@@ -17,7 +17,7 @@ from .common import (
 
 CLAUDE_HOME = Path(os.environ.get("CLAUDE_CONFIG_DIR", HOME / ".claude"))
 PROJECTS = CLAUDE_HOME / "projects"
-DESKTOP_CLI_GLOB = str(HOME / "Library/Application Support/Claude/claude-code/*/*/claude")
+DESKTOP_CLI_GLOB = str(HOME / "Library/Application Support/Claude/claude-code/*/*/claude.app/Contents/MacOS/claude")
 
 # Stamped on every record we write, so those records are never sent back to Codex.
 MARKER = "ccxImported"
