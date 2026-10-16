@@ -9,7 +9,7 @@ import subprocess
 import sys
 
 from . import __version__, claude, codex, history, install, pairs, repairs
-from .common import DEFAULTS, NAME, OTHER, L, real, set_setting, setting
+from .common import copy_to_clipboard, DEFAULTS, NAME, OTHER, L, real, set_setting, setting
 from .sync import (STATUS, continue_phrase, find_sessions, menu_data, new_claude_conversation, new_codex_conversation,
                    transfer)
 
@@ -31,7 +31,7 @@ def run_transfer(src_tool: str, sid: str, a):
     t = res["target"]
     if res["action"] == "linked" and t["tool"] == "codex" and codex.hooks_trusted() is False:
         # Without the hook Codex pulls on request: have the phrase ready to paste.
-        subprocess.run(["pbcopy"], input=continue_phrase(src_tool).encode(), check=False)
+        copy_to_clipboard(continue_phrase(src_tool))
         res["message"] += f" (Say “{continue_phrase(src_tool)}” there; it is on your clipboard.)"
     if a.json:
         print(json.dumps(res, ensure_ascii=False))

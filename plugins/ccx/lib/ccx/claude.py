@@ -142,8 +142,12 @@ def matches(query: str, title: str) -> bool:
 
 # ------------------------------------------------------------------- units
 
-def units(path: Path) -> List[Unit]:
-    """One entry per user/assistant record (the cursor counts these)."""
+def units(path: Path, include_imported: bool = False) -> List[Unit]:
+    """One entry per user/assistant record (the cursor counts these).
+
+    Records ccx wrote from a Codex thread are None by default, so incremental sync
+    never sends them back; include_imported renders them too (for a full
+    'continue from' and for reading history)."""
     out: List[Unit] = []
     skip_ids = set()
     with open(path, encoding="utf-8", errors="replace") as f:
@@ -154,7 +158,7 @@ def units(path: Path) -> List[Unit]:
                 continue
             if d.get("type") not in ("user", "assistant"):
                 continue
-            if d.get(MARKER) or d.get("isMeta") or d.get("isSidechain"):
+            if (d.get(MARKER) and not include_imported) or d.get("isMeta") or d.get("isSidechain"):
                 out.append(None)
             else:
                 out.append(_render(d, skip_ids))

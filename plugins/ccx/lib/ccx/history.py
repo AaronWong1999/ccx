@@ -10,7 +10,7 @@ from .common import NAME, STATE_DIR
 
 def read_page(tool: str, sid: str, offset: int = 0, limit: int = 6000) -> dict:
     """Read without moving sync cursors; offsets are characters in rendered text."""
-    src, units = pairs.session_units(tool, sid)
+    src, units = pairs.session_units(tool, sid, include_imported=True)
     if not src:
         raise RuntimeError(f"{NAME[tool]} session {sid} not found")
     body = "\n\n".join(f"[{NAME[tool] if u[0] == 'assistant' else 'user'}] {u[1]}" for u in units if u)
@@ -25,7 +25,7 @@ def export_linked() -> str:
     for pair in pairs.load():
         for tool in ("claude", "codex"):
             try:
-                src, units = pairs.session_units(tool, pair[tool]["id"])
+                src, units = pairs.session_units(tool, pair[tool]["id"], include_imported=True)
                 if not src:
                     continue
                 body = "\n\n".join(f"[{NAME[tool] if u[0] == 'assistant' else 'user'}] {u[1]}" for u in units if u)

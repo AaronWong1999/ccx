@@ -68,10 +68,10 @@ def _set_cursor(claude_id: str, side: str, cursor: int, size: Optional[int] = No
 
 # -------------------------------------------------------------------- units
 
-def session_units(tool: str, sid: str) -> Tuple[Optional[Session], List]:
+def session_units(tool: str, sid: str, include_imported: bool = False) -> Tuple[Optional[Session], List]:
     if tool == "claude":
         s = claude.find(sid)
-        return s, (claude.units(s.path) if s else [])
+        return s, (claude.units(s.path, include_imported) if s else [])
     s = codex.find(sid)
     return s, (codex.units(codex.items(sid)) if s else [])
 
@@ -164,7 +164,10 @@ def continue_from(here_tool: str, here_id: str, here_cwd: str, other_id: str) ->
     session's whole (compressed) conversation to carry on from."""
     other = OTHER[here_tool]
     s, us = session_units(other, other_id)
-    if not s or not any(us):
+    # A Claude session ccx wrote from a Codex thread, not yet continued in Claude:
+    # its imported records are the whole conversation, so show those.
+    shown = us if any(us) else session_units(other, other_id, include_imported=True)[1]
+    if not s or not any(shown):
         raise RuntimeError(f"{NAME[other]} session {other_id} not found or empty")
     here = side(here_tool, here_id) if (claude.find(here_id) if here_tool == "claude" else codex.find(here_id)) \
         else {"id": here_id, "cwd": here_cwd, "cursor": 0}
@@ -182,7 +185,7 @@ def continue_from(here_tool: str, here_id: str, here_cwd: str, other_id: str) ->
     link(**({"claude_side": here, "codex_side": there} if here_tool == "claude"
             else {"claude_side": there, "codex_side": here}))
     return {"from": other, "session": s.id, "title": s.title, "cwd": s.cwd,
-            "context": wrap(render([u for u in us if u], other, FULL_BUDGET), s, here["cwd"], first=True)}
+            "context": wrap(render([u for u in shown if u], other, FULL_BUDGET), s, here["cwd"], first=True)}
 
 
 def status(s: Session) -> Tuple[str, Optional[str]]:

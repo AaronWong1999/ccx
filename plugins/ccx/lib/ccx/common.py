@@ -134,6 +134,14 @@ def which(name: str, *candidates: str) -> Optional[str]:
     return None
 
 
+def copy_to_clipboard(text: str):
+    """pbcopy decodes its input using __CF_USER_TEXT_ENCODING; apps may start us
+    without it (MacRoman then), which garbles non-ASCII text. Force UTF-8."""
+    env = {**os.environ, "LANG": "en_US.UTF-8", "LC_ALL": "en_US.UTF-8",
+           "__CF_USER_TEXT_ENCODING": f"0x{os.getuid():X}:0x8000100:0x8000100"}  # UTF-8 for pbcopy
+    subprocess.run(["pbcopy"], input=text.encode("utf-8"), env=env, check=False)
+
+
 def _git(cwd: str, *args: str) -> str:
     if not cwd or not os.path.isdir(cwd):
         return ""

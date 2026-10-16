@@ -283,6 +283,15 @@ class PairsSync(Base):
         self.assertEqual(pair["codex"]["id"], "x-there")
         self.assertIsNone(pairs.pull("claude", "c-here"))
 
+    def test_continue_from_a_claude_copy_of_a_codex_thread(self):
+        # A Claude session ccx wrote from Codex, with no Claude turns since.
+        claude_file(PROJ_A, "c-copy", [user("从 Codex 导入的问题", ccxImported=True),
+                                       assistant(text("从 Codex 导入的回答"), ccxImported=True)], title="copy")
+        self.cx.add("x-fresh", PROJ_A, "fresh", [umsg("hi")])
+        res = pairs.continue_from("codex", "x-fresh", PROJ_A, "c-copy")
+        self.assertIn("从 Codex 导入的回答", res["context"])
+        self.assertIsNone(pairs.pull("codex", "x-fresh"))  # and nothing bounces back later
+
     def test_relink_replaces_old_pair(self):
         self.make_pair()
         self.cx.add("x-new", PROJ_A, "新线程", [umsg("hi")])

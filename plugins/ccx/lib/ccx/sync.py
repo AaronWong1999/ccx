@@ -11,7 +11,7 @@ from datetime import datetime
 from typing import Dict, List, Optional
 
 from . import claude, codex, pairs, repairs
-from .common import L, NAME, OTHER, Session, git_snapshot, real, same_dir
+from .common import copy_to_clipboard, L, NAME, OTHER, Session, git_snapshot, real, same_dir
 
 STATUS = {"new": "not linked", "linked": "linked", "updated": "has new progress", "mirror": "imported copy"}
 
@@ -43,7 +43,7 @@ def new_codex_conversation(claude_id: str) -> str:
     if not c:
         raise RuntimeError(f"Claude session {claude_id} not found")
     prompt = f"Continue the \u201c{c.title}\u201d session from Claude (session id {c.id})."
-    subprocess.run(["pbcopy"], input=prompt.encode(), check=False)
+    copy_to_clipboard(prompt)
     subprocess.run([codex.codex_bin(), "app", c.cwd], capture_output=True, check=False)
     return prompt
 
