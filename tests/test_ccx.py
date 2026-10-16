@@ -133,6 +133,16 @@ class ClaudeUnits(Base):
         self.assertEqual([u for u in claude.units(p) if u],
                          [("user", "暗号是什么？"), ("user", "第二句"), ("user", "转发来的话")])
 
+    def test_project_is_the_folder_it_is_filed_under(self):
+        # Started in a scratch folder, moved to PROJ_A, shell wandered into sub-folders.
+        d = claude.project_dir(PROJ_A)
+        d.mkdir(parents=True, exist_ok=True)
+        with open(d / "c-moved.jsonl", "w") as f:
+            for c in ("/tmp/scratch-123", PROJ_A, os.path.join(PROJ_A, "lib"), "/tmp/scratch-123", os.path.join(PROJ_A, "menubar")):
+                f.write(json.dumps({"type": "user", "cwd": c, "message": {"role": "user", "content": "hi"}}) + "\n")
+        self.assertEqual(claude.find("c-moved").cwd, PROJ_A)
+        self.assertIn("c-moved", [x.id for x in claude.sessions(PROJ_A)])
+
     def test_find_across_projects_and_title_search(self):
         claude_file(PROJ_B, "c-elsewhere-1234", [user("微信支付接入")], title="微信支付接入需求确认")
         s = claude.find("c-elsewhere")

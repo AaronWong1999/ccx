@@ -33,7 +33,7 @@ def project_dir(cwd: str) -> Path:
 
 # ------------------------------------------------------------ listing (cached)
 
-_CACHE = STATE_DIR / "claude-meta.json"
+_CACHE = STATE_DIR / "claude-meta-v2.json"
 
 
 def _load_cache() -> Dict[str, list]:
@@ -50,14 +50,16 @@ def _meta(path: Path, cache: Dict[str, list]) -> Tuple[str, str, bool]:
     hit = cache.get(key)
     if hit and hit[0] == st.st_size and hit[1] == st.st_mtime:
         return hit[2], hit[3], hit[4]
-    cwd, title, prompt, ours = "", "", "", False
+    cwds, title, prompt, ours = [], "", "", False
     with open(path, encoding="utf-8", errors="replace") as f:
         for line in f:
             try:
                 d = json.loads(line)
             except ValueError:
                 continue
-            cwd = cwd or d.get("cwd", "")
+            c = d.get("cwd")
+            if c and (not cwds or cwds[-1] != c):
+                cwds.append(c)
             ours = ours or bool(d.get(MARKER))
             if d.get("type") == "custom-title":
                 title = d.get("customTitle") or d.get("title") or title
@@ -67,6 +69,10 @@ def _meta(path: Path, cache: Dict[str, list]) -> Tuple[str, str, bool]:
                     c = next((x.get("text", "") for x in c if x.get("type") == "text"), "")
                 if isinstance(c, str) and user_text(c):
                     prompt = user_text(c)
+    # Each record's cwd is wherever the shell was at that moment (a sub-folder, or
+    # the folder the session started in before it was moved). The session belongs
+    # to the project whose folder it is filed under; otherwise use the latest cwd.
+    cwd = next((c for c in reversed(cwds) if project_dir(c).name == path.parent.name), cwds[-1] if cwds else "")
     label = first_line(title or prompt)
     cache[key] = [st.st_size, st.st_mtime, cwd, label, ours]
     return cwd, label, ours
