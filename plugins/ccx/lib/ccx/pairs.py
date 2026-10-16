@@ -11,12 +11,13 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import time
 from typing import List, Optional, Tuple
 
 from . import claude, codex
-from .common import NAME, OTHER, PLAN, STATE_DIR, TAG, Session, clip, est_tokens, folder_note, git_snapshot
+from .common import L, NAME, OTHER, PLAN, STATE_DIR, TAG, Session, clip, est_tokens, folder_note, git_snapshot
 
 PAIRS = STATE_DIR / "pairs.json"
 HOOK_BUDGET = 24_000   # chars injected automatically with a prompt
@@ -160,6 +161,16 @@ def pull(here_tool: str, here_id: str, budget: int = HOOK_BUDGET) -> Optional[di
             "context": wrap(render(new, other, budget), s, pair[here_tool]["cwd"], first=False)}
 
 
+_CONTINUED = re.compile(r"^(⇄\s*|From (Claude|Codex) · \d\d-\d\d \d\d:\d\d · |接 (Claude|Codex) · \d\d-\d\d \d\d:\d\d · )+")
+
+
+def continued_title(src_tool: str, title: str) -> str:
+    """e.g. "From Claude · 10-17 03:18 · Landing page" / "接 Claude · 10-17 03:18 · 落地页"."""
+    stamp = time.strftime("%m-%d %H:%M")
+    base = clip(_CONTINUED.sub("", title or ""), 60)
+    return L(f"From {NAME[src_tool]} · {stamp} · {base}", f"接 {NAME[src_tool]} · {stamp} · {base}")
+
+
 def continue_from(here_tool: str, here_id: str, here_cwd: str, other_id: str) -> dict:
     """Pair this conversation with `other_id` on the other side and return that
     session's whole (compressed) conversation to carry on from."""
@@ -177,11 +188,12 @@ def continue_from(here_tool: str, here_id: str, here_cwd: str, other_id: str) ->
         # In-conversation imports stay in the current thread's own workspace.
         # A foreign Claude folder remains reference context, never a silent move.
         # A thread started with "Continue the … session from Claude (session id …)"
-        # is titled by that prompt: name it after the task instead.
+        # is titled by that prompt: name it after where, when and what it continues
+        # (distinct each time, so repeated handovers don't pile up identical titles).
         mine = codex.find(here_id)
         if mine and ((mine.title or "").startswith("Continue the") or other_id in (mine.title or "")):
             try:
-                codex.set_name(here_id, s.title)
+                codex.set_name(here_id, continued_title(other, s.title))
             except (RuntimeError, TimeoutError, KeyError):
                 pass
         opened_workspace = codex.register_desktop_workspace(here["cwd"])
