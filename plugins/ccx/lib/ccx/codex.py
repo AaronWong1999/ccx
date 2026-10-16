@@ -22,6 +22,7 @@ APP_BUNDLES = ("/Applications/ChatGPT.app", "/Applications/Codex.app",
 SELF_SERVERS = ("ccx", "claudecodex")
 # Every interactive and scripted source; sub-agents are internal and left out.
 SOURCES = ["cli", "vscode", "exec", "appServer", "unknown"]
+DESKTOP_STATE = Path(os.environ.get("CODEX_HOME", HOME / ".codex")) / ".codex-global-state.json"
 
 Unit = Optional[Tuple[str, str]]
 
@@ -151,6 +152,48 @@ def find(tid: str) -> Optional[Session]:
         return None
 
 
+def desktop_project(cwd: str) -> Optional[dict]:
+    """Read the desktop's saved-folder index (never write its live state file).
+
+    A project created with app-server project/create alone isn't registered in
+    every desktop version. The UI maintains a separate local ID -> server ID map.
+    """
+    try:
+        state = json.loads(DESKTOP_STATE.read_text())
+    except (OSError, ValueError):
+        return None
+    root = real(cwd)
+    mappings = state.get("app-server-project-id-by-legacy-project-id-by-host", {})
+    host = "local:" + str(DESKTOP_STATE.parent)
+    for pid, project in state.get("local-projects", {}).items():
+        if any(real(path) == root for path in project.get("rootPaths", [])):
+            local_map = mappings.get(host, {})
+            return {"id": pid, "server_id": local_map.get(pid), "cwd": root,
+                    "registered_server_ids": list(local_map.values())}
+    return None
+
+
+def register_desktop_workspace(cwd: str, timeout: float = 15) -> bool:
+    """Use the official CLI to register the workspace in the live desktop.
+
+    Returns True only when registration was needed (the caller may want to
+    restore its thread afterwards). Merely restarting the app doesn't import
+    project/create records into this desktop index. No direct state-file writes.
+    """
+    root = real(cwd) if cwd else ""
+    if not root or not os.path.isdir(root) or "/scratch-workspaces/" in root or desktop_project(root):
+        return False
+    proc = subprocess.run([codex_bin(), "app", root], capture_output=True, text=True, timeout=30)
+    if proc.returncode:
+        raise RuntimeError("Codex could not register the desktop workspace: " + clip(proc.stderr or proc.stdout, 400))
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if desktop_project(root):
+            return True
+        time.sleep(0.1)  # opening the workspace is asynchronous after the CLI returns
+    raise RuntimeError("Codex opened the folder but has not registered it in the desktop project list yet; retry")
+
+
 def ensure_thread_project(tid: str, cwd: str) -> Optional[str]:
     """Attach a projectless thread to the desktop project for its working folder.
 
@@ -161,13 +204,29 @@ def ensure_thread_project(tid: str, cwd: str) -> Optional[str]:
     """
     srv = server()
     thread = srv.request("thread/read", {"threadId": tid, "includeTurns": False})["thread"]
-    if thread.get("projectId"):
-        return thread["projectId"]
     root = real(thread.get("cwd") or cwd) if thread.get("cwd") or cwd else ""
     if not root or not os.path.isdir(root) or "/scratch-workspaces/" in root:
-        return None  # don't create a sidebar project for a missing/temporary folder
-    project_id, cursor = None, None
-    while True:
+        return thread.get("projectId")  # don't create projects for missing/temporary folders
+    registered = desktop_project(root)
+    preferred = (registered or {}).get("server_id")
+    current = thread.get("projectId")
+    if current and current != preferred:
+        # Preserve explicit assignments. Only repair an orphan created by ccx's
+        # previous backend-only flow when it has the same root and is not a
+        # separately registered desktop project.
+        if not preferred or current in registered.get("registered_server_ids", []):
+            return current
+        try:
+            existing = srv.request("project/read", {"projectId": current})["project"]
+        except RuntimeError:
+            return current
+        roots = [real(r["path"]) for r in existing.get("roots", []) if r.get("path")]
+        if roots != [root]:
+            return current
+    if current and current == preferred:
+        return current
+    project_id, cursor = preferred, None
+    while project_id is None:
         page = srv.request("project/list", {"limit": 100, "cursor": cursor})
         match = next((p for p in page.get("data", [])
                       if any(real(r["path"]) == root for r in p.get("roots", []) if r.get("path"))), None)

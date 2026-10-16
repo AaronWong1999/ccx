@@ -117,9 +117,9 @@ Claude 会话 A 和 Codex 线程 T 组成一对，两边各记一个"对面已�
 
 ## History and project grouping · 历史与项目归属
 
-On transfer to Codex, ccx attaches the thread to the desktop project matching its actual working folder, creating that local project if needed. This is separate from `cwd`; existing user-assigned projects are kept. Reopening an older ccx pair repairs missing project membership without importing another conversation. A running desktop may need reopening to refresh its cached project list.
+On transfer to Codex, ccx first registers the working folder in the desktop through its bundled `codex app <folder>` command and waits until it appears in the saved project index. It then attaches the thread to that desktop project's mapped server ID. Creating only an app-server project is insufficient on some Codex versions—even after restarting. Existing user-assigned projects are kept, and reopening an older ccx pair repairs backend-only membership without importing another conversation.
 
-发到 Codex 时，ccx 会按实际工作目录关联桌面版项目；项目不存在时会创建。项目归属与 `cwd` 是两回事，已有的手动项目归属会保留。重新打开旧关联会话也会补齐归属，不会再导入一份。桌面版可能需要重新打开一次才能刷新缓存中的项目列表。
+发到 Codex 时，ccx 会先通过桌面版自带的 `codex app <目录>` 命令登记工作文件夹，等待桌面项目索引确认，再把会话关联到该项目映射的后端 ID。部分版本只创建后端项目并不足够，重启也不会自动补齐。已有的手动项目归属会保留；重新打开旧关联会话也会修复只存在于后端的归属，不会再导入一份。
 
 Some Codex versions import legacy history but use the newer item-pagination API to expand older turns. This causes a permanent “Retry” button. ccx uses Codex's own targeted `migrate-rollouts` command before opening new imports and verifies item paging afterwards. If an older thread still has an active writer, ccx queues the migration and retries from the menu bar every minute. It never kills Codex or rewrites a live database: quit Codex when convenient, leave ccx running, and reopen Codex after the “History repair pending” notice disappears. `ccx repair` retries manually.
 

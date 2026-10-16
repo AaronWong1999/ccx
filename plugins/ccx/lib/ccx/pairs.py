@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
 import time
 from typing import List, Optional, Tuple
 
@@ -158,7 +159,10 @@ def continue_from(here_tool: str, here_id: str, here_cwd: str, other_id: str) ->
     if here_tool == "codex":
         # In-conversation imports stay in the current thread's own workspace.
         # A foreign Claude folder remains reference context, never a silent move.
+        opened_workspace = codex.register_desktop_workspace(here["cwd"])
         codex.ensure_thread_project(here_id, here["cwd"])
+        if opened_workspace:
+            subprocess.run(["open", f"codex://threads/{here_id}"], capture_output=True, check=False)
     there = {"id": s.id, "cwd": s.cwd, "cursor": len(us)}
     if other == "codex":
         there["size"] = codex.size_of(s)

@@ -88,6 +88,9 @@ class FakeCodex:
         p = mock.patch.object(codex, "ensure_thread_project", return_value="project-test")
         p.start()
         test.addCleanup(p.stop)
+        p = mock.patch.object(codex, "register_desktop_workspace", return_value=False)
+        p.start()
+        test.addCleanup(p.stop)
         p = mock.patch.object(repairs, "prepare", return_value="ready")
         p.start()
         test.addCleanup(p.stop)
@@ -414,6 +417,8 @@ class ProjectAssignment(unittest.TestCase):
                 return next(pages)
             if method == "project/create":
                 return {"project": {"id": "created"}}
+            if method == "project/read":
+                return {"project": {"id": args["projectId"], "roots": [{"path": PROJ_A}]}}
             if method == "thread/metadata/update":
                 self.state["thread"]["projectId"] = args["projectId"]
                 return {}
@@ -450,6 +455,61 @@ class ProjectAssignment(unittest.TestCase):
         with mock.patch.object(codex, "server", return_value=srv):
             self.assertIsNone(codex.ensure_thread_project("x", PROJ_A))
         self.assertEqual(srv.request.call_count, 1)
+
+    def test_repairs_backend_only_project_to_desktop_mapping(self):
+        srv = self.server_for(project_id="old-backend-only")
+        registered = {"server_id": "native-server", "registered_server_ids": ["native-server"]}
+        with mock.patch.object(codex, "server", return_value=srv), \
+                mock.patch.object(codex, "desktop_project", return_value=registered):
+            self.assertEqual(codex.ensure_thread_project("x", PROJ_A), "native-server")
+        self.assertEqual(self.state["thread"]["projectId"], "native-server")
+
+    def test_does_not_override_another_registered_project(self):
+        srv = self.server_for(project_id="chosen-visible-project")
+        registered = {"server_id": "native-server",
+                      "registered_server_ids": ["native-server", "chosen-visible-project"]}
+        with mock.patch.object(codex, "server", return_value=srv), \
+                mock.patch.object(codex, "desktop_project", return_value=registered):
+            self.assertEqual(codex.ensure_thread_project("x", PROJ_A), "chosen-visible-project")
+        self.assertEqual(srv.request.call_count, 1)
+
+
+class DesktopWorkspace(unittest.TestCase):
+    def test_reads_native_id_mapping_without_writing_state(self):
+        with tempfile.TemporaryDirectory() as directory:
+            p = Path(directory) / ".codex-global-state.json"
+            state = {"local-projects": {"ui-project": {"rootPaths": [PROJ_A]}},
+                     "app-server-project-id-by-legacy-project-id-by-host": {
+                         "local:" + directory: {"ui-project": "server-project"}}}
+            original = json.dumps(state)
+            p.write_text(original)
+            with mock.patch.object(codex, "DESKTOP_STATE", p):
+                result = codex.desktop_project(PROJ_A)
+                self.assertEqual(result["id"], "ui-project")
+                self.assertEqual(result["server_id"], "server-project")
+                self.assertIsNone(codex.desktop_project(PROJ_B))
+            self.assertEqual(p.read_text(), original)
+
+    def test_registers_folder_through_official_cli_and_waits_for_index(self):
+        with mock.patch.object(codex, "desktop_project", side_effect=[None, None, {"id": "new-ui-project"}]), \
+                mock.patch.object(codex, "codex_bin", return_value="bundled-codex"), \
+                mock.patch.object(codex.subprocess, "run", return_value=mock.Mock(returncode=0)) as run, \
+                mock.patch.object(codex.time, "sleep"):
+            self.assertTrue(codex.register_desktop_workspace(PROJ_A))
+        self.assertEqual(run.call_args.args[0], ["bundled-codex", "app", os.path.realpath(PROJ_A)])
+
+    def test_existing_folder_is_not_reopened(self):
+        with mock.patch.object(codex, "desktop_project", return_value={"id": "exists"}), \
+                mock.patch.object(codex.subprocess, "run") as run:
+            self.assertFalse(codex.register_desktop_workspace(PROJ_A))
+        run.assert_not_called()
+
+    def test_failed_registration_is_not_reported_as_success(self):
+        with mock.patch.object(codex, "desktop_project", return_value=None), \
+                mock.patch.object(codex, "codex_bin", return_value="bundled-codex"), \
+                mock.patch.object(codex.subprocess, "run", return_value=mock.Mock(returncode=1, stderr="failed")):
+            with self.assertRaisesRegex(RuntimeError, "could not register"):
+                codex.register_desktop_workspace(PROJ_A)
 
 
 class NativeHistory(unittest.TestCase):

@@ -151,6 +151,9 @@ def transfer(tool: str, session_id: str, open_app: bool = True) -> dict:
         # Save the pair before grouping: if grouping fails, retry repairs this
         # thread instead of importing another copy. Also repairs pre-0.0.9 pairs.
         try:
+            if open_app:
+                target_session = codex.find(target)
+                codex.register_desktop_workspace(target_session.cwd if target_session else src.cwd)
             res["target"]["project_id"] = codex.ensure_thread_project(target, src.cwd)
             res["target"]["history_status"] = repairs.prepare(target)
         except (RuntimeError, TimeoutError) as e:
