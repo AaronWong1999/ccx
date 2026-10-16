@@ -5,7 +5,7 @@
     "url": "https://github.com/aaronwong1999"
   },
   "metadata": {
-    "description": "ccx - claudecodex: continue the same task across Claude Code and Codex"
+    "description": "ccx - claudecodex: sync task memory between Claude Code and Codex"
   },
   "plugins": [
     {

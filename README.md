@@ -2,9 +2,9 @@
 
 # ccx - claudecodex
 
-**Continue the same task across Claude Code and Codex: when one runs out of usage, keep going in the other, and come back to the same conversation.**
+**Sync task memory between Claude Code and Codex. When one runs out of usage, keep going in the other, and come back to the same conversation.**
 
-在 Claude Code 和 Codex 之间接着干同一个任务：一边额度用完就到另一边继续，回来时还是原来那个会话。
+在 Claude Code 和 Codex 之间同步任务记忆。一边额度用完就到另一边继续，回来时还是原来那个会话。
 
 > ccx is an independent open-source project, not affiliated with Anthropic or OpenAI. "Claude", "Claude Code" and "Codex" are trademarks of their owners.
 >
@@ -20,8 +20,8 @@ You need macOS 13+ and the Claude and/or Codex desktop app. You don't need to in
 
 需要 macOS 13 及以上，以及 Claude 和/或 Codex 桌面版。不需要另外安装 Claude Code 或 Codex 的命令行工具，ccx 用的是两个桌面版自带的那一份。
 
-**The easy way:** paste this into Claude Code or Codex.
-**最简单的方式：** 把下面这段话贴给 Claude Code 或 Codex。
+**The easy way:** paste this into Claude Code or Codex. It runs the installer for you (approve the command when asked).
+**最简单的方式：** 把下面这段话贴给 Claude Code 或 Codex，它会帮你运行安装命令（弹出确认时点允许即可）。
 
 ```
 Install ccx for me: run `curl -fsSL https://raw.githubusercontent.com/aaronwong1999/ccx/main/install.sh | sh`, then run `ccx doctor` and tell me the result.
@@ -36,8 +36,8 @@ curl -fsSL https://raw.githubusercontent.com/aaronwong1999/ccx/main/install.sh |
 The installer:
 
 1. puts ccx in `~/Library/Application Support/ccx`;
-2. installs the ccx plugin into Claude and Codex;
-3. trusts ccx's own sync hook in Codex;
+2. installs the ccx plugin into Claude and Codex. Each plugin syncs in **both directions** with a prompt hook: whenever you send a message, it brings over the other side's new progress;
+3. turns that hook on in Codex. Claude Code enables a plugin's hooks as soon as the plugin is installed, but Codex asks you to approve every third-party hook by hand, so the installer approves ccx's own hook (and only that one);
 4. builds the ⇄ menu bar icon on your Mac and starts it at login;
 5. adds a `ccx` command.
 
@@ -46,8 +46,8 @@ If Apple's Command Line Tools are missing, it opens Apple's installer first. Run
 安装脚本会做五件事：
 
 1. 把 ccx 放到 `~/Library/Application Support/ccx`；
-2. 把 ccx 插件装进 Claude 和 Codex；
-3. 在 Codex 里信任 ccx 自己的同步 hook；
+2. 把 ccx 插件装进 Claude 和 Codex。两边的插件都用一个"发消息前"的 hook 做**双向**同步：你每发一条消息，就把另一边的新进展带过来；
+3. 在 Codex 里启用这个 hook。Claude Code 装好插件后，插件的 hook 自动生效；但 Codex 要求每个第三方 hook 都由用户手动批准，所以安装脚本会替你批准 ccx 自己的 hook，而且只批准这一个；
 4. 在本机编译菜单栏 ⇄ 图标，并设为登录时自动启动；
 5. 安装一个 `ccx` 命令。
 
@@ -71,9 +71,9 @@ If Apple's Command Line Tools are missing, it opens Apple's installer first. Run
 | 立刻同步一下 | Claude：`/from-codex` · Codex：`$from-claude` |
 | 把当前对话交给另一边 | Claude：`/to-codex` · Codex：`$to-claude` · 或点 ⇄ |
 
-The ⇄ menu lists recent projects and both sides' sessions: ○ not linked (click to import and link), ✓ linked (click to open the linked conversation), ↻ new progress the other side hasn't received. The menu can be shown in English or Chinese (Language / 语言).
+The ⇄ menu lists recent projects and both sides' sessions: ○ new, not linked yet (click to import and link); ✓ linked (click to open the linked conversation); ↻ updated, with progress the other side hasn't received yet. The menu can be shown in English or Chinese (Language / 语言).
 
-⇄ 菜单按项目列出两边的会话：○ 未关联（点一下导入并关联），✓ 已关联（点一下打开关联的会话），↻ 有对面还没收到的新进展。菜单可以切换成英文或中文（Language / 语言）。
+⇄ 菜单按项目列出两边的会话：○ 未关联（点一下导入并关联）；✓ 已关联（点一下打开关联的会话）；↻ 有更新，这边有对面还没收到的新进展。菜单可以切换成英文或中文（Language / 语言）。
 
 ## FAQ · 常见问题
 

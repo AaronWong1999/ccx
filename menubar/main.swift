@@ -5,6 +5,18 @@ import AppKit
 
 let repoURL = "https://github.com/aaronwong1999/ccx"
 
+/// Shorten to about `width` Latin characters; CJK and other wide characters count double.
+func short(_ s: String, _ width: Int) -> String {
+    var used = 0, out = ""
+    for ch in s {
+        let w = ch.unicodeScalars.contains { $0.value >= 0x1100 } ? 2 : 1
+        if used + w > width - 1 { return out + "…" }
+        used += w
+        out.append(ch)
+    }
+    return s
+}
+
 /// The menu's language: English (default) or Chinese, chosen in the menu.
 func L(_ en: String, _ zh: String) -> String {
     UserDefaults.standard.string(forKey: "language") == "zh" ? zh : en
@@ -205,14 +217,20 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
         needsRebuild = false
         menu.removeAllItems()
 
+        // Title, then the tagline: the chosen language first, the other one smaller below it.
         let head = NSMenuItem()
         let title = NSMutableAttributedString(string: "ccx - claudecodex", attributes: [.font: NSFont.boldSystemFont(ofSize: 13)])
         title.append(NSAttributedString(string: "  \(version)", attributes: [
             .font: NSFont.systemFont(ofSize: 11), .foregroundColor: NSColor.secondaryLabelColor]))
+        let en = "Sync task memory between Claude Code and Codex", zh = "在 Claude Code 和 Codex 之间同步任务记忆"
+        let (first, second) = L("en", "zh") == "zh" ? (zh, en) : (en, zh)
+        title.append(NSAttributedString(string: "\n" + first, attributes: [
+            .font: NSFont.systemFont(ofSize: NSFont.smallSystemFontSize), .foregroundColor: NSColor.secondaryLabelColor]))
+        title.append(NSAttributedString(string: "\n" + second, attributes: [
+            .font: NSFont.systemFont(ofSize: NSFont.smallSystemFontSize - 1), .foregroundColor: NSColor.tertiaryLabelColor]))
         head.attributedTitle = title
         head.isEnabled = false
         menu.addItem(head)
-        menu.addItem(caption(L("Continue the same task across Claude Code and Codex", "在 Claude Code 和 Codex 之间接着干同一个任务")))
 
         if let r = release, r.available, let latest = r.latest {
             let up = action(L("Update to \(latest)", "更新到 \(latest)"), #selector(updateNow), symbol: "arrow.down.circle.fill")
@@ -227,7 +245,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
             } else {
                 menu.addItem(caption(L("RECENT PROJECTS", "最近的项目")))
                 for p in d.projects { menu.addItem(projectItem(p)) }
-                menu.addItem(caption(L("○ not linked    ✓ linked    ↻ new progress", "○ 未关联    ✓ 已关联    ↻ 有新进展")))
+                menu.addItem(caption(L("○ new  ✓ linked  ↻ updated", "○ 未关联  ✓ 已关联  ↻ 有更新")))
             }
             if d.codex_hook_trusted == false {
                 menu.addItem(.separator())
@@ -289,22 +307,23 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     func projectItem(_ p: Project) -> NSMenuItem {
-        let it = NSMenuItem(title: p.name, action: nil, keyEquivalent: "")
+        let name = short(p.name, 26)
+        let it = NSMenuItem(title: name, action: nil, keyEquivalent: "")
         it.image = NSImage(systemSymbolName: "folder", accessibilityDescription: nil)
         it.toolTip = p.cwd
         let pending = (p.codex + p.claude).contains { $0.status == "updated" }
         if pending {
-            let t = NSMutableAttributedString(string: p.name)
+            let t = NSMutableAttributedString(string: name)
             t.append(NSAttributedString(string: "  ↻", attributes: [.foregroundColor: NSColor.controlAccentColor]))
             it.attributedTitle = t
         }
         let sub = NSMenu()
         sub.autoenablesItems = false
-        sub.addItem(caption(L("CONTINUE IN CLAUDE  ·  from Codex", "到 Claude 接着干  ·  来自 Codex")))
+        sub.addItem(caption(L("TO CLAUDE · from Codex", "到 Claude 接着干 · 来自 Codex")))
         if p.codex.isEmpty { sub.addItem(caption(L("No Codex threads", "没有 Codex 会话"))) }
         for r in p.codex { sub.addItem(sessionItem(r, from: "codex")) }
         sub.addItem(.separator())
-        sub.addItem(caption(L("CONTINUE IN CODEX  ·  from Claude", "到 Codex 接着干  ·  来自 Claude")))
+        sub.addItem(caption(L("TO CODEX · from Claude", "到 Codex 接着干 · 来自 Claude")))
         if p.claude.isEmpty { sub.addItem(caption(L("No Claude sessions", "没有 Claude 会话"))) }
         for r in p.claude { sub.addItem(sessionItem(r, from: "claude")) }
         it.submenu = sub
@@ -313,7 +332,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func sessionItem(_ r: Row, from: String) -> NSMenuItem {
         let glyph = ["new": "○", "updated": "↻", "linked": "✓", "mirror": "·"][r.status] ?? "○"
-        var title = r.title.count > 44 ? String(r.title.prefix(44)) + "…" : r.title
+        var title = short(r.title, 36)
         if r.status == "mirror" { title += L("  (imported copy)", "  （导入的副本）") }
         let i = NSMenuItem(title: "", action: #selector(sessionClicked(_:)), keyEquivalent: "")
         i.target = self
@@ -325,9 +344,10 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
         s.append(NSAttributedString(string: "   \(r.updated)", attributes: [
             .font: NSFont.menuFont(ofSize: NSFont.smallSystemFontSize), .foregroundColor: NSColor.tertiaryLabelColor]))
         i.attributedTitle = s
-        i.toolTip = (r.status == "new" || r.status == "mirror")
+        let hint = (r.status == "new" || r.status == "mirror")
             ? L("Import into the other app and link the two; they stay in sync from then on", "导入到另一边并关联，之后两边自动同步")
             : L("Open the linked conversation in the other app; your next message there brings the new progress", "打开另一边关联的会话；在那边发一句话就会带上新进展")
+        i.toolTip = r.title + "\n\n" + hint
         i.isEnabled = !busy
         return i
     }
