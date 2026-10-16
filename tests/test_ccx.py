@@ -154,6 +154,15 @@ class ClaudeUnits(Base):
         finally:
             cp.unlink()
 
+    def test_pasted_content_and_slash_command_args_are_kept(self):
+        from ccx.common import user_text
+        self.assertIn("做一套交易界面", user_text('\n\n<pasted_content id="0320">\n在仓库里做一套交易界面\n</pasted_content id="0320">'))
+        self.assertEqual(user_text("<command-name>/goal</command-name>\n<command-message>goal</command-message>\n"
+                                   "<command-args>修好 to codex</command-args>"), "/goal 修好 to codex")
+        self.assertNotIn("pasted_content", user_text('<pasted_content id="a1">x</pasted_content id="a1">'))
+        self.assertEqual(user_text("<environment_context><cwd>/x</cwd></environment_context>"), "")
+        self.assertEqual(user_text("<local-command-stdout>Goal set</local-command-stdout>"), "")
+
     def test_find_across_projects_and_title_search(self):
         claude_file(PROJ_B, "c-elsewhere-1234", [user("微信支付接入")], title="微信支付接入需求确认")
         s = claude.find("c-elsewhere")

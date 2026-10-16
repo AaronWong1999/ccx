@@ -61,21 +61,27 @@ def same_dir(a: str, b: str) -> bool:
     return bool(a and b) and real(a) == real(b)
 
 
-_RELAYED = re.compile(r"<cross-session-message[^>]*>(.*?)</cross-session-message>", re.S)
-_LEADING_TAG = re.compile(r"\A\s*<([A-Za-z][\w-]*)[^>]*>.*?</\1>\s*", re.S)
+# Tags the apps wrap around text the person did write: keep what's inside.
+_KEEP_INNER = ("pasted_content", "cross-session-message", "command-name", "command-args")
+# Tags the apps inject on their own: drop them with their contents.
+_DROP = ("system-reminder", "environment_context", "user_instructions", "local-command-stdout",
+         "local-command-stderr", "local-command-caveat", "command-message", "app-context",
+         "external_codex_apps_open_page", "turn_aborted", "permissions instructions",
+         "ide_opened_file", "ide_selection", "collaboration_mode", "skills_instructions")
 
 
 def user_text(text: str) -> str:
-    """What the person actually typed: drop the tagged blocks (reminders,
-    environment context) the apps prepend to a user turn. '' if nothing is left."""
-    t = _RELAYED.sub(lambda m: m.group(1), text or "")  # a message relayed from another session
-    while True:
-        m = _LEADING_TAG.match(t)
-        if not m:
-            break
-        t = t[m.end():]
-    t = t.strip()
-    if t.startswith("<") or t.startswith("# AGENTS.md") or t.startswith("# Context from my IDE"):
+    """What the person actually typed or pasted: injected blocks (reminders,
+    environment) removed, wrapper tags around their own text unwrapped.
+    Unknown tags are kept rather than risk dropping the person's words."""
+    t = text or ""
+    for tag in _DROP:
+        t = re.sub(rf"<{re.escape(tag)}(\s[^>]*)?>.*?</{re.escape(tag)}(\s[^>]*)?>", "", t, flags=re.S)
+    for tag in _KEEP_INNER:
+        # (closing tags may carry attributes too: </pasted_content id="0320">)
+        t = re.sub(rf"<{re.escape(tag)}(\s[^>]*)?>(.*?)</{re.escape(tag)}(\s[^>]*)?>", lambda m: m.group(2).strip() + " ", t, flags=re.S)
+    t = re.sub(r"\A(/[\w:-]+)\s+", r"\1 ", t.strip())  # "/goal" + its args on one line
+    if t.startswith("# AGENTS.md") or t.startswith("# Context from my IDE") or t.startswith("<INSTRUCTIONS>"):
         return ""
     return t
 
