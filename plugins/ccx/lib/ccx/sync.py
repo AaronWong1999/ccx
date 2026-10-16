@@ -36,6 +36,18 @@ def new_claude_conversation(codex_id: str) -> str:
     return url
 
 
+def new_codex_conversation(claude_id: str) -> str:
+    """Open Codex in the session's folder and put a 'continue from Claude' prompt on
+    the clipboard (Codex has no link that pre-fills a new chat)."""
+    c = claude.find(claude_id)
+    if not c:
+        raise RuntimeError(f"Claude session {claude_id} not found")
+    prompt = f"Continue the \u201c{c.title}\u201d session from Claude (session id {c.id})."
+    subprocess.run(["pbcopy"], input=prompt.encode(), check=False)
+    subprocess.run([codex.codex_bin(), "app", c.cwd], capture_output=True, check=False)
+    return prompt
+
+
 def continue_phrase(tool: str) -> str:
     """What to say in the partner session to pull `tool`'s progress over."""
     return f"continue from {NAME[tool]}"
@@ -57,6 +69,16 @@ def rows(tool: str, ss: List[Session], here_cwd: Optional[str] = None, mirrors=f
             st = "mirror"
         row = {"id": s.id, "title": s.title, "updated": s.when, "status": st, "linked_to": partner,
                "cwd": s.cwd, "other_folder": bool(here_cwd and s.cwd and not same_dir(s.cwd, here_cwd))}
+        if tool == "claude":
+            # Sending a long Claude conversation to Codex: a full import makes Codex
+            # read all of it on its first reply; a linked Codex thread may be idle.
+            tokens, last = claude.context_state(s.path) if s.path else (0, 0)
+            row["own_tokens"] = tokens
+            if partner:
+                t = codex.find(partner)
+                if t:
+                    ptok, plast = codex.context_state(t)
+                    row["partner_tokens"], row["partner_idle_min"] = ptok, int((time.time() - plast) / 60)
         if tool == "codex" and partner:
             # Opening a huge Claude conversation that has sat idle re-reads all of it:
             # let the menu offer a fresh, linked conversation instead.

@@ -27,9 +27,11 @@ struct Row: Decodable {
     let title: String
     let updated: String
     let status: String  // new | linked | updated | mirror
+    let linked_to: String?
     let cwd: String
     let partner_tokens: Int?      // Codex rows: size of the linked Claude conversation
     let partner_idle_min: Int?    // … and how long it has been idle
+    let own_tokens: Int?          // Claude rows: size of the session itself
 }
 
 struct Project: Decodable {
@@ -351,7 +353,8 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let i = NSMenuItem(title: "", action: #selector(sessionClicked(_:)), keyEquivalent: "")
         i.target = self
         i.representedObject = ["from": from, "id": r.id, "tokens": String(r.partner_tokens ?? 0),
-                               "idle": String(r.partner_idle_min ?? 0), "title": r.title]
+                               "idle": String(r.partner_idle_min ?? 0), "own": String(r.own_tokens ?? 0),
+                               "linked": r.linked_to == nil ? "0" : "1", "title": r.title]
         let s = NSMutableAttributedString(string: "\(glyph)  \(title)", attributes: [
             .font: NSFont.menuFont(ofSize: 0),
             .foregroundColor: r.status == "mirror" ? NSColor.secondaryLabelColor : NSColor.labelColor,
@@ -390,6 +393,8 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
                let r = d.projects.flatMap({ $0.codex + $0.claude }).first(where: { $0.id == a[i + 2] }) {
                 obj["tokens"] = String(r.partner_tokens ?? 0)
                 obj["idle"] = String(r.partner_idle_min ?? 0)
+                obj["own"] = String(r.own_tokens ?? 0)
+                obj["linked"] = r.linked_to == nil ? "0" : "1"
             }
             let item = NSMenuItem()
             item.representedObject = obj
@@ -450,6 +455,39 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
             case .alertThirdButtonReturn: return
             default: break
             }
+        }
+        // Toward Codex: a full import of a long Claude session makes Codex read all of it
+        // on its first reply; a long linked Codex thread that sat idle re-reads all of it.
+        let own = Int(o["own"] ?? "") ?? 0, linked = o["linked"] == "1"
+        let fullImport = from == "claude" && !linked && own >= 250_000
+        let staleCodex = from == "claude" && linked && tokens >= 150_000 && idle >= 55
+        if fullImport || staleCodex {
+            let msg = fullImport
+                ? L("This Claude conversation is about \(own / 1000)k tokens. A full import makes Codex read all of it on its first reply.\n\nA new Codex conversation brings over the condensed progress (about 20k tokens) and stays linked.",
+                    "这个 Claude 对话大约 \(own / 1000)k token。完整导入后，Codex 第一次回复会把它全部读一遍。\n\n新开一个 Codex 对话只带压缩后的进展（约 2 万 token），并保持关联。")
+                : L("The linked Codex conversation is about \(tokens / 1000)k tokens and has been idle for \(idle / 60) h \(idle % 60) min, so its cache has likely expired: your next message there re-reads all of it.\n\nA new Codex conversation brings over the condensed progress (about 20k tokens) and stays linked.",
+                    "关联的 Codex 对话大约 \(tokens / 1000)k token，已闲置 \(idle / 60) 小时 \(idle % 60) 分钟，缓存很可能已过期：在那里发下一条消息会把它全部重新读一遍。\n\n新开一个 Codex 对话只带压缩后的进展（约 2 万 token），并保持关联。")
+            let choice: String
+            if clickTest, let p = preset {
+                print("DIALOG: \(fullImport ? "full import" : "stale Codex thread") -> \(p)")
+                choice = p
+            } else {
+                NSApp.activate(ignoringOtherApps: true)
+                let a = NSAlert()
+                a.messageText = fullImport ? L("This Claude conversation is very long", "这个 Claude 对话非常长")
+                                           : L("The Codex conversation is very long", "这个 Codex 对话非常长")
+                a.informativeText = msg
+                a.addButton(withTitle: L("New Codex Conversation", "新开 Codex 对话"))
+                a.addButton(withTitle: fullImport ? L("Import Everything", "完整导入") : L("Open It Anyway", "仍然打开"))
+                a.addButton(withTitle: L("Cancel", "取消"))
+                switch a.runModal() {
+                case .alertFirstButtonReturn: choice = "new"
+                case .alertThirdButtonReturn: choice = "cancel"
+                default: choice = "open"
+                }
+            }
+            if choice == "new" { work(["new-codex", id], title: "", showOutput: false, notifyResult: true); return }
+            if choice == "cancel" { if clickTest { exit(0) }; return }
         }
         work([from == "codex" ? "to-claude" : "to-codex", id], title: "", showOutput: false, notifyResult: true)
     }

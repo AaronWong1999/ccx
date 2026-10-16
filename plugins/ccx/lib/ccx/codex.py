@@ -301,6 +301,49 @@ def unarchive(tid: str):
         pass
 
 
+def context_state(s: Session) -> Tuple[int, float]:
+    """(tokens in the thread's context at its last model call, unix time of that
+    call), read from the end of its rollout. (0, updatedAt) if unknown."""
+    from datetime import datetime
+    if not s.path or not s.path.exists():
+        return 0, s.mtime
+    try:
+        if s.path.suffix == ".zst":
+            lines = list(_zst_lines(s.path))[-400:]
+        else:
+            size = s.path.stat().st_size
+            with open(s.path, "rb") as f:
+                f.seek(max(0, size - 3_000_000))
+                lines = f.read().decode("utf-8", "replace").splitlines()
+    except Exception:
+        return 0, s.mtime
+    for line in reversed(lines):
+        try:
+            d = json.loads(line)
+        except ValueError:
+            continue
+        p = d.get("payload") or {}
+        if d.get("type") == "event_msg" and p.get("type") == "token_count" and p.get("info"):
+            u = p["info"].get("last_token_usage") or {}
+            try:
+                ts = datetime.fromisoformat(d["timestamp"].replace("Z", "+00:00")).timestamp()
+            except (KeyError, ValueError):
+                ts = s.mtime
+            return int(u.get("input_tokens", 0)), ts
+    return 0, s.mtime
+
+
+def _zst_lines(path: Path):
+    try:
+        from compression import zstd  # Python 3.14+
+        with zstd.open(path, "rt", errors="replace") as f:
+            yield from f
+    except ImportError:
+        z = which("zstd")
+        if z:
+            yield from subprocess.run([z, "-dc", str(path)], capture_output=True).stdout.decode("utf-8", "replace").splitlines()
+
+
 def size_of(s: Optional[Session]) -> int:
     """Cheap change detector: the rollout file grows whenever the thread does."""
     try:

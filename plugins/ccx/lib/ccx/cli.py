@@ -10,7 +10,8 @@ import sys
 
 from . import __version__, claude, codex, history, install, pairs, repairs
 from .common import DEFAULTS, NAME, OTHER, L, real, set_setting, setting
-from .sync import STATUS, continue_phrase, find_sessions, menu_data, new_claude_conversation, transfer
+from .sync import (STATUS, continue_phrase, find_sessions, menu_data, new_claude_conversation, new_codex_conversation,
+                   transfer)
 
 
 def pick(tool: str, cwd: str, ref):
@@ -75,6 +76,8 @@ def main(argv=None):
     sub.add_parser("menu-data", help=argparse.SUPPRESS)
     nc = sub.add_parser("new-claude", help="open a new Claude conversation that continues a Codex thread")
     nc.add_argument("thread")
+    nx = sub.add_parser("new-codex", help="open Codex to continue a Claude session in a new thread")
+    nx.add_argument("session")
     cf = sub.add_parser("config", help="show or change a setting (language, warn_long_resume)")
     cf.add_argument("key", nargs="?")
     cf.add_argument("value", nargs="?")
@@ -124,6 +127,10 @@ def main(argv=None):
             new_claude_conversation(a.thread)
             print("✓ " + L("Opened a new Claude conversation; press Return to continue there.",
                            "已打开一个新的 Claude 对话，按回车即可接着干。"))
+        elif a.cmd == "new-codex":
+            new_codex_conversation(a.session)
+            print("✓ " + L("Opened Codex in this project. The prompt to continue is on your clipboard: paste it into a new chat and send.",
+                           "已在这个项目里打开 Codex，接着干的指令已复制到剪贴板：在新对话里粘贴并发送即可。"))
         elif a.cmd == "config":
             if a.key and a.value is not None:
                 v = {"true": True, "on": True, "false": False, "off": False}.get(a.value.lower(), a.value)
