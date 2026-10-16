@@ -99,7 +99,6 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
         item.menu = menu
         if clickTest { runClickTest(); return }
         run(["config", "language", defaults.string(forKey: "language") ?? "en"]) { _, _, _ in }
-        run(["config", "warn_long_resume", warnLongResume ? "true" : "false"]) { _, _, _ in }
         rebuild()
         refresh()
         Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in self?.refresh() }
@@ -304,9 +303,6 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let login = action(L("Start at Login", "登录时自动启动"), #selector(toggleLogin))
         login.state = autostartOn ? .on : .off
         menu.addItem(login)
-        let warn = action(L("Warn Before Resuming Long Conversations", "继续超长对话前提醒"), #selector(toggleWarnLongResume))
-        warn.state = warnLongResume ? .on : .off
-        menu.addItem(warn)
         let auto = action(L("Install Updates Automatically", "自动安装更新"), #selector(toggleAutoInstall))
         auto.state = autoInstall ? .on : .off
         menu.addItem(auto)
@@ -479,11 +475,11 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // 1. The target conversation is huge and idle past its cache lifetime: the next
         //    message there re-reads all of it, however little this transfer adds.
         // 2. An unlinked long Claude session: a full import makes Codex read all of it.
-        let stale = warnLongResume && tokens >= (from == "codex" ? 250_000 : 150_000) && idle >= 55
+        let stale = tokens >= (from == "codex" ? 250_000 : 150_000) && idle >= 55
         let est = stale || (from == "claude" && !linked && own >= 50_000) ? estimate(from, id) : [:]
         let full = est["full"] ?? 0, small = max(est["condensed"] ?? 0, 1000)
         let n = est["pending"] ?? 0, added = est["pending_tokens"] ?? 0
-        let fullImport = warnLongResume && !stale && from == "claude" && !linked && full >= 100_000
+        let fullImport = !stale && from == "claude" && !linked && full >= 100_000
         if stale || fullImport {
             let k = { (t: Int) in "\(max(1, (t + 500) / 1000))k" }
             let title: String, msg: String
@@ -534,17 +530,6 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let code = sender.representedObject as? String ?? "en"
         defaults.set(code, forKey: "language")
         run(["config", "language", code]) { _, _, _ in }  // ccx's own messages follow the menu
-        rebuild()
-    }
-
-    var warnLongResume: Bool {
-        get { defaults.object(forKey: "warnLongResume") as? Bool ?? true }
-        set { defaults.set(newValue, forKey: "warnLongResume") }
-    }
-
-    @objc func toggleWarnLongResume() {
-        warnLongResume.toggle()
-        run(["config", "warn_long_resume", warnLongResume ? "true" : "false"]) { _, _, _ in }
         rebuild()
     }
 

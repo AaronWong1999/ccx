@@ -81,7 +81,7 @@ def main(argv=None):
     nc.add_argument("thread")
     nx = sub.add_parser("new-codex", help="open Codex to continue a Claude session in a new thread")
     nx.add_argument("session")
-    cf = sub.add_parser("config", help="show or change a setting (language, warn_long_resume)")
+    cf = sub.add_parser("config", help="show or change a setting (language)")
     cf.add_argument("key", nargs="?")
     cf.add_argument("value", nargs="?")
     st = sub.add_parser("setup", help="install or repair: plugins in both apps, menu bar icon, `ccx` command")

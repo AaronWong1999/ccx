@@ -17,7 +17,7 @@ NAME = {"claude": "Claude", "codex": "Codex"}
 OTHER = {"claude": "codex", "codex": "claude"}
 
 SETTINGS = STATE_DIR / "settings.json"
-DEFAULTS = {"language": "en", "warn_long_resume": True}
+DEFAULTS = {"language": "en"}
 
 
 def setting(key: str):
