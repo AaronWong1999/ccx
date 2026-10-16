@@ -5,6 +5,11 @@ import AppKit
 
 let repoURL = "https://github.com/aaronwong1999/ccx"
 
+/// The menu's language: English (default) or Chinese, chosen in the menu.
+func L(_ en: String, _ zh: String) -> String {
+    UserDefaults.standard.string(forKey: "language") == "zh" ? zh : en
+}
+
 struct Row: Decodable {
     let id: String
     let title: String
@@ -138,13 +143,13 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
     func checkRelease(manual: Bool) {
         run(["update", "--check", "--json"]) { code, out, _ in
             guard code == 0, let r = try? JSONDecoder().decode(Release.self, from: Data(out.utf8)) else {
-                if manual { self.alert("Couldn't check for updates", "Check your network, or run `ccx update --check` in Terminal.") }
+                if manual { self.alert(L("Couldn't check for updates", "无法检查更新"), L("Check your network, or run `ccx update --check` in Terminal.", "请检查网络，或在终端运行 `ccx update --check`。")) }
                 return
             }
             self.release = r
             self.rebuild()
             guard r.available, let latest = r.latest else {
-                if manual { self.alert("You're up to date", "ccx - claudecodex \(r.current) is the latest version.") }
+                if manual { self.alert(L("You're up to date", "已是最新版本"), L("ccx - claudecodex \(r.current) is the latest version.", "ccx - claudecodex \(r.current) 已是最新。")) }
                 return
             }
             if self.autoInstall && !manual {
@@ -153,7 +158,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 self.install(latest, announce: true)
             } else if self.defaults.string(forKey: "notifiedVersion") != latest {
                 self.defaults.set(latest, forKey: "notifiedVersion")
-                self.notify("ccx \(latest) is available", "Open the ⇄ menu and choose “Update to \(latest)”.")
+                self.notify(L("ccx \(latest) is available", "ccx \(latest) 已发布"), L("Open the ⇄ menu and choose “Update to \(latest)”.", "打开 ⇄ 菜单，选择「更新到 \(latest)」。"))
             }
         }
     }
@@ -166,10 +171,10 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
             self.busy = false
             self.setIcon(busy: false)
             if code == 0 {
-                if announce { self.notify("ccx updated to \(latest)", "Claude and Codex pick up the new plugin in new conversations.") }
+                if announce { self.notify(L("ccx updated to \(latest)", "ccx 已更新到 \(latest)"), L("Claude and Codex pick up the new plugin in new conversations.", "Claude 和 Codex 会在新对话里使用新版插件。")) }
                 self.release = nil
             } else {
-                self.notify("ccx update failed", (err + out).trimmingCharacters(in: .whitespacesAndNewlines))
+                self.notify(L("ccx update failed", "ccx 更新失败"), (err + out).trimmingCharacters(in: .whitespacesAndNewlines))
             }
             self.refresh()
         }
@@ -200,44 +205,56 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
         head.attributedTitle = title
         head.isEnabled = false
         menu.addItem(head)
-        menu.addItem(caption("Continue the same task across Claude Code and Codex"))
+        menu.addItem(caption(L("Continue the same task across Claude Code and Codex", "在 Claude Code 和 Codex 之间接着干同一个任务")))
 
         if let r = release, r.available, let latest = r.latest {
-            let up = action("Update to \(latest)", #selector(updateNow), symbol: "arrow.down.circle.fill")
+            let up = action(L("Update to \(latest)", "更新到 \(latest)"), #selector(updateNow), symbol: "arrow.down.circle.fill")
             menu.addItem(up)
         }
         menu.addItem(.separator())
 
-        if busy { menu.addItem(caption("Working…")) }
+        if busy { menu.addItem(caption(L("Working…", "正在处理…"))) }
         if let d = data {
             if d.projects.isEmpty {
-                menu.addItem(caption("No Claude or Codex sessions yet"))
+                menu.addItem(caption(L("No Claude or Codex sessions yet", "还没有 Claude 或 Codex 会话")))
             } else {
-                menu.addItem(caption("RECENT PROJECTS"))
+                menu.addItem(caption(L("RECENT PROJECTS", "最近的项目")))
                 for p in d.projects { menu.addItem(projectItem(p)) }
-                menu.addItem(caption("○ not linked    ✓ linked    ↻ new progress"))
+                menu.addItem(caption(L("○ not linked    ✓ linked    ↻ new progress", "○ 未关联    ✓ 已关联    ↻ 有新进展")))
             }
             if d.codex_hook_trusted == false {
                 menu.addItem(.separator())
-                menu.addItem(action("Turn on auto-sync in Codex…", #selector(fixHook), symbol: "exclamationmark.triangle"))
+                menu.addItem(action(L("Turn on auto-sync in Codex…", "在 Codex 里开启自动同步…"), #selector(fixHook), symbol: "exclamationmark.triangle"))
             }
         } else {
-            menu.addItem(caption(lastError.map { "Couldn't read sessions: \($0)" } ?? "Reading sessions…"))
+            menu.addItem(caption(lastError.map { L("Couldn't read sessions: \($0)", "无法读取会话：\($0)") } ?? L("Reading sessions…", "正在读取会话…")))
         }
 
         menu.addItem(.separator())
-        let login = action("Start at Login", #selector(toggleLogin))
+        let lang = NSMenuItem(title: "Language / 语言", action: nil, keyEquivalent: "")
+        lang.image = NSImage(systemSymbolName: "globe", accessibilityDescription: nil)
+        let langs = NSMenu()
+        for (code, name) in [("en", "English"), ("zh", "中文")] {
+            let li = NSMenuItem(title: name, action: #selector(setLanguage(_:)), keyEquivalent: "")
+            li.target = self
+            li.representedObject = code
+            li.state = (defaults.string(forKey: "language") ?? "en") == code ? .on : .off
+            langs.addItem(li)
+        }
+        lang.submenu = langs
+        menu.addItem(lang)
+        let login = action(L("Start at Login", "登录时自动启动"), #selector(toggleLogin))
         login.state = autostartOn ? .on : .off
         menu.addItem(login)
-        let auto = action("Install Updates Automatically", #selector(toggleAutoInstall))
+        let auto = action(L("Install Updates Automatically", "自动安装更新"), #selector(toggleAutoInstall))
         auto.state = autoInstall ? .on : .off
         menu.addItem(auto)
-        menu.addItem(action("Check for Updates…", #selector(checkUpdate)))
-        menu.addItem(action("Diagnostics…", #selector(showDoctor)))
-        menu.addItem(action("Refresh", #selector(refreshClicked), key: "r"))
+        menu.addItem(action(L("Check for Updates…", "检查更新…"), #selector(checkUpdate)))
+        menu.addItem(action(L("Diagnostics…", "诊断…"), #selector(showDoctor)))
+        menu.addItem(action(L("Refresh", "刷新"), #selector(refreshClicked), key: "r"))
         menu.addItem(.separator())
-        menu.addItem(action("Star on GitHub  ·  github.com/aaronwong1999/ccx", #selector(openRepo), symbol: "star"))
-        menu.addItem(NSMenuItem(title: "Quit ccx", action: #selector(NSApp.terminate), keyEquivalent: "q"))
+        menu.addItem(action(L("Star on GitHub  ·  github.com/aaronwong1999/ccx", "在 GitHub 上点 Star  ·  github.com/aaronwong1999/ccx"), #selector(openRepo), symbol: "star"))
+        menu.addItem(NSMenuItem(title: L("Quit ccx", "退出 ccx"), action: #selector(NSApp.terminate), keyEquivalent: "q"))
     }
 
     func action(_ t: String, _ sel: Selector, key: String = "", symbol: String? = nil) -> NSMenuItem {
@@ -270,12 +287,12 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         let sub = NSMenu()
         sub.autoenablesItems = false
-        sub.addItem(caption("CONTINUE IN CLAUDE  ·  from Codex"))
-        if p.codex.isEmpty { sub.addItem(caption("No Codex threads")) }
+        sub.addItem(caption(L("CONTINUE IN CLAUDE  ·  from Codex", "到 Claude 接着干  ·  来自 Codex")))
+        if p.codex.isEmpty { sub.addItem(caption(L("No Codex threads", "没有 Codex 会话"))) }
         for r in p.codex { sub.addItem(sessionItem(r, from: "codex")) }
         sub.addItem(.separator())
-        sub.addItem(caption("CONTINUE IN CODEX  ·  from Claude"))
-        if p.claude.isEmpty { sub.addItem(caption("No Claude sessions")) }
+        sub.addItem(caption(L("CONTINUE IN CODEX  ·  from Claude", "到 Codex 接着干  ·  来自 Claude")))
+        if p.claude.isEmpty { sub.addItem(caption(L("No Claude sessions", "没有 Claude 会话"))) }
         for r in p.claude { sub.addItem(sessionItem(r, from: "claude")) }
         it.submenu = sub
         return it
@@ -284,7 +301,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
     func sessionItem(_ r: Row, from: String) -> NSMenuItem {
         let glyph = ["new": "○", "updated": "↻", "linked": "✓", "mirror": "·"][r.status] ?? "○"
         var title = r.title.count > 44 ? String(r.title.prefix(44)) + "…" : r.title
-        if r.status == "mirror" { title += "  (imported copy)" }
+        if r.status == "mirror" { title += L("  (imported copy)", "  （导入的副本）") }
         let i = NSMenuItem(title: "", action: #selector(sessionClicked(_:)), keyEquivalent: "")
         i.target = self
         i.representedObject = ["from": from, "id": r.id]
@@ -296,8 +313,8 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
             .font: NSFont.menuFont(ofSize: NSFont.smallSystemFontSize), .foregroundColor: NSColor.tertiaryLabelColor]))
         i.attributedTitle = s
         i.toolTip = (r.status == "new" || r.status == "mirror")
-            ? "Import into the other app and link the two; they stay in sync from then on"
-            : "Open the linked conversation in the other app; your next message there brings the new progress"
+            ? L("Import into the other app and link the two; they stay in sync from then on", "导入到另一边并关联，之后两边自动同步")
+            : L("Open the linked conversation in the other app; your next message there brings the new progress", "打开另一边关联的会话；在那边发一句话就会带上新进展")
         i.isEnabled = !busy
         return i
     }
@@ -320,7 +337,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
             self.busy = false
             self.setIcon(busy: false)
             let text = (out + err).trimmingCharacters(in: .whitespacesAndNewlines)
-            if code != 0 { self.alert("That didn't work", text) } else if showOutput { self.alert(title, text) }
+            if code != 0 { self.alert(L("That didn't work", "没有成功"), text) } else if showOutput { self.alert(title, text) }
             self.refresh()
         }
     }
@@ -332,10 +349,15 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc func updateNow() { if let l = release?.latest { install(l, announce: true) } }
     @objc func checkUpdate() { checkRelease(manual: true) }
-    @objc func showDoctor() { work(["doctor"], title: "ccx diagnostics", showOutput: true) }
-    @objc func fixHook() { work(["setup"], title: "ccx setup", showOutput: true) }
+    @objc func showDoctor() { work(["doctor"], title: L("ccx diagnostics", "ccx 诊断"), showOutput: true) }
+    @objc func fixHook() { work(["setup"], title: L("ccx setup", "ccx 设置"), showOutput: true) }
     @objc func refreshClicked() { refresh() }
     @objc func openRepo() { NSWorkspace.shared.open(URL(string: repoURL)!) }
+
+    @objc func setLanguage(_ sender: NSMenuItem) {
+        defaults.set(sender.representedObject as? String ?? "en", forKey: "language")
+        rebuild()
+    }
 
     @objc func toggleAutoInstall() {
         autoInstall.toggle()

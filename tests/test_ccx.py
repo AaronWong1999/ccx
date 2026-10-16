@@ -260,6 +260,16 @@ class PairsSync(Base):
 
 
 class Interfaces(Base):
+    def test_cli_flags_before_or_after_subcommand(self):
+        from ccx import cli, install
+        fake = {"current": "0.0.1", "latest": "0.0.2", "available": True, "url": "u"}
+        for argv in (["update", "--check", "--json"], ["--json", "update", "--check"]):
+            out = io.StringIO()
+            with mock.patch.object(install, "check", lambda: fake), redirect_stdout(out), self.assertRaises(SystemExit) as e:
+                cli.main(argv)
+            self.assertEqual(e.exception.code, 0)
+            self.assertEqual(json.loads(out.getvalue())["latest"], "0.0.2")
+
     def test_hook_injects_only_for_paired_sessions(self):
         claude_file(PROJ_A, "c-hook", [user("hi")], title="hook")
         self.cx.add("x-hook", PROJ_A, "hook", [umsg("hi")])

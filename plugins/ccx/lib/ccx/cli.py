@@ -40,13 +40,30 @@ def run_transfer(src_tool: str, sid: str, a):
             print(f"  open: open '{t['deep_link']}'")
 
 
+def _reorder(argv, commands) -> list:
+    """Move shared flags given before the subcommand to after it (default: switch)."""
+    if any(x in ("-h", "--help", "--version") for x in argv[:1]):
+        return argv
+    head, i = [], 0
+    while i < len(argv) and argv[i] not in commands:
+        head.append(argv[i])
+        i += 1
+    rest = argv[i:] or ["switch"]
+    return rest[:1] + head + rest[1:]
+
+
 def main(argv=None):
+    # Shared flags work before or after the subcommand: `ccx --json update --check`
+    # is rewritten to `ccx update --check --json` before parsing.
+    common = argparse.ArgumentParser(add_help=False)
+    common.add_argument("-C", dest="cwd", default=os.getcwd(), help="project folder (default: current folder)")
+    common.add_argument("--no-open", action="store_true", help="import/link only, don't open the desktop app")
+    common.add_argument("--json", action="store_true", help="JSON output")
     p = argparse.ArgumentParser(prog="ccx", description="ccx - claudecodex: continue the same task across Claude Code and Codex")
     p.add_argument("--version", action="version", version=f"ccx - claudecodex {__version__}")
-    p.add_argument("-C", dest="cwd", default=os.getcwd(), help="project folder (default: current folder)")
-    p.add_argument("--no-open", action="store_true", help="import/link only, don't open the desktop app")
-    p.add_argument("--json", action="store_true", help="JSON output")
     sub = p.add_subparsers(dest="cmd")
+    _add = sub.add_parser
+    sub.add_parser = lambda *args, **kw: _add(*args, parents=[common], **kw)
     sub.add_parser("switch", help="(default) take this folder's most recent session to the other app")
     for dst in ("codex", "claude"):
         sp = sub.add_parser(f"to-{dst}", help=f"take a {NAME[OTHER[dst]]} session to {NAME[dst]} "
@@ -68,7 +85,7 @@ def main(argv=None):
     au.add_argument("state", choices=["on", "off", "status"])
     un = sub.add_parser("uninstall", help="remove the plugins, menu bar icon and `ccx` command")
     un.add_argument("--purge", action="store_true", help="also delete link records in ~/.ccx")
-    a = p.parse_args(argv)
+    a = p.parse_args(_reorder(list(sys.argv[1:] if argv is None else argv), set(sub.choices)))
     cwd = real(a.cwd)
 
     try:

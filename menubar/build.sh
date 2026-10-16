@@ -9,14 +9,16 @@ VERSION="${3:-0.0.0}"
 TMP="$(mktemp -d)"
 mkdir -p "$TMP/ccx.app/Contents/MacOS" "$TMP/ccx.app/Contents/Resources"
 swiftc -O -swift-version 5 -o "$TMP/ccx.app/Contents/MacOS/ccx" "$HERE/main.swift" -framework AppKit
+cp "$HERE/AppIcon.icns" "$TMP/ccx.app/Contents/Resources/AppIcon.icns"
 cat > "$TMP/ccx.app/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
   <key>CFBundleIdentifier</key><string>io.github.aaronwong1999.ccx</string>
   <key>CFBundleName</key><string>ccx</string>
-  <key>CFBundleDisplayName</key><string>ccx</string>
+  <key>CFBundleDisplayName</key><string>ccx - claudecodex</string>
   <key>CFBundleExecutable</key><string>ccx</string>
+  <key>CFBundleIconFile</key><string>AppIcon</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleShortVersionString</key><string>$VERSION</string>
   <key>CFBundleVersion</key><string>$VERSION</string>
