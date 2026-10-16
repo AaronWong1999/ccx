@@ -1,6 +1,6 @@
 {
   "name": "ccx",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Continue the same task across Codex and Claude Code: import a Claude Code session into this thread, keep both in sync, or hand this thread to Claude.",
   "author": { "name": "Aaron Wong", "url": "https://github.com/aaronwong1999" },
   "homepage": "https://github.com/aaronwong1999/ccx",

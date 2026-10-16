@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import subprocess
 from dataclasses import dataclass
@@ -56,10 +57,28 @@ def same_dir(a: str, b: str) -> bool:
     return bool(a and b) and real(a) == real(b)
 
 
+_RELAYED = re.compile(r"<cross-session-message[^>]*>(.*?)</cross-session-message>", re.S)
+_LEADING_TAG = re.compile(r"\A\s*<([A-Za-z][\w-]*)[^>]*>.*?</\1>\s*", re.S)
+
+
+def user_text(text: str) -> str:
+    """What the person actually typed: drop the tagged blocks (reminders,
+    environment context) the apps prepend to a user turn. '' if nothing is left."""
+    t = _RELAYED.sub(lambda m: m.group(1), text or "")  # a message relayed from another session
+    while True:
+        m = _LEADING_TAG.match(t)
+        if not m:
+            break
+        t = t[m.end():]
+    t = t.strip()
+    if t.startswith("<") or t.startswith("# AGENTS.md") or t.startswith("# Context from my IDE"):
+        return ""
+    return t
+
+
 def is_injected(text: str) -> bool:
-    """Text the apps inject into a user turn (environment, reminders, commands)."""
-    t = (text or "").lstrip()
-    return t.startswith("<") or t.startswith("# AGENTS.md") or t.startswith("# Context from my IDE")
+    """True when a user turn holds nothing the person typed."""
+    return not user_text(text)
 
 
 def which(name: str, *candidates: str) -> Optional[str]:

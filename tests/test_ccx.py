@@ -124,6 +124,15 @@ class ClaudeUnits(Base):
         self.assertIn("[工具结果] a.py", live[2][1])
         self.assertEqual(len(live), 3)
 
+    def test_keeps_text_after_prepended_reminder(self):
+        p = claude_file(PROJ_A, "c-reminder", [
+            user("<system-reminder>\nThis conversation is now continuing…\n</system-reminder>\n\n暗号是什么？"),
+            user([text("<system-reminder>only a reminder</system-reminder>"), text("第二句")]),
+            user('<system-reminder>x</system-reminder>\n<cross-session-message from="s1">\n转发来的话\n</cross-session-message>'),
+        ])
+        self.assertEqual([u for u in claude.units(p) if u],
+                         [("user", "暗号是什么？"), ("user", "第二句"), ("user", "转发来的话")])
+
     def test_find_across_projects_and_title_search(self):
         claude_file(PROJ_B, "c-elsewhere-1234", [user("微信支付接入")], title="微信支付接入需求确认")
         s = claude.find("c-elsewhere")

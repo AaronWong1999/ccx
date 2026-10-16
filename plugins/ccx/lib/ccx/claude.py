@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 from .common import (
-    HOME, STATE_DIR, TAG, Session, clip, first_line, git_branch, is_injected, now_iso, real, same_dir, which,
+    HOME, STATE_DIR, TAG, Session, clip, first_line, git_branch, is_injected, now_iso, real, same_dir, user_text, which,
 )
 
 CLAUDE_HOME = Path(os.environ.get("CLAUDE_CONFIG_DIR", HOME / ".claude"))
@@ -65,8 +65,8 @@ def _meta(path: Path, cache: Dict[str, list]) -> Tuple[str, str, bool]:
                 c = (d.get("message") or {}).get("content")
                 if isinstance(c, list):
                     c = next((x.get("text", "") for x in c if x.get("type") == "text"), "")
-                if isinstance(c, str) and c.strip() and not is_injected(c):
-                    prompt = c
+                if isinstance(c, str) and user_text(c):
+                    prompt = user_text(c)
     label = first_line(title or prompt)
     cache[key] = [st.st_size, st.st_mtime, cwd, label, ours]
     return cwd, label, ours
@@ -140,14 +140,14 @@ def units(path: Path) -> List[Unit]:
 def _render(d: dict, skip_ids: set) -> Unit:
     content = (d.get("message") or {}).get("content")
     if isinstance(content, str):
-        ok = d["type"] == "user" and content.strip() and not is_injected(content) and TAG not in content
-        return ("user", content) if ok else None
+        typed = user_text(content) if d["type"] == "user" else ""
+        return ("user", typed) if typed and TAG not in typed else None
     parts, role = [], ("user" if d["type"] == "user" else "assistant")
     for c in content or []:
         t = c.get("type")
         if t == "text":
-            text = c.get("text", "")
-            if text.strip() and TAG not in text and not (role == "user" and is_injected(text)):
+            text = user_text(c.get("text", "")) if role == "user" else c.get("text", "")
+            if text.strip() and TAG not in text:
                 parts.append(text)
         elif t == "tool_use":
             if SELF_TOOL.search(c.get("name", "")):

@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 from . import __version__
-from .common import HOME, TAG, Session, clip, first_line, is_injected, real, which
+from .common import HOME, TAG, Session, clip, first_line, real, user_text, which
 
 APP_BUNDLES = ("/Applications/ChatGPT.app", "/Applications/Codex.app",
                str(HOME / "Applications/ChatGPT.app"), str(HOME / "Applications/Codex.app"))
@@ -163,8 +163,8 @@ def _text(content) -> str:
 def _render(it: dict) -> Unit:
     t = it.get("type")
     if t == "userMessage":
-        text = _text(it.get("content"))
-        return ("user", text) if text.strip() and not is_injected(text) and TAG not in text else None
+        text = user_text(_text(it.get("content")))
+        return ("user", text) if text and TAG not in text else None
     if t == "agentMessage":
         text = it.get("text") or ""
         return ("assistant", text) if text.strip() and TAG not in text else None
