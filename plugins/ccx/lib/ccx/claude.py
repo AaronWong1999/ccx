@@ -241,10 +241,15 @@ def write_session(cwd: str, turns: List[Tuple[str, str]], title: str) -> Session
     return Session("claude", sid, cwd, path.stat().st_mtime, title, path)
 
 
-def copy_with_new_id(src: Path) -> Path:
-    """Copy a session under a fresh id next to the original (Codex imports each file once)."""
+def copy_with_new_id(src: Path, cwd: Optional[str] = None) -> Path:
+    """Copy a session under a fresh id. With `cwd`, every record's cwd is set to it
+    and the copy is filed under that project: Codex's importer skips sessions whose
+    recorded folder looks temporary (e.g. a Claude scratch workspace) or doesn't
+    match, and it imports each source file only once."""
     nid = str(uuid.uuid4())
-    dst = src.parent / f"{nid}.jsonl"
+    folder = project_dir(cwd) if cwd else src.parent
+    folder.mkdir(parents=True, exist_ok=True)
+    dst = folder / f"{nid}.jsonl"
     with open(src, encoding="utf-8", errors="replace") as f, open(dst, "w", encoding="utf-8") as g:
         for line in f:
             try:
@@ -253,5 +258,7 @@ def copy_with_new_id(src: Path) -> Path:
                 continue
             if "sessionId" in r:
                 r["sessionId"] = nid
+            if cwd and "cwd" in r:
+                r["cwd"] = cwd
             g.write(json.dumps(r, ensure_ascii=False) + "\n")
     return dst

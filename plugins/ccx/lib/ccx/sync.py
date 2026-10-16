@@ -86,18 +86,24 @@ def menu_data(projects: int = 8, per_side: int = 6) -> dict:
 # ---------------------------------------------------------------- transfers
 
 def _import_to_codex(src: Session) -> str:
+    """Native import of a Claude session into Codex; returns the thread id."""
     prior = codex.import_history().get(str(src.path))
     if prior and codex.find(prior):
-        return prior  # Codex already has it (from its own app or the official plugin)
+        codex.unarchive(prior)  # Codex already has it (from its own app or the official plugin)
+        return prior
     tid = codex.import_claude_session(str(src.path), src.cwd, src.title)
-    if tid is None:  # imported before but that thread is gone: import a fresh copy
-        tmp = claude.copy_with_new_id(src.path)
+    if tid is None:
+        # Codex skipped the file: it was imported before, or its recorded folder
+        # looks temporary to Codex (sessions started in a scratch workspace and
+        # moved later). Import a copy filed under the session's real project.
+        tmp = claude.copy_with_new_id(src.path, src.cwd)
         try:
             tid = codex.import_claude_session(str(tmp), src.cwd, src.title)
         finally:
             tmp.unlink(missing_ok=True)
     if not tid:
-        raise RuntimeError("Codex did not return an import result")
+        raise RuntimeError(f"Codex skipped this session during import (folder {src.cwd}). "
+                           f"Run `ccx doctor`, or report it at https://github.com/aaronwong1999/ccx/issues")
     return tid
 
 

@@ -143,6 +143,17 @@ class ClaudeUnits(Base):
         self.assertEqual(claude.find("c-moved").cwd, PROJ_A)
         self.assertIn("c-moved", [x.id for x in claude.sessions(PROJ_A)])
 
+    def test_normalized_copy_for_codex_import(self):
+        p = claude_file("/tmp/scratch-xyz", "c-scratch", [user("从临时目录开始"), assistant(text("好"))])
+        cp = claude.copy_with_new_id(p, PROJ_A)
+        try:
+            recs = [json.loads(l) for l in open(cp)]
+            self.assertTrue(all(r["cwd"] == PROJ_A for r in recs if "cwd" in r))
+            self.assertEqual(cp.parent, claude.project_dir(PROJ_A))
+            self.assertNotEqual(recs[0]["sessionId"], "c-scratch")
+        finally:
+            cp.unlink()
+
     def test_find_across_projects_and_title_search(self):
         claude_file(PROJ_B, "c-elsewhere-1234", [user("微信支付接入")], title="微信支付接入需求确认")
         s = claude.find("c-elsewhere")

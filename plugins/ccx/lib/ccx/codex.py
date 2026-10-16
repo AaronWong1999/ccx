@@ -139,6 +139,14 @@ def items(tid: str) -> List[dict]:
     return [it for turn in t.get("turns") or [] for it in turn.get("items") or []]
 
 
+def unarchive(tid: str):
+    """Bring an archived thread back (no-op when it isn't archived)."""
+    try:
+        server().request("thread/unarchive", {"threadId": tid})
+    except RuntimeError:
+        pass
+
+
 def size_of(s: Optional[Session]) -> int:
     """Cheap change detector: the rollout file grows whenever the thread does."""
     try:
