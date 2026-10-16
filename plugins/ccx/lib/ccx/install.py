@@ -10,6 +10,7 @@ import re
 import shutil
 import subprocess
 import sys
+import time
 from pathlib import Path
 from typing import List, Optional, Tuple
 
@@ -145,8 +146,19 @@ def build_menubar(quiet: bool = False, force: bool = False) -> bool:
     return True
 
 
+def menubar_running() -> bool:
+    # -a: also match our own ancestors (this may run as a child of the menu bar app).
+    return run(["pgrep", "-a", "-x", "ccx"])[0] == 0
+
+
 def restart_menubar():
-    run(["pkill", "-x", "ccx"])
+    """Replace the running menu bar app with the freshly built one (even when this
+    update was started by that very app, which is our ancestor then)."""
+    run(["pkill", "-a", "-x", "ccx"])
+    for _ in range(30):
+        if not menubar_running():
+            break
+        time.sleep(0.1)
     run(["open", str(APP)])
 
 
@@ -198,7 +210,7 @@ def setup(dev: bool = False, quiet: bool = False) -> int:
         LINK.unlink()
     LINK.symlink_to(PLUGIN_BIN / "ccx")
     say(True, f"`ccx` command → {LINK}", quiet)
-    run(["pkill", "-x", "ClaudeCodex"])  # the pre-rename menu bar app
+    run(["pkill", "-a", "-x", "ClaudeCodex"])  # the pre-rename menu bar app
     shutil.rmtree(HOME / "Applications/ClaudeCodex.app", ignore_errors=True)
     if build_menubar(quiet, force=True) and not AGENT.exists():
         autostart(True)
@@ -246,7 +258,7 @@ def doctor() -> int:
             rows.append((bool(trusted), "Codex sync hook: " + ("trusted" if trusted else "not trusted (run `ccx setup`)")))
     except RuntimeError as e:
         rows.append((False, str(e)))
-    running = run(["pgrep", "-x", "ccx"])[0] == 0
+    running = menubar_running()
     rows.append((running, "Menu bar icon: " + ("running" if running else "not running (open ~/Applications/ccx.app)")))
     rows.append((True, "Start at login: " + ("on" if autostart(None) else "off")))
     c = check()
@@ -269,7 +281,7 @@ def uninstall(purge: bool = False) -> int:
     except RuntimeError:
         pass
     autostart(False)
-    run(["pkill", "-x", "ccx"])
+    run(["pkill", "-a", "-x", "ccx"])
     shutil.rmtree(APP, ignore_errors=True)
     if LINK.is_symlink():
         LINK.unlink()

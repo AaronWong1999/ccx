@@ -69,6 +69,13 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func applicationDidFinishLaunching(_ n: Notification) {
         setIcon(busy: false)
+        // An update restarts this app, so announce it from the new copy.
+        let bundleVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""
+        if let last = defaults.string(forKey: "lastVersion"), last != bundleVersion, !bundleVersion.isEmpty {
+            notify(L("ccx updated to \(bundleVersion)", "ccx 已更新到 \(bundleVersion)"),
+                   L("Claude and Codex pick up the new plugin in new conversations.", "Claude 和 Codex 会在新对话里使用新版插件。"))
+        }
+        defaults.set(bundleVersion, forKey: "lastVersion")
         item.button?.toolTip = "ccx - claudecodex"
         menu.delegate = self
         menu.autoenablesItems = false
@@ -253,7 +260,13 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(action(L("Diagnostics…", "诊断…"), #selector(showDoctor)))
         menu.addItem(action(L("Refresh", "刷新"), #selector(refreshClicked), key: "r"))
         menu.addItem(.separator())
-        menu.addItem(action(L("Star on GitHub  ·  github.com/aaronwong1999/ccx", "在 GitHub 上点 Star  ·  github.com/aaronwong1999/ccx"), #selector(openRepo), symbol: "star"))
+        let star = action("", #selector(openRepo), symbol: "star")
+        let st = NSMutableAttributedString(string: L("Star on GitHub", "在 GitHub 上点 Star") + "\n",
+                                           attributes: [.font: NSFont.menuFont(ofSize: 0)])
+        st.append(NSAttributedString(string: "github.com/aaronwong1999/ccx", attributes: [
+            .font: NSFont.systemFont(ofSize: NSFont.smallSystemFontSize), .foregroundColor: NSColor.secondaryLabelColor]))
+        star.attributedTitle = st
+        menu.addItem(star)
         menu.addItem(NSMenuItem(title: L("Quit ccx", "退出 ccx"), action: #selector(NSApp.terminate), keyEquivalent: "q"))
     }
 
