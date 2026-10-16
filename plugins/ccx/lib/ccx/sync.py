@@ -11,7 +11,7 @@ from datetime import datetime
 from typing import Dict, List, Optional
 
 from . import claude, codex, pairs, repairs
-from .common import NAME, OTHER, Session, git_snapshot, real, same_dir
+from .common import L, NAME, OTHER, Session, git_snapshot, real, same_dir
 
 STATUS = {"new": "not linked", "linked": "linked", "updated": "has new progress", "mirror": "imported copy"}
 
@@ -192,6 +192,9 @@ def transfer(tool: str, session_id: str, open_app: bool = True) -> dict:
 def _message(action: str, tool: str, title: str) -> str:
     dst = OTHER[tool]
     if action == "created":
-        return f"Imported {NAME[tool]} \u201c{title}\u201d into {NAME[dst]} and linked them; they stay in sync from now on."
-    return (f"\u201c{title}\u201d is already linked to a {NAME[dst]} conversation, opened it. Send any message there "
-            f"(e.g. \u201ccontinue\u201d) and the {NAME[tool]} progress comes along.")
+        return L(f"Imported {NAME[tool]} \u201c{title}\u201d into {NAME[dst]} and linked them; they stay in sync from now on.",
+                 f"已把 {NAME[tool]} 的「{title}」导入 {NAME[dst]} 并关联，之后两边会自动同步。")
+    return L(f"\u201c{title}\u201d is already linked to a {NAME[dst]} conversation, opened it. Send any message there "
+             f"(e.g. \u201ccontinue\u201d) and the {NAME[tool]} progress comes along.",
+             f"「{title}」已关联到 {NAME[dst]} 的会话，已为你打开。在那里随便说一句（比如\u201c继续\u201d），"
+             f"{NAME[tool]} 的进展就会带过去。")
