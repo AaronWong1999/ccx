@@ -171,13 +171,14 @@ IMPORT_OVERHEAD = 1.8  # native imports keep tool output ccx clips: measured ~21
 def estimate(tool: str, session_id: str) -> dict:
     """Rough tokens the other app reads on the first reply: after a full native
     import vs. a new conversation that continues from the condensed progress."""
+    n, added = pairs.pending(tool, session_id)
     s, us = pairs.session_units(tool, session_id, include_imported=True)
     us = [u for u in us if u]
     if not s or not us:
-        return {"full": 0, "condensed": 0}
+        return {"full": 0, "condensed": 0, "pending": n, "pending_tokens": added}
     full = int(est_tokens("\n".join(t for _, t in us)) * IMPORT_OVERHEAD)
     condensed = est_tokens(pairs.render(us, tool, pairs.FULL_BUDGET)) + 2_000
-    return {"full": full, "condensed": min(condensed, full)}
+    return {"full": full, "condensed": min(condensed, full), "pending": n, "pending_tokens": added}
 
 
 def transfer(tool: str, session_id: str, open_app: bool = True) -> dict:

@@ -83,11 +83,11 @@ The ⇄ menu lists recent projects and both sides' sessions: ○ new, not linked
 
 **Why can one message after switching back cost a lot of usage?** Not because of ccx: syncing adds only the condensed new progress (a few thousand tokens). But a conversation that has grown very long (hundreds of thousands of tokens) and sat idle for over an hour, while you worked in the other app, has lost its prompt cache, so the next message there re-reads all of it. ccx watches for this: the ⇄ menu offers a **new, linked conversation** instead (about 20–30k tokens of condensed progress), and if you type into such a conversation directly, ccx pauses that one message once and explains your options (send again to go ahead, `/compact`, or a new conversation). You can turn this off in the menu.
 
-**Does clicking a conversation again send everything again?** No. Each update is delivered once. After every click a window says what happened: imported (with the estimated tokens Codex reads on its first reply), linked with N new updates that arrive with your next message, or **already in sync, nothing added**. Before a long import or resume, the dialog compares the full cost with a condensed new conversation (for example ~215k vs ~25k tokens) so you can choose. ccx also recognizes Claude Code's own compaction (including the idle compaction in 2.1.299+), so a conversation that has already been compacted isn't treated as huge.
+**Does clicking a conversation again send everything again?** No. Each update is delivered once. After every click a window says what happened: imported (with the estimated tokens Codex reads on its first reply), linked with N new updates that arrive with your next message, or **already in sync, nothing added**. Before a long import, the dialog compares the full import with a condensed new conversation (for example ~215k vs ~25k tokens). When the conversation you transfer *to* is itself huge and idle, it shows both numbers separately: what the transfer adds (often just a few thousand tokens) and what the next message there re-reads (the whole conversation, because its cache has expired), next to the cost of a new, linked conversation. You choose. ccx also recognizes Claude Code's own compaction (including the idle compaction in 2.1.299+), so a conversation that has already been compacted isn't treated as huge.
 
 **为什么切回来之后，一条消息可能消耗很多额度？** 原因不在 ccx：同步只带压缩后的新进展（几千 token）。真正的成本在于：一个已经很长的对话（几十万 token），在你去另一个 app 干活时闲置了一个多小时，缓存就过期了，下一条消息会把它整个重新读一遍。ccx 会处理这种情况：⇄ 菜单会建议你**新开一个关联的对话**（只带约 2–3 万 token 的压缩进展）；如果你直接在这种对话里发消息，ccx 会先拦一次并说明几种选择（再发一次照常继续、先运行 `/compact`，或者新开对话）。这个提醒可以在菜单里关闭。
 
-**重复点击同一个会话，会不会把内容再堆一遍？** 不会，每条进展只送一次。每次点击后都会弹窗说明结果：已导入（附 Codex 第一次回复大约要读多少 token）、已关联且有 N 条新进展（你下一条消息时带入），或者**已同步，没有新内容，这次没有追加任何数据**。导入或继续一个很长的对话前，弹窗会对比完整导入和新开压缩对话的消耗（例如约 215k 对比约 25k token），由你来选。ccx 也能识别 Claude Code 自己的压缩（包括 2.1.299 起的闲置自动压缩），已经压缩过的对话不会被当成超长对话。
+**重复点击同一个会话，会不会把内容再堆一遍？** 不会，每条进展只送一次。每次点击后都会弹窗说明结果：已导入（附 Codex 第一次回复大约要读多少 token）、已关联且有 N 条新进展（你下一条消息时带入），或者**已同步，没有新内容，这次没有追加任何数据**。导入一个很长的对话前，弹窗会对比完整导入和新开压缩对话的消耗（例如约 215k 对比约 25k token）。如果要传去的那个对话本身已经很长又闲置了很久，弹窗会把两个数字分开写清楚：这次传输新增多少（常常只有几千 token），以及你在那边发下一条消息时要重新读多少（缓存过期，整个对话重读），再和新开一个关联对话的消耗放在一起，由你来选。ccx 也能识别 Claude Code 自己的压缩（包括 2.1.299 起的闲置自动压缩），已经压缩过的对话不会被当成超长对话。
 
 **Do I have to close an app first?** No. Codex data only goes through Codex's own app-server API, and syncing only adds context to the conversation you're in. It never edits a live session file.
 
@@ -161,6 +161,12 @@ python3 -m unittest discover -s tests   # needs neither Claude nor Codex · 不�
 `plugins/ccx/` is the plugin, with both a `.claude-plugin` and a `.codex-plugin` manifest; `lib/ccx/` is the core in standard-library Python 3.9+. `menubar/` is the Swift menu bar app. Releases: [docs/RELEASING.md](docs/RELEASING.md).
 
 `plugins/ccx/` 是插件本体，同时带有 `.claude-plugin` 和 `.codex-plugin` 两套清单；`lib/ccx/` 是核心代码，只用 Python 3.9+ 标准库。`menubar/` 是 Swift 写的菜单栏程序。发布流程见 [docs/RELEASING.md](docs/RELEASING.md)。
+
+## Author · 作者
+
+Made by Aaron, [@aaron0x10](https://x.com/aaron0x10) on X. Feedback and ideas are welcome there or in [Issues](https://github.com/aaronwong1999/ccx/issues).
+
+作者 Aaron，X（推特）：[@aaron0x10](https://x.com/aaron0x10)。欢迎在那里或 [Issues](https://github.com/aaronwong1999/ccx/issues) 反馈和提建议。
 
 ## License · 许可
 

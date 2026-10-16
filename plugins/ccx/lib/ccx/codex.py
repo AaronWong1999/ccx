@@ -301,6 +301,9 @@ def unarchive(tid: str):
         pass
 
 
+COMPACTED_TOKENS = 20_000  # rough size of a compacted Codex thread
+
+
 def context_state(s: Session) -> Tuple[int, float]:
     """(tokens in the thread's context at its last model call, unix time of that
     call), read from the end of its rollout. (0, updatedAt) if unknown."""
@@ -323,6 +326,13 @@ def context_state(s: Session) -> Tuple[int, float]:
         except ValueError:
             continue
         p = d.get("payload") or {}
+        if d.get("type") == "compacted" or p.get("type") == "context_compacted":
+            # Codex compacted after its last model call: the next one reads the summary.
+            try:
+                ts = datetime.fromisoformat(d["timestamp"].replace("Z", "+00:00")).timestamp()
+            except (KeyError, ValueError):
+                ts = s.mtime
+            return COMPACTED_TOKENS, ts
         if d.get("type") == "event_msg" and p.get("type") == "token_count" and p.get("info"):
             u = p["info"].get("last_token_usage") or {}
             try:

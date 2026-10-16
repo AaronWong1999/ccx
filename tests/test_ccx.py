@@ -452,6 +452,7 @@ class Interfaces(Base):
             again = sync.transfer("claude", "c-more", open_app=False)
             self.assertEqual((again["action"], again["pending"]), ("linked", 2))
             self.assertGreater(again["pending_tokens"], 0)
+            self.assertEqual(sync.estimate("claude", "c-more")["pending"], 2)
             pairs.pull("codex", "x-more")  # the next Codex prompt delivers them
             self.assertEqual(sync.transfer("claude", "c-more", open_app=False)["action"], "in_sync")
 

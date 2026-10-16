@@ -151,11 +151,11 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
         return o
     }
 
-    /// (full, condensed) tokens the other app reads on its first reply.
-    func estimate(_ from: String, _ id: String) -> (Int, Int) {
+    /// Tokens the other app reads: full import, condensed new conversation, and the
+    /// pending updates a transfer to the linked conversation adds.
+    func estimate(_ from: String, _ id: String) -> [String: Int] {
         let o = runNow(["estimate", from, id])
-        let d = (try? JSONSerialization.jsonObject(with: Data(o.utf8))) as? [String: Any] ?? [:]
-        return (d["full"] as? Int ?? 0, max(d["condensed"] as? Int ?? 0, 1000))
+        return (try? JSONSerialization.jsonObject(with: Data(o.utf8))) as? [String: Int] ?? [:]
     }
 
     func refresh() {
@@ -356,11 +356,11 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         let sub = NSMenu()
         sub.autoenablesItems = false
-        sub.addItem(caption(L("TO CLAUDE · from Codex", "到 Claude 接着干 · 来自 Codex")))
+        sub.addItem(caption(L("Transfer to Claude · from Codex", "传输到 Claude · 来自 Codex")))
         if p.codex.isEmpty { sub.addItem(caption(L("No Codex threads", "没有 Codex 会话"))) }
         for r in p.codex { sub.addItem(sessionItem(r, from: "codex")) }
         sub.addItem(.separator())
-        sub.addItem(caption(L("TO CODEX · from Claude", "到 Codex 接着干 · 来自 Claude")))
+        sub.addItem(caption(L("Transfer to Codex · from Claude", "传输到 Codex · 来自 Claude")))
         if p.claude.isEmpty { sub.addItem(caption(L("No Claude sessions", "没有 Claude 会话"))) }
         for r in p.claude { sub.addItem(sessionItem(r, from: "claude")) }
         it.submenu = sub
@@ -472,60 +472,45 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc func sessionClicked(_ sender: NSMenuItem) {
         guard let o = sender.representedObject as? [String: String], let from = o["from"], let id = o["id"] else { return }
-        // Going back to a huge Claude conversation that sat idle past its cache lifetime
-        // re-reads the whole thing. Offer a fresh, linked conversation instead.
+        let dst = from == "codex" ? "Claude" : "Codex"
+        // tokens/idle describe the linked conversation on the other side (the target).
         let tokens = Int(o["tokens"] ?? "") ?? 0, idle = Int(o["idle"] ?? "") ?? 0
+        let own = Int(o["own"] ?? "") ?? 0, linked = o["linked"] == "1"
         // In click tests, `--answer new|open|cancel` stands in for the button press.
         let a0 = CommandLine.arguments, preset = a0.firstIndex(of: "--answer").map { a0[$0 + 1] }
-        if from == "codex", tokens >= 250_000, idle >= 55, clickTest, let p = preset {
-            print("DIALOG: long conversation (\(tokens / 1000)k tokens, idle \(idle) min) -> \(p)")
-            if p == "new" { work(["new-claude", id], title: "", showOutput: false); return }
-            if p == "cancel" { exit(0) }
-        }
-        if from == "codex", tokens >= 250_000, idle >= 55, !clickTest {
-            let small = estimate(from, id).1 / 1000
-            NSApp.activate(ignoringOtherApps: true)
-            let a = NSAlert()
-            a.messageText = L("This Claude conversation is very long", "这个 Claude 对话非常长")
-            a.informativeText = L(
-                "It is about \(tokens / 1000)k tokens and has been idle for \(idle / 60) h \(idle % 60) min, so its cache has expired: your next message there re-reads all \(tokens / 1000)k.\n\nA new conversation brings over the condensed progress instead: about \(small)k tokens, and it stays linked.",
-                "它大约 \(tokens / 1000)k token，已闲置 \(idle / 60) 小时 \(idle % 60) 分钟，缓存已过期：在那里发下一条消息会把这 \(tokens / 1000)k 全部重新读一遍。\n\n新开一个对话只带压缩后的进展：约 \(small)k token，并保持关联。")
-            a.addButton(withTitle: L("New Conversation", "新开对话"))
-            a.addButton(withTitle: L("Open It Anyway", "仍然打开"))
-            a.addButton(withTitle: L("Cancel", "取消"))
-            switch a.runModal() {
-            case .alertFirstButtonReturn: work(["new-claude", id], title: "", showOutput: false); return
-            case .alertThirdButtonReturn: return
-            default: break
+        // 1. The target conversation is huge and idle past its cache lifetime: the next
+        //    message there re-reads all of it, however little this transfer adds.
+        // 2. An unlinked long Claude session: a full import makes Codex read all of it.
+        let stale = tokens >= (from == "codex" ? 250_000 : 150_000) && idle >= 55
+        let est = stale || (from == "claude" && !linked && own >= 50_000) ? estimate(from, id) : [:]
+        let full = est["full"] ?? 0, small = max(est["condensed"] ?? 0, 1000)
+        let n = est["pending"] ?? 0, added = est["pending_tokens"] ?? 0
+        let fullImport = !stale && from == "claude" && !linked && full >= 100_000
+        if stale || fullImport {
+            let k = { (t: Int) in "\(max(1, (t + 500) / 1000))k" }
+            let title: String, msg: String
+            if fullImport {
+                title = L("This Claude conversation is very long", "这个 Claude 对话非常长")
+                msg = L("A full import makes Codex read about \(k(full)) tokens of it on its first reply.\n\nA new Codex conversation reads only the condensed progress instead: about \(k(small)) tokens, and it stays linked.",
+                        "完整导入后，Codex 第一次回复会读取它约 \(k(full)) token。\n\n新开一个 Codex 对话只读压缩后的进展：约 \(k(small)) token，并保持关联。")
+            } else {
+                let adds = n > 0 ? L("This transfer adds only the new progress: \(n) updates, about \(k(added)) tokens.",
+                                     "这次只传新进展：\(n) 条，约 \(k(added)) token。")
+                                 : L("There is no new progress to transfer.", "这次没有新进展需要传。")
+                title = L("The \(dst) conversation it goes to is very long", "要传去的 \(dst) 对话已经很长")
+                msg = adds + L(" But that \(dst) conversation itself is about \(k(tokens)) tokens and has been idle for \(idle / 60) h \(idle % 60) min, so its cache has likely expired: with your next message there, \(dst) re-reads all of it, about \(k(tokens + added)) tokens.\n\nA new \(dst) conversation reads only the condensed progress: about \(k(small)) tokens, and it stays linked.",
+                               "但目标 \(dst) 对话本身已有约 \(k(tokens)) token，闲置了 \(idle / 60) 小时 \(idle % 60) 分钟，缓存很可能已过期：你在那里发下一条消息时，\(dst) 会把整个对话重新读一遍，约 \(k(tokens + added)) token。\n\n新开一个 \(dst) 对话只读压缩后的进展：约 \(k(small)) token，并保持关联。")
             }
-        }
-        // Toward Codex: a full import of a long Claude session makes Codex read all of it
-        // on its first reply; a long linked Codex thread that sat idle re-reads all of it.
-        let own = Int(o["own"] ?? "") ?? 0, linked = o["linked"] == "1"
-        // Unlinked Claude sessions: decide by what a full import really costs Codex
-        // (Claude's own context may already be compacted while the transcript is long).
-        let (full, small) = from == "claude" && !linked && own >= 50_000 ? estimate(from, id)
-                          : (0, from == "claude" && linked && tokens >= 150_000 && idle >= 55 ? estimate(from, id).1 : 0)
-        let fullImport = from == "claude" && !linked && full >= 100_000
-        let staleCodex = from == "claude" && linked && tokens >= 150_000 && idle >= 55
-        if fullImport || staleCodex {
-            let k = small / 1000
-            let msg = fullImport
-                ? L("A full import makes Codex read about \(full / 1000)k tokens of this Claude conversation on its first reply.\n\nA new Codex conversation brings over the condensed progress instead: about \(k)k tokens, and it stays linked.",
-                    "完整导入后，Codex 第一次回复会读取这个 Claude 对话约 \(full / 1000)k token。\n\n新开一个 Codex 对话只带压缩后的进展：约 \(k)k token，并保持关联。")
-                : L("The linked Codex conversation is about \(tokens / 1000)k tokens and has been idle for \(idle / 60) h \(idle % 60) min, so its cache has likely expired: your next message there re-reads all \(tokens / 1000)k.\n\nA new Codex conversation brings over the condensed progress instead: about \(k)k tokens, and it stays linked.",
-                    "关联的 Codex 对话大约 \(tokens / 1000)k token，已闲置 \(idle / 60) 小时 \(idle % 60) 分钟，缓存很可能已过期：在那里发下一条消息会把这 \(tokens / 1000)k 全部重新读一遍。\n\n新开一个 Codex 对话只带压缩后的进展：约 \(k)k token，并保持关联。")
             let choice: String
             if clickTest, let p = preset {
-                print("DIALOG: \(fullImport ? "full import ~\(full / 1000)k" : "stale Codex thread") vs condensed ~\(k)k -> \(p)")
+                print("DIALOG: \(title)\n\(msg)\n-> \(p)")
                 choice = p
             } else {
                 NSApp.activate(ignoringOtherApps: true)
                 let a = NSAlert()
-                a.messageText = fullImport ? L("This Claude conversation is very long", "这个 Claude 对话非常长")
-                                           : L("The Codex conversation is very long", "这个 Codex 对话非常长")
+                a.messageText = title
                 a.informativeText = msg
-                a.addButton(withTitle: L("New Codex Conversation", "新开 Codex 对话"))
+                a.addButton(withTitle: L("New \(dst) Conversation", "新开 \(dst) 对话"))
                 a.addButton(withTitle: fullImport ? L("Import Everything", "完整导入") : L("Open It Anyway", "仍然打开"))
                 a.addButton(withTitle: L("Cancel", "取消"))
                 switch a.runModal() {
@@ -534,7 +519,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 default: choice = "open"
                 }
             }
-            if choice == "new" { work(["new-codex", id], title: "", showOutput: false, notifyResult: true); return }
+            if choice == "new" { work([from == "codex" ? "new-claude" : "new-codex", id], title: "", showOutput: false, notifyResult: true); return }
             if choice == "cancel" { if clickTest { exit(0) }; return }
         }
         work([from == "codex" ? "to-claude" : "to-codex", id, "--json"], title: "", showOutput: false, notifyResult: true)
