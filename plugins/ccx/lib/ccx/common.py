@@ -142,10 +142,18 @@ def copy_to_clipboard(text: str):
     subprocess.run(["pbcopy"], input=text.encode("utf-8"), env=env, check=False)
 
 
+GIT_TIMEOUT = 4  # seconds: a huge or busy working tree must never stall a prompt or a transfer
+
+
 def _git(cwd: str, *args: str) -> str:
+    """'' when not a repository, on error, or when git is too slow."""
     if not cwd or not os.path.isdir(cwd):
         return ""
-    r = subprocess.run(["git", "-C", cwd, *args], capture_output=True, text=True)
+    env = {**os.environ, "GIT_OPTIONAL_LOCKS": "0"}  # read-only: never take index locks
+    try:
+        r = subprocess.run(["git", "-C", cwd, *args], capture_output=True, text=True, env=env, timeout=GIT_TIMEOUT)
+    except (subprocess.TimeoutExpired, OSError):
+        return "" if args[:1] != ("status",) else "(git status took too long; skipped)"
     return r.stdout.strip() if r.returncode == 0 else ""
 
 

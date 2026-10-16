@@ -322,6 +322,14 @@ class PairsSync(Base):
         self.assertIn("2. 样式", out)
         self.assertNotIn("stopped in the middle", out)
 
+    def test_slow_git_never_blocks(self):
+        from ccx import common
+        def slow(*a, **k):
+            raise common.subprocess.TimeoutExpired(cmd="git", timeout=4)
+        with mock.patch.object(common.subprocess, "run", side_effect=slow):
+            self.assertIn("took too long", common.git_snapshot(PROJ_A))
+            self.assertEqual(common.git_branch(PROJ_A), "HEAD")
+
     def test_render_budget_keeps_newest(self):
         items = [("user", f"问题{i}") for i in range(50)] + [("assistant", "最后的回答")]
         out = pairs.render(items, "codex", budget=60)

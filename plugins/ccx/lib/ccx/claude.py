@@ -241,12 +241,18 @@ def desktop_cli() -> Optional[str]:
     return which("claude", *bundled, str(HOME / ".local/bin/claude"))
 
 
+_VERSION: Optional[str] = None
+
+
 def version() -> str:
-    b = desktop_cli()
-    try:
-        return subprocess.run([b, "--version"], capture_output=True, text=True, timeout=10).stdout.split()[0]
-    except Exception:
-        return "2.1.0"
+    global _VERSION
+    if _VERSION is None:
+        try:
+            _VERSION = subprocess.run([desktop_cli(), "--version"], capture_output=True, text=True,
+                                      timeout=10).stdout.split()[0]
+        except Exception:
+            _VERSION = "2.1.0"
+    return _VERSION
 
 
 def write_session(cwd: str, turns: List[Tuple[str, str]], title: str) -> Session:
