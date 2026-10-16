@@ -15,7 +15,7 @@ import time
 from typing import List, Optional, Tuple
 
 from . import claude, codex
-from .common import NAME, OTHER, STATE_DIR, TAG, Session, clip, folder_note, git_snapshot
+from .common import NAME, OTHER, PLAN, STATE_DIR, TAG, Session, clip, folder_note, git_snapshot
 
 PAIRS = STATE_DIR / "pairs.json"
 HOOK_BUDGET = 24_000   # chars injected automatically with a prompt
@@ -76,7 +76,7 @@ def side(tool: str, sid: str) -> dict:
     """A pair side positioned at the session's current end (nothing pending)."""
     s, us = session_units(tool, sid)
     if not s:
-        raise RuntimeError(f"找不到 {NAME[tool]} 会话 {sid}")
+        raise RuntimeError(f"{NAME[tool]} session {sid} not found")
     d = {"id": s.id, "cwd": s.cwd, "cursor": len(us)}
     if tool == "codex":
         d["size"] = codex.size_of(s)
@@ -86,9 +86,11 @@ def side(tool: str, sid: str) -> dict:
 # ------------------------------------------------------------------- deltas
 
 def render(items: List[Tuple[str, str]], src_tool: str, budget: int) -> str:
-    """Readable transcript of units, keeping the newest within budget."""
-    who = {"user": "【用户】", "assistant": f"【{NAME[src_tool]}】"}
-    lines = [who[r] + t.strip() for r, t in items]
+    """Readable transcript of units, keeping the newest within budget. The latest
+    task list is always kept in full, and a turn cut off mid-step is called out."""
+    who = {"user": "[user] ", "assistant": f"[{NAME[src_tool]}] "}
+    plan = next((t for _, t in reversed(items) if t.startswith(PLAN)), None)
+    lines = [who[r] + t.strip() for r, t in items if not (t.startswith(PLAN) and t is not plan)]
     kept, size = [], 0
     for line in reversed(lines):
         if size + len(line) > budget and kept:
@@ -96,22 +98,30 @@ def render(items: List[Tuple[str, str]], src_tool: str, budget: int) -> str:
         kept.append(line)
         size += len(line)
     kept.reverse()
+    head = []
     dropped = len(lines) - len(kept)
-    head = ""
     if dropped:
-        asks = [clip(t, 200) for r, t in items[:dropped] if r == "user"]
-        head = f"（更早的 {dropped} 条已省略。其中用户说过：" + "；".join(asks[-15:]) + "）\n\n"
-    return head + "\n\n".join(kept)
+        shown = set(kept)
+        asks = [clip(t, 200) for r, t in items if r == "user" and who["user"] + t.strip() not in shown]
+        head.append(f"({dropped} earlier entries omitted. The user had asked: " + " | ".join(asks[-15:]) + ")")
+    if plan and not any(plan.strip() in k for k in kept):
+        head.append(f"Latest task list:\n{plan[len(PLAN):].strip()}")
+    tail = []
+    last = items[-1][1] if items else ""
+    if items and items[-1][0] == "assistant" and last.lstrip().startswith(("[tool", "[ran", "[result", "[edited", "[output")):
+        tail.append(f"NOTE: {NAME[src_tool]} stopped in the middle of a step (for example it ran out of usage). "
+                    f"Its last action is above; check whether it finished before you go on.")
+    return "\n\n".join(head + kept + tail)
 
 
 def wrap(body: str, src: Session, here_cwd: str, first: bool) -> str:
-    what = "完整对话（已压缩）" if first else "自上次同步以来的新进展"
+    what = "whole conversation (condensed)" if first else "progress since the last sync"
     note = folder_note(here_cwd, src.cwd, src.tool)
     return (
         f"<{TAG} from=\"{src.tool}\" session=\"{src.id}\" title=\"{src.title}\">\n"
-        f"以下是这个任务在 {NAME[src.tool]} 里的{what}。把它当作你自己已经做过的工作，在此基础上继续；"
-        f"代码改动以磁盘上的文件为准。\n" + (f"\n{note}\n" if note else "") +
-        f"\n{body}\n\n当前目录的 git 状态：\n```\n{git_snapshot(here_cwd or src.cwd)}\n```\n</{TAG}>"
+        f"Below is this task's {what} in {NAME[src.tool]}. Treat it as work you already did and carry on "
+        f"from it; the files on disk are the source of truth for code.\n" + (f"\n{note}\n" if note else "") +
+        f"\n{body}\n\ngit status here:\n```\n{git_snapshot(here_cwd or src.cwd)}\n```\n</{TAG}>"
     )
 
 
@@ -143,7 +153,7 @@ def continue_from(here_tool: str, here_id: str, here_cwd: str, other_id: str) ->
     other = OTHER[here_tool]
     s, us = session_units(other, other_id)
     if not s or not any(us):
-        raise RuntimeError(f"{NAME[other]} 会话 {other_id} 不存在或是空的")
+        raise RuntimeError(f"{NAME[other]} session {other_id} not found or empty")
     here = side(here_tool, here_id) if (claude.find(here_id) if here_tool == "claude" else codex.find(here_id)) \
         else {"id": here_id, "cwd": here_cwd, "cursor": 0}
     here["cwd"] = here_cwd or here["cwd"]

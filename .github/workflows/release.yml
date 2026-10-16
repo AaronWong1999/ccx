@@ -1,0 +1,26 @@
+name: release
+# Push a tag like v0.0.2 (matching the version in plugins/ccx/lib/ccx/__init__.py
+# and both plugin.json files) to publish a GitHub Release. Installed copies of
+# ccx notice it and update (automatically, unless turned off in the ⇄ menu).
+on:
+  push:
+    tags: ["v*"]
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Version matches the tag
+        run: |
+          v="${GITHUB_REF_NAME#v}"
+          grep -q "__version__ = \"$v\"" plugins/ccx/lib/ccx/__init__.py
+          grep -q "\"version\": \"$v\"" plugins/ccx/.claude-plugin/plugin.json
+          grep -q "\"version\": \"$v\"" plugins/ccx/.codex-plugin/plugin.json
+      - name: Tests
+        run: python3 -m unittest discover -s tests
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" --title "ccx - claudecodex $GITHUB_REF_NAME" --generate-notes

@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 from . import __version__
-from .common import HOME, TAG, Session, clip, first_line, real, user_text, which
+from .common import HOME, PLAN, TAG, Session, clip, first_line, real, user_text, which
 
 APP_BUNDLES = ("/Applications/ChatGPT.app", "/Applications/Codex.app",
                str(HOME / "Applications/ChatGPT.app"), str(HOME / "Applications/Codex.app"))
@@ -30,7 +30,7 @@ def codex_bin() -> str:
     bundled = [f"{a}/Contents/Resources/codex-cli/bin/codex" for a in APP_BUNDLES]
     b = which("codex", *bundled)
     if not b:
-        raise RuntimeError("找不到 Codex：请先安装 Codex 桌面版")
+        raise RuntimeError("Codex not found: install the Codex desktop app first")
     return b
 
 
@@ -53,7 +53,7 @@ class AppServer:
             return None
         line = self.p.stdout.readline()
         if not line:
-            raise RuntimeError("Codex app-server 意外退出")
+            raise RuntimeError("Codex app-server exited unexpectedly")
         return json.loads(line)
 
     def request(self, method: str, params: dict, timeout: float = 60) -> dict:
@@ -67,11 +67,11 @@ class AppServer:
                 continue
             if msg.get("id") == rid:
                 if "error" in msg:
-                    raise RuntimeError(f"Codex {method} 失败: {msg['error'].get('message', msg['error'])}")
+                    raise RuntimeError(f"Codex {method} failed: {msg['error'].get('message', msg['error'])}")
                 return msg.get("result") or {}
             if "method" in msg:
                 self.notifications.append(msg)
-        raise TimeoutError(f"Codex {method} 超时")
+        raise TimeoutError(f"Codex {method} timed out")
 
     def wait_notification(self, method: str, match, timeout: float = 180) -> dict:
         end = time.time() + timeout
@@ -82,7 +82,7 @@ class AppServer:
             msg = self._read(1)
             if msg and "method" in msg:
                 self.notifications.append(msg)
-        raise TimeoutError(f"等待 Codex {method} 超时")
+        raise TimeoutError(f"timed out waiting for Codex {method}")
 
     def close(self):
         if self.p.poll() is None:
@@ -169,13 +169,13 @@ def _render(it: dict) -> Unit:
         text = it.get("text") or ""
         return ("assistant", text) if text.strip() and TAG not in text else None
     if t == "plan":
-        return ("assistant", f"[计划] {clip(it.get('text', ''), 600)}")
+        return ("assistant", f"{PLAN}\n{it.get('text', '').strip()}")
     if t == "commandExecution":
         out = clip(it.get("aggregatedOutput") or "", 400)
-        return ("assistant", f"[执行命令] {clip(str(it.get('command')), 300)}" + (f"\n[输出] {out}" if out else ""))
+        return ("assistant", f"[ran] {clip(str(it.get('command')), 300)}" + (f"\n[output] {out}" if out else ""))
     if t == "fileChange":
         paths = [c.get("path", "") for c in it.get("changes") or [] if isinstance(c, dict)]
-        return ("assistant", "[修改文件] " + ", ".join(paths[:20])) if paths else None
+        return ("assistant", "[edited] " + ", ".join(paths[:20])) if paths else None
     if t == "mcpToolCall":
         if it.get("server") in SELF_SERVERS:
             return None
@@ -183,13 +183,13 @@ def _render(it: dict) -> Unit:
         res = _text((res or {}).get("content")) if isinstance(res, dict) else str(res or "")
         if TAG in res:
             return None
-        return ("assistant", f"[调用工具 {it.get('server')}.{it.get('tool')}] "
-                             f"{clip(json.dumps(it.get('arguments'), ensure_ascii=False), 300)}\n[结果] {clip(res, 400)}")
+        return ("assistant", f"[tool {it.get('server')}.{it.get('tool')}] "
+                             f"{clip(json.dumps(it.get('arguments'), ensure_ascii=False), 300)}\n[result] {clip(res, 400)}")
     if t in ("dynamicToolCall", "functionCallOutput"):
         body = json.dumps(it.get("arguments") or it.get("output") or "", ensure_ascii=False)
-        return ("assistant", f"[调用工具 {it.get('tool') or it.get('name')}] {clip(body, 300)}")
+        return ("assistant", f"[tool {it.get('tool') or it.get('name')}] {clip(body, 300)}")
     if t == "webSearch":
-        return ("assistant", f"[搜索] {it.get('query')}")
+        return ("assistant", f"[web search] {it.get('query')}")
     return None  # reasoning, hookPrompt (our own injections), compaction, images, …
 
 
@@ -225,7 +225,7 @@ def import_claude_session(path: str, cwd: str, title: Optional[str]) -> Optional
             continue
         if r.get("failures"):
             f = r["failures"][0]
-            raise RuntimeError(f"Codex 导入失败（{f.get('failureStage')}）: {f.get('message')}")
+            raise RuntimeError(f"Codex import failed ({f.get('failureStage')}): {f.get('message')}")
         if r.get("successes"):
             return r["successes"][0].get("target")
     return None

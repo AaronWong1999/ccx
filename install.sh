@@ -1,5 +1,5 @@
 #!/bin/sh
-# ccx installer (macOS).
+# ccx - claudecodex installer (macOS).
 #
 #   curl -fsSL https://raw.githubusercontent.com/aaronwong1999/ccx/main/install.sh | sh
 #
@@ -11,7 +11,7 @@ set -e
 REPO="aaronwong1999/ccx"
 DEST="$HOME/Library/Application Support/ccx/src"
 
-[ "$(uname)" = "Darwin" ] || { echo "ccx 目前只支持 macOS"; exit 1; }
+[ "$(uname)" = "Darwin" ] || { echo "ccx currently supports macOS only"; exit 1; }
 
 # Developer install from a checkout: ./install.sh --dev
 if [ "${1:-}" = "--dev" ]; then
@@ -20,14 +20,14 @@ if [ "${1:-}" = "--dev" ]; then
 fi
 
 if ! /usr/bin/xcode-select -p >/dev/null 2>&1; then
-  echo "ccx 需要「命令行开发者工具」（提供 git、python3、swiftc，约几分钟装完）。"
-  echo "正在打开安装窗口；装好后请重新运行这条安装命令。"
+  echo "ccx needs Apple's Command Line Tools (git, python3, swiftc). Opening the installer;"
+  echo "when it finishes, run this install command again."
   /usr/bin/xcode-select --install >/dev/null 2>&1 || true
   exit 1
 fi
 
 if [ ! -d /Applications/Claude.app ] && [ ! -d /Applications/ChatGPT.app ] && [ ! -d /Applications/Codex.app ]; then
-  echo "提示：没找到 Claude 或 Codex 桌面版。ccx 会先装好，装了桌面版后运行 ccx setup 即可。"
+  echo "Note: neither the Claude nor the Codex desktop app was found. ccx installs anyway; run \`ccx setup\` after installing them."
 fi
 
 if [ -d "$DEST/.git" ]; then

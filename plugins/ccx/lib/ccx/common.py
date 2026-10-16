@@ -39,9 +39,13 @@ def now_iso() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
 
 
+# Units carrying a task list start with this, so the latest one is always kept.
+PLAN = "[task list]"
+
+
 def clip(text: str, n: int) -> str:
     text = (text or "").strip()
-    return text if len(text) <= n else text[:n] + f"…（截断，原长 {len(text)} 字符）"
+    return text if len(text) <= n else text[:n] + f"… (truncated, {len(text)} chars)"
 
 
 def first_line(text: str, n: int = 60) -> str:
@@ -105,7 +109,7 @@ def _git(cwd: str, *args: str) -> str:
 
 def git_snapshot(cwd: str) -> str:
     out = _git(cwd, "status", "--short", "--branch")
-    return clip(out, 1500) if out else "（不是 git 仓库，或工作区干净）"
+    return clip(out, 1500) if out else "(not a git repository, or nothing to report)"
 
 
 def git_branch(cwd: str) -> str:
@@ -117,16 +121,15 @@ def folder_note(here: str, there: str, there_tool: str) -> str:
     if not here or not there or same_dir(here, there):
         return ""
     if not os.path.isdir(there):
-        return (f"注意：{NAME[there_tool]} 那个会话的工作目录 {there} 在这台电脑上已经不存在了，"
-                f"你现在在 {here}。下面的进展只能当参考。")
-    same_repo = _git(here, "rev-parse", "--git-common-dir") and \
-        real(os.path.join(here, _git(here, "rev-parse", "--git-common-dir"))) == \
-        real(os.path.join(there, _git(there, "rev-parse", "--git-common-dir")))
-    if same_repo:
-        return (f"注意：两边是同一个 git 仓库的不同目录（worktree）。{NAME[there_tool]} 在 {there}"
-                f"（分支 {git_branch(there)}），你现在在 {here}（分支 {git_branch(here)}）。"
-                f"那边的改动不一定在这边的文件里，动手前先确认，必要时请用户切换到那个目录。\n"
-                f"{NAME[there_tool]} 那边的 git 状态：\n```\n{git_snapshot(there)}\n```")
-    return (f"注意：{NAME[there_tool]} 那个会话是在另一个目录 {there} 里做的，你现在在 {here}。"
-            f"那边的改动在 {there} 里，不在当前目录。先告诉用户这一点，问清是切换到 {there} 继续，"
-            f"还是只把它当参考；不要擅自去改另一个目录。")
+        return (f"NOTE: the {NAME[there_tool]} session worked in {there}, which no longer exists on this Mac. "
+                f"You are in {here}. Treat the progress below as reference only.")
+    common_here, common_there = _git(here, "rev-parse", "--git-common-dir"), _git(there, "rev-parse", "--git-common-dir")
+    if common_here and common_there and real(os.path.join(here, common_here)) == real(os.path.join(there, common_there)):
+        return (f"NOTE: both sides use the same git repository but different folders (worktrees). "
+                f"{NAME[there_tool]} worked in {there} (branch {git_branch(there)}); you are in {here} "
+                f"(branch {git_branch(here)}). Its changes may not be in your files: check before editing, "
+                f"and ask the user whether to switch to that folder.\n"
+                f"git status over there:\n```\n{git_snapshot(there)}\n```")
+    return (f"NOTE: the {NAME[there_tool]} session worked in a different folder, {there}; you are in {here}. "
+            f"Its changes are in {there}, not here. Tell the user and ask whether to continue in {there} "
+            f"or to use this only as reference. Do not edit the other folder on your own.")

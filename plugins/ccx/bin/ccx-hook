@@ -12,5 +12,5 @@ for py in $CANDIDATES; do
     PYTHONPATH="$DIR/lib" exec "$py" -m ccx.hook "$@"
   fi
 done
-echo "ccx: 需要 Python 3.9+。运行 xcode-select --install 安装命令行开发者工具即可。" >&2
+echo "ccx needs Python 3.9+: run xcode-select --install to get the Command Line Tools." >&2
 exit 1

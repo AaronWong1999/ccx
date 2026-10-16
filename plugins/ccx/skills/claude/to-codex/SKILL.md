@@ -1,10 +1,11 @@
 ---
 name: to-codex
-description: 让用户去 Codex 接着干当前这个对话：第一次导入过去并关联，之后直接打开关联的 Codex 会话。Use when the user says /to-codex, "切到 codex", "转给 codex", "在 codex 里继续", or is running out of Claude usage.
+description: Hand this conversation to Codex so the user can keep going there. The first time it is imported and linked; after that the linked Codex conversation is opened. Use when the user says /to-codex, "switch to codex", "continue in codex", 切到 codex, 转给 codex, or is running out of Claude usage.
 ---
 
-# 去 Codex 继续
+# Continue in Codex
 
-1. 如果还有没写完的改动，先停下来，不要留半截文件。
-2. 调用 ccx 的 `send_current_session`，`cwd` 传当前工作目录。
-3. 用一句话回复结果。之后不要再改代码，避免两边同时改。用户在 Codex 那边发消息时，这里的进展会带过去。
+1. If a change is half-written, finish or stop it cleanly first. Don't leave broken files.
+2. If you have a task list, make sure it's up to date: it travels with the conversation.
+3. Call ccx's `send_current_session` with the current working directory as `cwd`.
+4. Reply with one sentence about the result. Then stop editing, so the two apps don't change files at the same time. When the user sends a message on the Codex side, this side's progress goes with it.

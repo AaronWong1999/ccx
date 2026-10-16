@@ -1,12 +1,20 @@
 {
   "name": "ccx",
-  "version": "1.0.2",
-  "description": "Continue the same task across Claude Code and Codex: import a Codex thread into this conversation, keep both in sync, or hand this conversation to Codex.",
-  "author": { "name": "Aaron Wong", "url": "https://github.com/aaronwong1999" },
+  "version": "0.0.1",
+  "description": "ccx - claudecodex: continue the same task across Claude Code and Codex. Import a Codex thread into this conversation, keep both in sync, or hand this conversation to Codex.",
+  "author": {
+    "name": "Aaron Wong",
+    "url": "https://github.com/aaronwong1999"
+  },
   "homepage": "https://github.com/aaronwong1999/ccx",
   "repository": "https://github.com/aaronwong1999/ccx",
   "license": "MIT",
-  "keywords": ["codex", "session", "handoff", "sync"],
+  "keywords": [
+    "codex",
+    "session",
+    "handoff",
+    "sync"
+  ],
   "skills": "./skills/claude/",
   "mcpServers": "./.mcp.json"
 }

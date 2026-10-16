@@ -12,7 +12,7 @@ from typing import Dict, List, Optional
 from . import claude, codex, pairs
 from .common import NAME, OTHER, Session, git_snapshot, real, same_dir
 
-STATUS = {"new": "未关联", "linked": "已关联", "updated": "有新进展", "mirror": "从对面导入的副本"}
+STATUS = {"new": "not linked", "linked": "linked", "updated": "has new progress", "mirror": "imported copy"}
 
 
 def deep_link(tool: str, sid: str) -> str:
@@ -25,7 +25,7 @@ def open_in_app(tool: str, sid: str) -> bool:
 
 def continue_phrase(tool: str) -> str:
     """What to say in the partner session to pull `tool`'s progress over."""
-    return f"接着 {NAME[tool]} 继续"
+    return f"continue from {NAME[tool]}"
 
 
 # ------------------------------------------------------------------ listing
@@ -97,23 +97,23 @@ def _import_to_codex(src: Session) -> str:
         finally:
             tmp.unlink(missing_ok=True)
     if not tid:
-        raise RuntimeError("Codex 没有返回导入结果")
+        raise RuntimeError("Codex did not return an import result")
     return tid
 
 
 def _import_to_claude(src: Session) -> str:
     turns = codex.turns_for_claude(codex.items(src.id))
     if not turns:
-        raise RuntimeError("这个 Codex 会话里没有可导入的对话内容")
-    header = (f"[ccx] 以下对话从 Codex 会话 {src.id}（{src.when}）导入。"
-              "工具调用和输出已压缩成摘要；代码改动以磁盘上的文件为准。\n\n")
+        raise RuntimeError("this Codex thread has no conversation to import")
+    header = (f"[ccx] Imported from Codex thread {src.id} ({src.when}). Tool calls and output are "
+              "condensed; the files on disk are the source of truth for code.\n\n")
     turns[0] = (turns[0][0], header + turns[0][1])
-    tail = f"\n\n---\n[ccx] 导入时的 git 状态：\n```\n{git_snapshot(src.cwd)}\n```\n请在此基础上继续。"
+    tail = f"\n\n---\n[ccx] git status at import:\n```\n{git_snapshot(src.cwd)}\n```\nPick up from here."
     if turns[-1][0] == "assistant":
         turns[-1] = ("assistant", turns[-1][1] + tail)
     else:
         turns.append(("assistant", tail.strip()))
-    return claude.write_session(src.cwd, turns, f"⇄ {src.title or 'Codex 会话'}").id
+    return claude.write_session(src.cwd, turns, f"⇄ {src.title or 'Codex thread'}").id
 
 
 def transfer(tool: str, session_id: str, open_app: bool = True) -> dict:
@@ -121,7 +121,7 @@ def transfer(tool: str, session_id: str, open_app: bool = True) -> dict:
     time; afterwards just open the partner."""
     src = claude.find(session_id) if tool == "claude" else codex.find(session_id)
     if not src:
-        raise RuntimeError(f"找不到 {NAME[tool]} 会话 {session_id}")
+        raise RuntimeError(f"{NAME[tool]} session {session_id} not found")
     dst = OTHER[tool]
     pair = pairs.find(tool, src.id)
     if pair:
@@ -142,8 +142,6 @@ def transfer(tool: str, session_id: str, open_app: bool = True) -> dict:
 def _message(action: str, tool: str, title: str) -> str:
     dst = OTHER[tool]
     if action == "created":
-        return f"已导入：{NAME[tool]}「{title}」→ {NAME[dst]}，两边已关联，之后会自动同步"
-    if dst == "claude":
-        return f"「{title}」已关联到 Claude 的会话。在那里随便说一句（比如“继续”），{NAME[tool]} 的新进展就会自动带进去"
-    return (f"「{title}」已关联到 Codex 的会话。在那里说「{continue_phrase(tool)}」就会带上新进展"
-            f"（在 Codex 里信任 ccx 的 hook 之后，随便说一句也会自动带上）")
+        return f"Imported {NAME[tool]} \u201c{title}\u201d into {NAME[dst]} and linked them; they stay in sync from now on."
+    return (f"\u201c{title}\u201d is already linked to a {NAME[dst]} conversation, opened it. Send any message there "
+            f"(e.g. \u201ccontinue\u201d) and the {NAME[tool]} progress comes along.")

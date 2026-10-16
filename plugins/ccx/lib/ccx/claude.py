@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 from .common import (
-    HOME, STATE_DIR, TAG, Session, clip, first_line, git_branch, is_injected, now_iso, real, same_dir, user_text, which,
+    HOME, PLAN, STATE_DIR, TAG, Session, clip, first_line, git_branch, is_injected, now_iso, real, same_dir, user_text, which,
 )
 
 CLAUDE_HOME = Path(os.environ.get("CLAUDE_CONFIG_DIR", HOME / ".claude"))
@@ -72,10 +72,28 @@ def _meta(path: Path, cache: Dict[str, list]) -> Tuple[str, str, bool]:
     return cwd, label, ours
 
 
+DESKTOP_INDEX = HOME / "Library/Application Support/Claude/claude-code-sessions"
+
+
+def archived_ids() -> set:
+    """Sessions archived in the Claude desktop app (the session files don't record it)."""
+    out = set()
+    for f in DESKTOP_INDEX.glob("*/*/local_*.json"):
+        try:
+            d = json.loads(f.read_text())
+        except (OSError, ValueError):
+            continue
+        if d.get("isArchived") and d.get("cliSessionId"):
+            out.add(d["cliSessionId"])
+    return out
+
+
 def sessions(cwd: Optional[str] = None, query: Optional[str] = None) -> List[Session]:
-    """Claude sessions, newest first; limited to a project folder and/or a title search."""
+    """Claude sessions, newest first; limited to a project folder and/or a title search.
+    Sessions archived in the desktop app are left out."""
     if not PROJECTS.is_dir():
         return []
+    hidden = archived_ids()
     files = list(project_dir(cwd).glob("*.jsonl")) if cwd else list(PROJECTS.glob("*/*.jsonl"))
     cache = _load_cache()
     out = []
@@ -84,7 +102,7 @@ def sessions(cwd: Optional[str] = None, query: Optional[str] = None) -> List[Ses
             s_cwd, title, _ = _meta(p, cache)
         except OSError:
             continue
-        if not title or (cwd and s_cwd and not same_dir(s_cwd, cwd)):
+        if not title or p.stem in hidden or (cwd and s_cwd and not same_dir(s_cwd, cwd)):
             continue
         if query and not matches(query, title):
             continue
@@ -153,7 +171,13 @@ def _render(d: dict, skip_ids: set) -> Unit:
             if SELF_TOOL.search(c.get("name", "")):
                 skip_ids.add(c.get("id"))
                 continue
-            parts.append(f"[调用工具 {c.get('name')}] {clip(json.dumps(c.get('input'), ensure_ascii=False), 300)}")
+            todos = (c.get("input") or {}).get("todos") if c.get("name") == "TodoWrite" else None
+            if isinstance(todos, list):
+                mark = {"completed": "[x]", "in_progress": "[~]"}
+                parts.append(PLAN + "\n" + "\n".join(
+                    f"- {mark.get(t.get('status'), '[ ]')} {t.get('content') or t.get('activeForm') or ''}" for t in todos))
+            else:
+                parts.append(f"[tool {c.get('name')}] {clip(json.dumps(c.get('input'), ensure_ascii=False), 300)}")
             role = "assistant"
         elif t == "tool_result":
             if c.get("tool_use_id") in skip_ids:
@@ -162,7 +186,7 @@ def _render(d: dict, skip_ids: set) -> Unit:
             if isinstance(r, list):
                 r = "\n".join(x.get("text", "") for x in r if isinstance(x, dict))
             if (r or "").strip() and TAG not in r:
-                parts.append(f"[工具结果] {clip(r, 400)}")
+                parts.append(f"[result] {clip(r, 400)}")
             role = "assistant"  # results read as part of the agent's work
     return (role, "\n".join(parts)) if parts else None
 

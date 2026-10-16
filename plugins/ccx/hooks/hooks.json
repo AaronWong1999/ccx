@@ -3,7 +3,7 @@
     "UserPromptSubmit": [
       {
         "hooks": [
-          { "type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/bin/ccx-hook\"", "timeout": 30, "statusMessage": "ccx：同步另一边的进展" }
+          { "type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/bin/ccx-hook\"", "timeout": 30, "statusMessage": "ccx: syncing progress from the other app" }
         ]
       }
     ],

@@ -1,4 +1,4 @@
-"""ccx — continue the same task across Claude Code and Codex."""
+"""ccx - claudecodex: continue the same task across Claude Code and Codex."""
 
 from __future__ import annotations
 
@@ -17,55 +17,57 @@ def pick(tool: str, cwd: str, ref):
     if ref:
         s = claude.find(ref) if tool == "claude" else codex.find(ref)
         if not s:
-            sys.exit(f"找不到 {NAME[tool]} 会话 {ref}（用 ccx ls 查看）")
+            sys.exit(f"{NAME[tool]} session {ref} not found (see `ccx ls`)")
         return s
     ss = claude.sessions(cwd) if tool == "claude" else codex.threads(cwd, limit=1)
     if not ss:
-        sys.exit(f"当前目录没有 {NAME[tool]} 会话：{cwd}")
+        sys.exit(f"no {NAME[tool]} session in {cwd}")
     return ss[0]
 
 
 def run_transfer(src_tool: str, sid: str, a):
     res = transfer(src_tool, sid, open_app=not a.no_open)
     t = res["target"]
-    if res["action"] == "linked" and t["tool"] == "codex":
-        # Until Codex's hook is trusted, Codex pulls on request: have the phrase ready to paste.
+    if res["action"] == "linked" and t["tool"] == "codex" and codex.hooks_trusted() is False:
+        # Without the hook Codex pulls on request: have the phrase ready to paste.
         subprocess.run(["pbcopy"], input=continue_phrase(src_tool).encode(), check=False)
-        res["message"] += "（这句话已复制到剪贴板）"
+        res["message"] += f" (Say “{continue_phrase(src_tool)}” there; it is on your clipboard.)"
     if a.json:
         print(json.dumps(res, ensure_ascii=False))
     else:
         print(f"✓ {res['message']}")
         if a.no_open:
-            print(f"  打开：open '{t['deep_link']}'")
+            print(f"  open: open '{t['deep_link']}'")
 
 
 def main(argv=None):
-    p = argparse.ArgumentParser(prog="ccx", description="在 Claude Code 和 Codex 之间接着干同一个任务")
-    p.add_argument("--version", action="version", version=f"ccx {__version__}")
-    p.add_argument("-C", dest="cwd", default=os.getcwd(), help="项目目录（默认当前目录）")
-    p.add_argument("--no-open", action="store_true", help="只导入/关联，不打开桌面版")
-    p.add_argument("--json", action="store_true", help="输出 JSON")
+    p = argparse.ArgumentParser(prog="ccx", description="ccx - claudecodex: continue the same task across Claude Code and Codex")
+    p.add_argument("--version", action="version", version=f"ccx - claudecodex {__version__}")
+    p.add_argument("-C", dest="cwd", default=os.getcwd(), help="project folder (default: current folder)")
+    p.add_argument("--no-open", action="store_true", help="import/link only, don't open the desktop app")
+    p.add_argument("--json", action="store_true", help="JSON output")
     sub = p.add_subparsers(dest="cmd")
-    sub.add_parser("switch", help="（默认）把当前目录最近用过的那边的会话带到另一边")
+    sub.add_parser("switch", help="(default) take this folder's most recent session to the other app")
     for dst in ("codex", "claude"):
-        sp = sub.add_parser(f"to-{dst}", help=f"把 {NAME[OTHER[dst]]} 会话带到 {NAME[dst]}（第一次导入并关联，之后打开关联的会话）")
-        sp.add_argument("session", nargs="?", help="会话 ID 或前缀（默认当前目录最近一个）")
-    ls = sub.add_parser("ls", help="列出两边的会话和关联状态")
-    ls.add_argument("-q", "--query", help="按标题搜索（所有项目）")
+        sp = sub.add_parser(f"to-{dst}", help=f"take a {NAME[OTHER[dst]]} session to {NAME[dst]} "
+                                              f"(import and link the first time, then open the linked one)")
+        sp.add_argument("session", nargs="?", help="session id or prefix (default: newest in this folder)")
+    ls = sub.add_parser("ls", help="list both sides' sessions and their link status")
+    ls.add_argument("-q", "--query", help="search titles in every project")
     ls.add_argument("-n", type=int, default=8)
-    sub.add_parser("menu-data", help="（菜单栏程序用）最近项目和两边会话的 JSON")
-    st = sub.add_parser("setup", help="安装/修复：两边的插件、菜单栏图标、ccx 命令")
-    st.add_argument("--dev", action="store_true", help="插件从这个本地仓库安装（开发用）")
-    up = sub.add_parser("update", help="更新 ccx 和两边的插件")
+    sub.add_parser("menu-data", help=argparse.SUPPRESS)
+    st = sub.add_parser("setup", help="install or repair: plugins in both apps, menu bar icon, `ccx` command")
+    st.add_argument("--dev", action="store_true", help="install the plugin from this checkout (development)")
+    up = sub.add_parser("update", help="update ccx and both apps' plugins")
     up.add_argument("--quiet", action="store_true")
+    up.add_argument("--check", action="store_true", help="only check whether a new release is out")
     rf = sub.add_parser("_refresh", help=argparse.SUPPRESS)
     rf.add_argument("--quiet", action="store_true")
-    sub.add_parser("doctor", help="检查安装状态")
-    au = sub.add_parser("autostart", help="登录时自动启动菜单栏图标")
+    sub.add_parser("doctor", help="check the installation")
+    au = sub.add_parser("autostart", help="start the menu bar icon at login")
     au.add_argument("state", choices=["on", "off", "status"])
-    un = sub.add_parser("uninstall", help="移除两边的插件、菜单栏图标和 ccx 命令")
-    un.add_argument("--purge", action="store_true", help="同时删除配对记录 ~/.ccx")
+    un = sub.add_parser("uninstall", help="remove the plugins, menu bar icon and `ccx` command")
+    un.add_argument("--purge", action="store_true", help="also delete link records in ~/.ccx")
     a = p.parse_args(argv)
     cwd = real(a.cwd)
 
@@ -73,21 +75,21 @@ def main(argv=None):
         if a.cmd in (None, "switch"):
             c, x = claude.sessions(cwd), codex.threads(cwd, limit=1)
             if not c and not x:
-                sys.exit(f"当前目录没有任何 Claude / Codex 会话：{cwd}")
+                sys.exit(f"no Claude or Codex session in {cwd}")
             src = max((ss[0] for ss in (c, x) if ss), key=lambda s: s.mtime)
             run_transfer(src.tool, src.id, a)
         elif a.cmd in ("to-codex", "to-claude"):
             src_tool = "claude" if a.cmd == "to-codex" else "codex"
             run_transfer(src_tool, pick(src_tool, cwd, a.session).id, a)
         elif a.cmd == "ls":
-            for tool, label in (("codex", "Codex 的会话（可带到 Claude）"), ("claude", "Claude 的会话（可带到 Codex）")):
+            for tool in ("codex", "claude"):
                 rows = find_sessions(tool, cwd, a.query, a.n)
-                print(f"[{label}]")
+                print(f"[{NAME[tool]} sessions → continue in {NAME[OTHER[tool]]}]")
                 for r in rows:
                     where = f"  ({r['cwd']})" if r["other_folder"] else ""
-                    print(f"  {r['updated']}  {r['id'][:8]}  {STATUS[r['status']]:<5} {r['title']}{where}")
+                    print(f"  {r['updated']}  {r['id'][:8]}  {STATUS[r['status']]:<16} {r['title']}{where}")
                 if not rows:
-                    print("  （无）")
+                    print("  (none)")
         elif a.cmd == "menu-data":
             d = menu_data()
             d["version"] = __version__
@@ -96,6 +98,14 @@ def main(argv=None):
         elif a.cmd == "setup":
             sys.exit(install.setup(dev=a.dev))
         elif a.cmd == "update":
+            if a.check:
+                c = install.check()
+                if a.json:
+                    print(json.dumps(c))
+                else:
+                    print(f"ccx {c['current']}: " + (f"{c['latest']} is available ({c['url']}). Run `ccx update`."
+                                                    if c["available"] else "up to date."))
+                sys.exit(0)
             sys.exit(install.update(quiet=a.quiet))
         elif a.cmd == "_refresh":
             sys.exit(install.refresh(quiet=a.quiet))
@@ -107,7 +117,7 @@ def main(argv=None):
                 print("on" if on else "off")
                 sys.exit(0 if on else 1)
             install.autostart(a.state == "on")
-            print(f"✓ 登录时自动启动：{'开' if a.state == 'on' else '关'}")
+            print(f"✓ start at login: {a.state}")
         elif a.cmd == "uninstall":
             sys.exit(install.uninstall(purge=a.purge))
     except RuntimeError as e:

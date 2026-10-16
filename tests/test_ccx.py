@@ -120,8 +120,8 @@ class ClaudeUnits(Base):
         live = [u for u in us if u]
         self.assertEqual(live[0], ("user", "把登录页做完"))
         self.assertIn("好的，我先看代码", live[1][1])
-        self.assertIn("[调用工具 Bash]", live[1][1])
-        self.assertIn("[工具结果] a.py", live[2][1])
+        self.assertIn("[tool Bash]", live[1][1])
+        self.assertIn("[result] a.py", live[2][1])
         self.assertEqual(len(live), 3)
 
     def test_keeps_text_after_prepended_reminder(self):
@@ -158,7 +158,7 @@ class CodexUnits(Base):
         live = [u for u in us if u]
         self.assertEqual(live[0], ("user", "记住暗号 蓝鲸-42"))
         self.assertEqual(live[1], ("assistant", "已记住"))
-        self.assertIn("[执行命令] ls", live[2][1])
+        self.assertIn("[ran] ls", live[2][1])
         self.assertIn("github.search", live[3][1])
         self.assertIn("src/a.py", live[4][1])
         self.assertEqual(len(live), 5)
@@ -214,9 +214,9 @@ class PairsSync(Base):
         claude_file(PROJ_A, "c-here", [user("新对话")])
         self.cx.add("x-there", PROJ_B, "B 项目的任务", [umsg("在 B 里做事"), amsg("做完了一半")])
         res = pairs.continue_from("claude", "c-here", PROJ_A, "x-there")
-        self.assertIn("完整对话", res["context"])
+        self.assertIn("whole conversation", res["context"])
         self.assertIn("做完了一半", res["context"])
-        self.assertIn("另一个目录", res["context"])
+        self.assertIn("different folder", res["context"])
         self.assertIn(PROJ_B, res["context"])
         pair = pairs.find("claude", "c-here")
         self.assertEqual(pair["codex"]["id"], "x-there")
@@ -229,11 +229,34 @@ class PairsSync(Base):
         self.assertEqual(pairs.find("claude", "c-pair")["codex"]["id"], "x-new")
         self.assertIsNone(pairs.find("codex", "x-pair"))
 
+    def test_task_list_survives_budget_and_interruption_is_flagged(self):
+        p = claude_file(PROJ_A, "c-plan", [
+            user("重构登录模块"),
+            assistant({"type": "tool_use", "id": "p1", "name": "TodoWrite", "input": {"todos": [
+                {"content": "拆分 auth.py", "status": "completed"},
+                {"content": "补测试", "status": "in_progress"},
+                {"content": "更新文档", "status": "pending"}]}}),
+        ] + [assistant(text(f"第 {i} 步" * 40)) for i in range(30)] + [
+            assistant({"type": "tool_use", "id": "b1", "name": "Bash", "input": {"command": "pytest tests/test_auth.py"}}),
+        ])
+        out = pairs.render([u for u in claude.units(p) if u], "claude", budget=2000)
+        self.assertIn("Latest task list", out)
+        self.assertIn("[~] 补测试", out)
+        self.assertIn("[ ] 更新文档", out)
+        self.assertIn("stopped in the middle of a step", out)
+        self.assertIn("pytest tests/test_auth.py", out)
+
+    def test_codex_plan_kept(self):
+        us = codex.units([umsg("做个页面"), {"type": "plan", "text": "1. 布局 ✓\n2. 样式"}, amsg("开始写样式")])
+        out = pairs.render([u for u in us if u], "codex", budget=10_000)
+        self.assertIn("2. 样式", out)
+        self.assertNotIn("stopped in the middle", out)
+
     def test_render_budget_keeps_newest(self):
         items = [("user", f"问题{i}") for i in range(50)] + [("assistant", "最后的回答")]
         out = pairs.render(items, "codex", budget=60)
         self.assertIn("最后的回答", out)
-        self.assertIn("已省略", out)
+        self.assertIn("omitted", out)
 
 
 class Interfaces(Base):
@@ -260,11 +283,11 @@ class Interfaces(Base):
             listing = mcp_server.call("claude", "continue_here", {"cwd": PROJ_A, "query": "登录"})
             self.assertIn("百度登录页面", listing)
             self.assertIn("x-login", listing)
-            self.assertIn("和当前目录不同", listing)
+            self.assertIn("differs from yours", listing)
             done = mcp_server.call("claude", "continue_here", {"cwd": PROJ_A, "session_id": "x-login"})
             self.assertIn("找到了", done)
             again = mcp_server.call("claude", "continue_here", {"cwd": PROJ_A})
-            self.assertIn("没有新进展", again)
+            self.assertIn("Nothing new", again)
 
     def test_mcp_protocol(self):
         tools = {t["name"] for t in mcp_server.tools("codex")}
