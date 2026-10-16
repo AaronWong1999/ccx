@@ -9,8 +9,8 @@ import subprocess
 import sys
 
 from . import __version__, claude, codex, history, install, pairs, repairs
-from .common import NAME, OTHER, real
-from .sync import STATUS, continue_phrase, find_sessions, menu_data, transfer
+from .common import DEFAULTS, NAME, OTHER, L, real, set_setting, setting
+from .sync import STATUS, continue_phrase, find_sessions, menu_data, new_claude_conversation, transfer
 
 
 def pick(tool: str, cwd: str, ref):
@@ -73,6 +73,11 @@ def main(argv=None):
     ls.add_argument("-q", "--query", help="search titles in every project")
     ls.add_argument("-n", type=int, default=8)
     sub.add_parser("menu-data", help=argparse.SUPPRESS)
+    nc = sub.add_parser("new-claude", help="open a new Claude conversation that continues a Codex thread")
+    nc.add_argument("thread")
+    cf = sub.add_parser("config", help="show or change a setting (language, warn_long_resume)")
+    cf.add_argument("key", nargs="?")
+    cf.add_argument("value", nargs="?")
     st = sub.add_parser("setup", help="install or repair: plugins in both apps, menu bar icon, `ccx` command")
     st.add_argument("--dev", action="store_true", help="install the plugin from this checkout (development)")
     up = sub.add_parser("update", help="update ccx and both apps' plugins")
@@ -115,6 +120,15 @@ def main(argv=None):
             d["version"] = __version__
             d["codex_hook_trusted"] = codex.hooks_trusted()
             print(json.dumps(d, ensure_ascii=False))
+        elif a.cmd == "new-claude":
+            new_claude_conversation(a.thread)
+            print("✓ " + L("Opened a new Claude conversation; press Return to continue there.",
+                           "已打开一个新的 Claude 对话，按回车即可接着干。"))
+        elif a.cmd == "config":
+            if a.key and a.value is not None:
+                v = {"true": True, "on": True, "false": False, "off": False}.get(a.value.lower(), a.value)
+                set_setting(a.key, v)
+            print(json.dumps({k: setting(k) for k in DEFAULTS} if not a.key else {a.key: setting(a.key)}))
         elif a.cmd == "setup":
             sys.exit(install.setup(dev=a.dev))
         elif a.cmd == "update":

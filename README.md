@@ -81,6 +81,10 @@ The ⇄ menu lists recent projects and both sides' sessions: ○ new, not linked
 
 **能不能迁移复杂任务，或者因为额度用完而中断的会话？** 能，这正是主要用途。两个 app 每说一句话、每调用一次工具都会立刻写到磁盘，所以额度用完那一刻之前的内容都在。ccx 会带过去：所有用户消息和回复、压缩后的工具调用和输出、完整的最新任务清单（Claude 的待办或 Codex 的计划）、对面是否停在某一步中间的提示，以及 `git status`。代码本来就在你的磁盘上。限制：每次工具输出会截断；Codex 加密的推理内容带不过去；很长的会话第一次导入时，只保留最近约 6 万字符，加上你所有的提问和任务清单。
 
+**Why can one message after switching back cost a lot of usage?** Not because of ccx: syncing adds only the condensed new progress (a few thousand tokens). But a conversation that has grown very long (hundreds of thousands of tokens) and sat idle for over an hour, while you worked in the other app, has lost its prompt cache, so the next message there re-reads all of it. ccx watches for this: the ⇄ menu offers a **new, linked conversation** instead (about 20k tokens of condensed progress), and if you type into such a conversation directly, ccx pauses that one message once and explains your options (send again to go ahead, `/compact`, or a new conversation). You can turn this off in the menu.
+
+**为什么切回来之后，一条消息可能消耗很多额度？** 原因不在 ccx：同步只带压缩后的新进展（几千 token）。真正的成本在于：一个已经很长的对话（几十万 token），在你去另一个 app 干活时闲置了一个多小时，缓存就过期了，下一条消息会把它整个重新读一遍。ccx 会处理这种情况：⇄ 菜单会建议你**新开一个关联的对话**（只带约 2 万 token 的压缩进展）；如果你直接在这种对话里发消息，ccx 会先拦一次并说明几种选择（再发一次照常继续、先运行 `/compact`，或者新开对话）。这个提醒可以在菜单里关闭。
+
 **Do I have to close an app first?** No. Codex data only goes through Codex's own app-server API, and syncing only adds context to the conversation you're in. It never edits a live session file.
 
 **要先关掉某个 app 吗？** 不用。Codex 的数据只通过 Codex 自己的 app-server 接口读写；同步只是往当前对话里加上下文，从不修改正在使用的会话文件。

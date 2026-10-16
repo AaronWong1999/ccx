@@ -16,6 +16,34 @@ STATE_DIR = Path(os.environ.get("CCX_HOME", HOME / ".ccx"))
 NAME = {"claude": "Claude", "codex": "Codex"}
 OTHER = {"claude": "codex", "codex": "claude"}
 
+SETTINGS = STATE_DIR / "settings.json"
+DEFAULTS = {"language": "en", "warn_long_resume": True}
+
+
+def setting(key: str):
+    try:
+        import json as _json
+        return _json.loads(SETTINGS.read_text()).get(key, DEFAULTS.get(key))
+    except (OSError, ValueError):
+        return DEFAULTS.get(key)
+
+
+def set_setting(key: str, value):
+    import json as _json
+    try:
+        d = _json.loads(SETTINGS.read_text())
+    except (OSError, ValueError):
+        d = {}
+    d[key] = value
+    STATE_DIR.mkdir(parents=True, exist_ok=True)
+    SETTINGS.write_text(_json.dumps(d, ensure_ascii=False, indent=1))
+
+
+def L(en: str, zh: str) -> str:
+    """Text in the language chosen in the menu bar app."""
+    return zh if setting("language") == "zh" else en
+
+
 # Every piece of text we inject is wrapped in this tag, so neither side ever
 # forwards our own sync content back to the other.
 TAG = "ccx-sync"

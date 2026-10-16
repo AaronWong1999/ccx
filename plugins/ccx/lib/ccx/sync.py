@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import os
 import subprocess
+import time
 from datetime import datetime
 from typing import Dict, List, Optional
 
@@ -21,6 +22,18 @@ def deep_link(tool: str, sid: str) -> str:
 
 def open_in_app(tool: str, sid: str) -> bool:
     return subprocess.run(["open", deep_link(tool, sid)], capture_output=True).returncode == 0
+
+
+def new_claude_conversation(codex_id: str) -> str:
+    """Open a new Claude conversation in the thread's folder, prefilled to continue it."""
+    t = codex.find(codex_id)
+    if not t:
+        raise RuntimeError(f"Codex thread {codex_id} not found")
+    from urllib.parse import quote
+    prompt = f"Continue the \u201c{t.title}\u201d session from Codex (session id {t.id})."
+    url = f"claude://code/new?folder={quote(t.cwd)}&q={quote(prompt)}"
+    subprocess.run(["open", url], capture_output=True, check=False)
+    return url
 
 
 def continue_phrase(tool: str) -> str:
@@ -42,8 +55,16 @@ def rows(tool: str, ss: List[Session], here_cwd: Optional[str] = None, mirrors=f
         st, partner = pairs.status(s)
         if st == "new" and s.id in mirrors:
             st = "mirror"
-        out.append({"id": s.id, "title": s.title, "updated": s.when, "status": st, "linked_to": partner,
-                    "cwd": s.cwd, "other_folder": bool(here_cwd and s.cwd and not same_dir(s.cwd, here_cwd))})
+        row = {"id": s.id, "title": s.title, "updated": s.when, "status": st, "linked_to": partner,
+               "cwd": s.cwd, "other_folder": bool(here_cwd and s.cwd and not same_dir(s.cwd, here_cwd))}
+        if tool == "codex" and partner:
+            # Opening a huge Claude conversation that has sat idle re-reads all of it:
+            # let the menu offer a fresh, linked conversation instead.
+            c = claude.find(partner)
+            if c:
+                tokens, last = claude.context_state(c.path)
+                row["partner_tokens"], row["partner_idle_min"] = tokens, int((time.time() - last) / 60)
+        out.append(row)
     return out
 
 

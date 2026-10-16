@@ -197,6 +197,36 @@ def _render(d: dict, skip_ids: set) -> Unit:
     return (role, "\n".join(parts)) if parts else None
 
 
+# ------------------------------------------------------------- cost of resuming
+
+def context_state(path: Path) -> Tuple[int, float]:
+    """(tokens in the conversation's context at its last model call, unix time of
+    its last activity). Reads only the end of the file."""
+    import time as _time
+    from datetime import datetime
+    size = path.stat().st_size
+    with open(path, "rb") as f:
+        f.seek(max(0, size - 4_000_000))
+        tail = f.read().decode("utf-8", "replace").splitlines()
+    tokens, last = 0, 0.0
+    for line in reversed(tail):
+        try:
+            d = json.loads(line)
+        except ValueError:
+            continue
+        if not last and d.get("timestamp"):
+            try:
+                last = datetime.fromisoformat(d["timestamp"].replace("Z", "+00:00")).timestamp()
+            except ValueError:
+                pass
+        u = (d.get("message") or {}).get("usage") if d.get("type") == "assistant" else None
+        if u and not tokens:
+            tokens = u.get("input_tokens", 0) + u.get("cache_creation_input_tokens", 0) + u.get("cache_read_input_tokens", 0)
+        if tokens and last:
+            break
+    return tokens, last or path.stat().st_mtime
+
+
 # ------------------------------------------------------------------ writing
 
 def desktop_cli() -> Optional[str]:

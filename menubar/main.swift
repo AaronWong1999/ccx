@@ -28,6 +28,8 @@ struct Row: Decodable {
     let updated: String
     let status: String  // new | linked | updated | mirror
     let cwd: String
+    let partner_tokens: Int?      // Codex rows: size of the linked Claude conversation
+    let partner_idle_min: Int?    // … and how long it has been idle
 }
 
 struct Project: Decodable {
@@ -94,6 +96,8 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.autoenablesItems = false
         item.menu = menu
         if clickTest { runClickTest(); return }
+        run(["config", "language", defaults.string(forKey: "language") ?? "en"]) { _, _, _ in }
+        run(["config", "warn_long_resume", warnLongResume ? "true" : "false"]) { _, _, _ in }
         rebuild()
         refresh()
         Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in self?.refresh() }
@@ -278,6 +282,9 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let login = action(L("Start at Login", "登录时自动启动"), #selector(toggleLogin))
         login.state = autostartOn ? .on : .off
         menu.addItem(login)
+        let warn = action(L("Warn Before Resuming Long Conversations", "继续超长对话前提醒"), #selector(toggleWarnLongResume))
+        warn.state = warnLongResume ? .on : .off
+        menu.addItem(warn)
         let auto = action(L("Install Updates Automatically", "自动安装更新"), #selector(toggleAutoInstall))
         auto.state = autoInstall ? .on : .off
         menu.addItem(auto)
@@ -343,7 +350,8 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if r.status == "mirror" { title += L("  (imported copy)", "  （导入的副本）") }
         let i = NSMenuItem(title: "", action: #selector(sessionClicked(_:)), keyEquivalent: "")
         i.target = self
-        i.representedObject = ["from": from, "id": r.id]
+        i.representedObject = ["from": from, "id": r.id, "tokens": String(r.partner_tokens ?? 0),
+                               "idle": String(r.partner_idle_min ?? 0), "title": r.title]
         let s = NSMutableAttributedString(string: "\(glyph)  \(title)", attributes: [
             .font: NSFont.menuFont(ofSize: 0),
             .foregroundColor: r.status == "mirror" ? NSColor.secondaryLabelColor : NSColor.labelColor,
@@ -389,7 +397,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
         a.runModal()
     }
 
-    func work(_ args: [String], title: String, showOutput: Bool) {
+    func work(_ args: [String], title: String, showOutput: Bool, notifyResult: Bool = false) {
         busy = true
         setIcon(busy: true)
         rebuild()
@@ -398,6 +406,9 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
             self.setIcon(busy: false)
             let text = (out + err).trimmingCharacters(in: .whitespacesAndNewlines)
             if code != 0 { self.alert(L("That didn't work", "没有成功"), text) } else if showOutput { self.alert(title, text) }
+            else if notifyResult && !self.clickTest {
+                self.notify("ccx", text.replacingOccurrences(of: "✓ ", with: ""))
+            }
             if self.clickTest { print("OK: \(text)"); exit(0) }
             self.refresh()
         }
@@ -405,7 +416,26 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc func sessionClicked(_ sender: NSMenuItem) {
         guard let o = sender.representedObject as? [String: String], let from = o["from"], let id = o["id"] else { return }
-        work([from == "codex" ? "to-claude" : "to-codex", id], title: "", showOutput: false)
+        // Going back to a huge Claude conversation that sat idle past its cache lifetime
+        // re-reads the whole thing. Offer a fresh, linked conversation instead.
+        let tokens = Int(o["tokens"] ?? "") ?? 0, idle = Int(o["idle"] ?? "") ?? 0
+        if from == "codex", tokens >= 250_000, idle >= 55, !clickTest {
+            NSApp.activate(ignoringOtherApps: true)
+            let a = NSAlert()
+            a.messageText = L("This Claude conversation is very long", "这个 Claude 对话非常长")
+            a.informativeText = L(
+                "It is about \(tokens / 1000)k tokens and has been idle for \(idle / 60) h \(idle % 60) min, so its cache has expired: your next message there re-reads all of it.\n\nA new conversation brings over the condensed progress (about 20k tokens) and stays linked.",
+                "它大约 \(tokens / 1000)k token，已闲置 \(idle / 60) 小时 \(idle % 60) 分钟，缓存已过期：在那里发下一条消息会把它全部重新读一遍。\n\n新开一个对话只带压缩后的进展（约 2 万 token），并保持关联。")
+            a.addButton(withTitle: L("New Conversation", "新开对话"))
+            a.addButton(withTitle: L("Open It Anyway", "仍然打开"))
+            a.addButton(withTitle: L("Cancel", "取消"))
+            switch a.runModal() {
+            case .alertFirstButtonReturn: work(["new-claude", id], title: "", showOutput: false); return
+            case .alertThirdButtonReturn: return
+            default: break
+            }
+        }
+        work([from == "codex" ? "to-claude" : "to-codex", id], title: "", showOutput: false, notifyResult: true)
     }
 
     @objc func updateNow() { if let l = release?.latest { install(l, announce: true) } }
@@ -416,7 +446,20 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc func openRepo() { NSWorkspace.shared.open(URL(string: repoURL)!) }
 
     @objc func setLanguage(_ sender: NSMenuItem) {
-        defaults.set(sender.representedObject as? String ?? "en", forKey: "language")
+        let code = sender.representedObject as? String ?? "en"
+        defaults.set(code, forKey: "language")
+        run(["config", "language", code]) { _, _, _ in }  // ccx's own messages follow the menu
+        rebuild()
+    }
+
+    var warnLongResume: Bool {
+        get { defaults.object(forKey: "warnLongResume") as? Bool ?? true }
+        set { defaults.set(newValue, forKey: "warnLongResume") }
+    }
+
+    @objc func toggleWarnLongResume() {
+        warnLongResume.toggle()
+        run(["config", "warn_long_resume", warnLongResume ? "true" : "false"]) { _, _, _ in }
         rebuild()
     }
 

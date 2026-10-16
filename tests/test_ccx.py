@@ -9,6 +9,7 @@ import json
 import os
 import sys
 import tempfile
+import time
 import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
@@ -345,6 +346,55 @@ class Interfaces(Base):
                 self.assertIn("Codex 做了新东西", ctx)
             else:
                 self.assertEqual(out.getvalue(), "")
+
+    def _hook(self, sid, prompt="hi"):
+        out = io.StringIO()
+        with mock.patch.object(sys, "stdin", io.StringIO(json.dumps({"session_id": sid, "prompt": prompt}))), \
+                redirect_stdout(out), self.assertRaises(SystemExit):
+            hook.main()
+        return json.loads(out.getvalue()) if out.getvalue().strip() else None
+
+    def _big_idle_pair(self, sid, tokens, hours_idle):
+        from datetime import datetime, timezone
+        ts = datetime.fromtimestamp(time.time() - hours_idle * 3600, timezone.utc).isoformat().replace("+00:00", "Z")
+        claude_file(PROJ_A, sid, [user("长任务", timestamp=ts),
+                                  assistant(text("ok"), timestamp=ts, **{"message": {"role": "assistant", "content": [text("ok")],
+                                            "usage": {"input_tokens": 2, "cache_creation_input_tokens": 0,
+                                                      "cache_read_input_tokens": tokens}}})], title="长任务")
+        self.cx.add("x-" + sid, PROJ_A, "长任务", [umsg("长任务")])
+        pairs.link(pairs.side("claude", sid), pairs.side("codex", "x-" + sid))
+
+    def test_resume_guard_stops_once_then_lets_resend_through(self):
+        from ccx import common
+        common.set_setting("warn_long_resume", True)
+        self._big_idle_pair("c-big", 800_000, 2)
+        first = self._hook("c-big", "接着干")
+        self.assertEqual(first["decision"], "block")
+        self.assertIn("800k", first["reason"])
+        self.assertIn("接着干", first["reason"])          # the message is echoed back to copy
+        self.assertNotEqual((self._hook("c-big") or {}).get("decision"), "block")
+
+    def test_resume_guard_skips_small_recent_or_disabled(self):
+        from ccx import common
+        common.set_setting("warn_long_resume", True)
+        self._big_idle_pair("c-small", 40_000, 3)
+        self._big_idle_pair("c-recent", 800_000, 0.2)
+        for sid in ("c-small", "c-recent"):
+            self.assertNotEqual((self._hook(sid) or {}).get("decision"), "block")
+        common.set_setting("warn_long_resume", False)
+        self._big_idle_pair("c-off", 800_000, 3)
+        self.assertNotEqual((self._hook("c-off") or {}).get("decision"), "block")
+        common.set_setting("warn_long_resume", True)
+
+    def test_hook_shows_a_visible_notice_and_skips_unchanged_threads(self):
+        claude_file(PROJ_A, "c-note", [user("hi")], title="note")
+        self.cx.add("x-note", PROJ_A, "note", [umsg("hi")])
+        pairs.link(pairs.side("claude", "c-note"), pairs.side("codex", "x-note"))
+        self.cx.append("x-note", amsg("新进展"))
+        out = self._hook("c-note")
+        self.assertIn("1", out["systemMessage"])
+        with mock.patch.object(codex, "items", side_effect=AssertionError("full read on an unchanged thread")):
+            self.assertIsNone(pairs.pull("claude", "c-note"))
 
     def test_mcp_continue_here_search_then_link(self):
         claude_file(PROJ_A, "c-mcp", [user("新对话")])

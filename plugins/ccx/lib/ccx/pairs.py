@@ -52,13 +52,16 @@ def link(claude_side: dict, codex_side: dict) -> dict:
     return p
 
 
-def _set_cursor(claude_id: str, side: str, cursor: int, size: Optional[int] = None):
+def _set_cursor(claude_id: str, side: str, cursor: int, size: Optional[int] = None,
+                updated_at: Optional[float] = None):
     pairs = load()
     for p in pairs:
         if p["claude"]["id"] == claude_id:
             p[side]["cursor"] = cursor
             if size is not None:
                 p[side]["size"] = size
+            if updated_at is not None:
+                p[side]["updated_at"] = updated_at
             p["synced_at"] = time.time()
     save(pairs)
 
@@ -80,7 +83,7 @@ def side(tool: str, sid: str) -> dict:
         raise RuntimeError(f"{NAME[tool]} session {sid} not found")
     d = {"id": s.id, "cwd": s.cwd, "cursor": len(us)}
     if tool == "codex":
-        d["size"] = codex.size_of(s)
+        d["size"], d["updated_at"] = codex.size_of(s), s.mtime
     return d
 
 
@@ -133,13 +136,23 @@ def pull(here_tool: str, here_id: str, budget: int = HOOK_BUDGET) -> Optional[di
         return None
     other = OTHER[here_tool]
     o = pair[other]
-    # Rollout size is not a valid change detector for paginated history: new
-    # items may be in the history DB, and a missing path returns -1 every time.
-    s, us = session_units(other, o["id"])
-    if not s:
-        return None
+    # Rollout size is not a valid change detector for paginated history (new items
+    # may live in the history DB). The thread's updatedAt is: skip the full read
+    # when it hasn't moved since the last sync (and isn't from the last few seconds).
+    if other == "codex":
+        s = codex.find(o["id"])
+        if not s:
+            return None
+        if o.get("updated_at") == s.mtime and time.time() - s.mtime > 5:
+            return None
+        us = codex.units(codex.items(s.id))
+    else:
+        s, us = session_units(other, o["id"])
+        if not s:
+            return None
     new = [u for u in us[o["cursor"]:] if u]
-    _set_cursor(pair["claude"]["id"], other, len(us), codex.size_of(s) if other == "codex" else None)
+    _set_cursor(pair["claude"]["id"], other, len(us), codex.size_of(s) if other == "codex" else None,
+                s.mtime if other == "codex" else None)
     if not new:
         return None
     return {"from": other, "session": s.id, "count": len(new),
@@ -165,7 +178,7 @@ def continue_from(here_tool: str, here_id: str, here_cwd: str, other_id: str) ->
             subprocess.run(["open", f"codex://threads/{here_id}"], capture_output=True, check=False)
     there = {"id": s.id, "cwd": s.cwd, "cursor": len(us)}
     if other == "codex":
-        there["size"] = codex.size_of(s)
+        there["size"], there["updated_at"] = codex.size_of(s), s.mtime
     link(**({"claude_side": here, "codex_side": there} if here_tool == "claude"
             else {"claude_side": there, "codex_side": here}))
     return {"from": other, "session": s.id, "title": s.title, "cwd": s.cwd,
@@ -180,6 +193,8 @@ def status(s: Session) -> Tuple[str, Optional[str]]:
         return "new", None
     mine, partner = pair[s.tool], pair[OTHER[s.tool]]["id"]
     if s.tool == "codex":
+        if mine.get("updated_at") == s.mtime and time.time() - s.mtime > 5:
+            return "linked", partner
         us = codex.units(codex.items(s.id))
     else:
         us = claude.units(s.path) if s.path else []
