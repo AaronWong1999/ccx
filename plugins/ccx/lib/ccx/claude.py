@@ -214,7 +214,9 @@ def context_state(path: Path) -> Tuple[int, float]:
             d = json.loads(line)
         except ValueError:
             continue
-        if not last and d.get("timestamp"):
+        # Idle time counts from the last conversation turn; opening a session can
+        # append metadata records that don't refresh the prompt cache.
+        if not last and d.get("timestamp") and d.get("type") in ("user", "assistant"):
             try:
                 last = datetime.fromisoformat(d["timestamp"].replace("Z", "+00:00")).timestamp()
             except ValueError:

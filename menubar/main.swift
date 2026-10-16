@@ -383,9 +383,18 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func runClickTest() {
         let a = CommandLine.arguments, i = a.firstIndex(of: "--click")!
-        let item = NSMenuItem()
-        item.representedObject = ["from": a[i + 1], "id": a[i + 2]]
-        sessionClicked(item)
+        // Use the same row data a real click carries (size and idle time of the partner).
+        run(["menu-data"]) { _, out, _ in
+            var obj = ["from": a[i + 1], "id": a[i + 2]]
+            if let d = try? JSONDecoder().decode(MenuData.self, from: Data(out.utf8)),
+               let r = d.projects.flatMap({ $0.codex + $0.claude }).first(where: { $0.id == a[i + 2] }) {
+                obj["tokens"] = String(r.partner_tokens ?? 0)
+                obj["idle"] = String(r.partner_idle_min ?? 0)
+            }
+            let item = NSMenuItem()
+            item.representedObject = obj
+            self.sessionClicked(item)
+        }
     }
 
     func alert(_ title: String, _ text: String) {
@@ -419,6 +428,13 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // Going back to a huge Claude conversation that sat idle past its cache lifetime
         // re-reads the whole thing. Offer a fresh, linked conversation instead.
         let tokens = Int(o["tokens"] ?? "") ?? 0, idle = Int(o["idle"] ?? "") ?? 0
+        // In click tests, `--answer new|open|cancel` stands in for the button press.
+        let a0 = CommandLine.arguments, preset = a0.firstIndex(of: "--answer").map { a0[$0 + 1] }
+        if from == "codex", tokens >= 250_000, idle >= 55, clickTest, let p = preset {
+            print("DIALOG: long conversation (\(tokens / 1000)k tokens, idle \(idle) min) -> \(p)")
+            if p == "new" { work(["new-claude", id], title: "", showOutput: false); return }
+            if p == "cancel" { exit(0) }
+        }
         if from == "codex", tokens >= 250_000, idle >= 55, !clickTest {
             NSApp.activate(ignoringOtherApps: true)
             let a = NSAlert()
