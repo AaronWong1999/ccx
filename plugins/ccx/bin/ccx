@@ -1,0 +1,16 @@
+#!/bin/sh
+# Launched by GUI apps with a minimal PATH, so find a usable python3 ourselves.
+# /usr/bin/python3 is only a stub until the Command Line Tools are installed
+# (running it would pop an installer dialog), so check for them first.
+SELF="$0"
+[ -L "$SELF" ] && SELF="$(readlink "$SELF")"
+DIR="$(cd "$(dirname "$SELF")/.." && pwd)"
+CANDIDATES="/opt/homebrew/bin/python3 /usr/local/bin/python3"
+/usr/bin/xcode-select -p >/dev/null 2>&1 && CANDIDATES="$CANDIDATES /usr/bin/python3"
+for py in $CANDIDATES; do
+  if [ -x "$py" ] && "$py" -c 'import sys; sys.exit(sys.version_info < (3, 9))' 2>/dev/null; then
+    PYTHONPATH="$DIR/lib" exec "$py" -m ccx "$@"
+  fi
+done
+echo "ccx: 需要 Python 3.9+。运行 xcode-select --install 安装命令行开发者工具即可。" >&2
+exit 1

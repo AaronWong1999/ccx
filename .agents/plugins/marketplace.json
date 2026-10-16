@@ -1,10 +1,10 @@
 {
-  "name": "claudecodex",
-  "interface": { "displayName": "ClaudeCodex" },
+  "name": "ccx",
+  "interface": { "displayName": "ccx" },
   "plugins": [
     {
-      "name": "claudecodex",
-      "source": { "source": "local", "path": "./plugins/claudecodex" },
+      "name": "ccx",
+      "source": { "source": "local", "path": "./plugins/ccx" },
       "policy": { "installation": "AVAILABLE", "authentication": "ON_INSTALL" },
       "category": "Developer Tools"
     }

@@ -1,8 +1,0 @@
-{
-  "mcpServers": {
-    "claudecodex": {
-      "command": "${CLAUDE_PLUGIN_ROOT}/bin/ccx-mcp",
-      "args": ["--host", "claude"]
-    }
-  }
-}

@@ -1,0 +1,19 @@
+name: test
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        python: ["3.9", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Unit tests
+        run: python -m unittest discover -s tests -v
+      - name: Build the menu bar app
+        run: sh menubar/build.sh "$RUNNER_TEMP/ccx.app" "$PWD/plugins/ccx/bin/ccx" ci
+      - name: Shell syntax
+        run: for f in install.sh menubar/build.sh plugins/ccx/bin/*; do sh -n "$f"; done

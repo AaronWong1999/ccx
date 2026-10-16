@@ -1,11 +1,8 @@
 {
-  "name": "claudecodex",
-  "owner": { "name": "Aaron Wong" },
+  "name": "ccx",
+  "owner": { "name": "Aaron Wong", "url": "https://github.com/aaronwong1999" },
+  "metadata": { "description": "ccx: continue the same task across Claude Code and Codex" },
   "plugins": [
-    {
-      "name": "claudecodex",
-      "source": "./plugins/claudecodex",
-      "description": "Continue Codex sessions in Claude Code, and back"
-    }
+    { "name": "ccx", "source": "./plugins/ccx", "description": "Continue Codex threads in Claude Code, and back" }
   ]
 }
