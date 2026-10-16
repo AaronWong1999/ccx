@@ -25,7 +25,8 @@
    `plugin marketplace add aaronwong1999/ccx` 和 `plugin add ccx@ccx`。
 4. 编译菜单栏程序到 `~/Applications/ccx.app`，并写一个登录启动项（LaunchAgent）。
 5. 把 `ccx` 命令链接到 `~/.local/bin/ccx`。
-6. 清理改名前的旧版本（`claudecodex`）。
+6. 在 Codex 里信任 ccx **自己的**两个 hook。用的是 Codex 自己的 hooks 设置页同样调用的接口（`config/batchWrite` 写入 `hooks.state."<key>".trusted_hash`），只针对 `ccx@ccx` 插件；每次更新后 hook 的哈希会变，`ccx update` 会再信任一次。
+7. 清理改名前的旧版本（`claudecodex`）。
 
 用户**不需要**另外安装 Claude Code 或 Codex 的命令行工具。
 

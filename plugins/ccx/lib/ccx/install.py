@@ -84,6 +84,14 @@ def setup_codex(source: str, quiet: bool = False) -> bool:
     code, out = run([cli, "plugin", "add", "ccx@ccx"])
     ok = code == 0
     say(ok, "Codex 插件已安装/更新（新开的线程生效）" if ok else f"Codex 插件安装失败：{out[-300:]}", quiet)
+    if ok:
+        # Installing ccx is the user's consent to its own sync hook; Codex otherwise
+        # asks for each third-party hook to be trusted by hand (and again after updates).
+        try:
+            n = codex.trust_hooks()
+            say(True, f"已在 Codex 里信任 ccx 自己的同步 hook（{n} 个）" if n else "Codex 已信任 ccx 的同步 hook", quiet)
+        except Exception as e:
+            say(False, f"没能信任 Codex 里的 ccx hook：{e}（可在 Codex 设置 → Hooks 里手动信任）", quiet)
     return ok
 
 
@@ -153,10 +161,9 @@ def setup(dev: bool = False, quiet: bool = False) -> int:
     if build_menubar(quiet, force=True):
         if not AGENT.exists():
             autostart(True)
-    if ok_codex and codex.hooks_trusted() is False and not quiet:
-        print("\n还差一步（只需一次）：在 Codex 里信任 ccx 的 hook，这样 Codex 那边也能随便说一句就自动同步。\n"
-              "  Codex 桌面版：设置 → Hooks → 找到 ccx → 信任；或在终端版 Codex 里输入 /hooks。\n"
-              "  不信任也能用：在 Codex 里说「接着 Claude 继续」即可。")
+    if not quiet:
+        print("\n完成。在 Claude 或 Codex 里新开一个对话，说「从 Codex/Claude 把……那个会话导入，接着干」就能用；"
+              "也可以点屏幕右上角的 ⇄。")
     return 0 if (ok_claude or ok_codex) else 1
 
 
@@ -198,7 +205,7 @@ def doctor() -> int:
         rows.append((trusted is not None, "Codex 插件 ccx" + ("已安装" if trusted is not None else "未安装（运行 ccx setup）")))
         if trusted is not None:
             rows.append((bool(trusted), "Codex 自动同步 hook " + ("已信任" if trusted else
-                         "未信任：Codex 设置 → Hooks 里信任 ccx（不信任时说「接着 Claude 继续」也能同步）")))
+                         "未信任：运行 ccx setup 修复（不信任时说「接着 Claude 继续」也能同步）")))
     except RuntimeError as e:
         rows.append((False, str(e)))
     running = run(["pgrep", "-x", "ccx"])[0] == 0

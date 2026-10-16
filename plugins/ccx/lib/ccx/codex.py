@@ -246,6 +246,22 @@ def import_history() -> Dict[str, str]:
     return {src: tgt for _, src, tgt in sorted(pairs)}
 
 
+def _our_hooks() -> List[dict]:
+    res = server().request("hooks/list", {"cwds": [str(HOME)]})
+    return [h for g in res.get("data", []) for h in g.get("hooks", []) if (h.get("pluginId") or "").startswith("ccx@")]
+
+
+def trust_hooks() -> int:
+    """Trust ccx's own plugin hooks, the way Codex's own hooks screen does
+    (config/batchWrite of hooks.state."<key>".trusted_hash). Only ccx's hooks
+    are touched. Returns how many were newly trusted."""
+    edits = [{"keyPath": f'hooks.state."{h["key"]}".trusted_hash', "value": h["currentHash"], "mergeStrategy": "upsert"}
+             for h in _our_hooks() if h.get("trustStatus") != "trusted" and h.get("currentHash")]
+    if edits:
+        server().request("config/batchWrite", {"edits": edits, "reloadUserConfig": True})
+    return len(edits)
+
+
 def hooks_trusted() -> Optional[bool]:
     """Whether Codex trusts our UserPromptSubmit hook (None if not installed)."""
     try:

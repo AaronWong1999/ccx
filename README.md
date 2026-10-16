@@ -23,7 +23,7 @@ curl -fsSL https://raw.githubusercontent.com/aaronwong1999/ccx/main/install.sh |
 
 如果电脑上还没有"命令行开发者工具"（git、python3 都靠它），安装脚本会先弹出系统的安装窗口，装好后再运行一次就行。
 
-**最后一步（只需一次）**：在 Codex 里信任 ccx 的 hook。打开 Codex 桌面版 → 设置 → Hooks → 找到 ccx → 信任；终端版 Codex 里输入 `/hooks`。不信任也能用，只是在 Codex 里要说一句"接着 Claude 继续"才会同步；Claude 那边不需要这一步。
+装完就能用，两个 app 都不需要再手动设置。Codex 默认要求用户亲自信任每个第三方 hook，ccx 安装时会替你信任**它自己的**同步 hook（只信任这一个，以后更新时也会重新信任）。安装 ccx 就表示你同意这一点；不想要的话，可以在 Codex 设置 → Hooks 里关掉它，这时在 Codex 里说"接着 Claude 继续"也能同步。
 
 ## 怎么用
 
@@ -31,7 +31,7 @@ curl -fsSL https://raw.githubusercontent.com/aaronwong1999/ccx/main/install.sh |
 |---|---|
 | Claude 额度用完了，到 Codex 接着干 | 在 Codex 新开一个对话，说「**从 Claude 把 XX 那个会话导入，接着干**」。也可以贴一张 Claude 会话的截图，说"接着这个干"。或者点菜单栏 ⇄ → 项目 → 选那个会话 |
 | Codex 也用完了，回到 Claude | 打开**原来那个** Claude 会话，随便说一句（比如"继续"），Codex 的新进展会自动带进来 |
-| 再回到 Codex | 打开原来那个 Codex 对话，说「接着 Claude 继续」；信任 hook 之后，随便说一句也会自动同步 |
+| 再回到 Codex | 打开原来那个 Codex 对话，随便说一句，Claude 的新进展会自动带进来 |
 | 主动同步一下 | Claude 里说 `/from-codex`，Codex 里说 `$from-claude` |
 | 把当前对话交给另一边 | Claude 里说 `/to-codex`，Codex 里说 `$to-claude`，或者点菜单栏 ⇄ |
 
