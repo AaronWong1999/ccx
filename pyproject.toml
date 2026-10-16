@@ -1,0 +1,13 @@
+[project]
+name = "claudecodex"
+version = "0.1.0"
+description = "Switch a project's conversation between Claude Code and Codex with one command"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.scripts]
+ccx = "claudecodex.cli:main"
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
