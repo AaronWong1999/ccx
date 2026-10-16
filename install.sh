@@ -27,3 +27,12 @@ fi
 mkdir -p "$HOME/.local/bin"
 ln -sf "$ROOT/plugins/claudecodex/bin/ccx" "$HOME/.local/bin/ccx"
 echo "✓ 终端命令 ccx → ~/.local/bin/ccx"
+
+if command -v swiftc >/dev/null 2>&1; then
+  APP="$("$ROOT/menubar/build.sh")"
+  pkill -x ClaudeCodex 2>/dev/null || true
+  open "$APP"
+  echo "✓ 菜单栏图标 ⇄ 已启动（$APP；菜单里可以勾选「登录时自动启动」）"
+else
+  echo "! 没有 swiftc（xcode-select --install 可装），跳过菜单栏图标"
+fi

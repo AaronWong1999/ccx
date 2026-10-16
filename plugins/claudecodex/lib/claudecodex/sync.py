@@ -80,13 +80,14 @@ def _fmt_ms(ms: float) -> str:
 
 # ------------------------------------------------------------------- listing
 
-def list_codex_for_claude(cwd: Optional[str], limit: int = 10) -> List[dict]:
+def list_codex_for_claude(cwd: Optional[str], limit: int = 10, history=None, sessions=None) -> List[dict]:
     """Codex sessions of a project, each with its import status into Claude."""
     links = load_links()
     from_claude = {l["target"] for l in links[K2C].values()}
-    mirrors = {h["target"] for h in _history_by_source().values()}
+    history = _history_by_source() if history is None else history
+    mirrors = {h["target"] for h in history.values()}
     out = []
-    for s in codex_sessions(cwd):
+    for s in codex_sessions(cwd) if sessions is None else sessions:
         link = links[C2K].get(s.id)
         target = claude_session(s.cwd, link["target"]) if link else None
         if s.id in from_claude and not target:
@@ -107,12 +108,12 @@ def list_codex_for_claude(cwd: Optional[str], limit: int = 10) -> List[dict]:
     return out
 
 
-def list_claude_for_codex(cwd: Optional[str], limit: int = 10) -> List[dict]:
+def list_claude_for_codex(cwd: Optional[str], limit: int = 10, history=None, sessions=None) -> List[dict]:
     """Claude sessions of a project, each with its import status into Codex."""
     links = load_links()
-    history = _history_by_source()
+    history = _history_by_source() if history is None else history
     out = []
-    for s in claude_sessions(cwd):
+    for s in claude_sessions(cwd) if sessions is None else sessions:
         if _is_pure_ccx_import(s.path):
             continue
         link = _claude_link(s, links, history)
@@ -165,6 +166,31 @@ def _claude_changed(s: Session, link: dict) -> bool:
     if "src_turns" in link:
         return claude_turn_count(s.path) != link["src_turns"]
     return s.mtime > link["at"] + 5
+
+
+def menu_data(projects: int = 8, per_side: int = 6) -> dict:
+    """Recent projects with both sides' sessions and statuses, for the menu bar app."""
+    history = _history_by_source()
+    by_cwd: Dict[str, dict] = {}
+    for s in claude_sessions(None) + codex_sessions(None):
+        if not s.cwd:
+            continue
+        p = by_cwd.setdefault(os.path.realpath(s.cwd), {"claude": [], "codex": [], "mtime": 0})
+        p[s.tool].append(s)
+        p["mtime"] = max(p["mtime"], s.mtime)
+    out = []
+    for cwd, p in sorted(by_cwd.items(), key=lambda kv: kv[1]["mtime"], reverse=True):
+        if "/scratch-workspaces/" in cwd or not os.path.isdir(cwd):
+            continue
+        codex_rows = list_codex_for_claude(cwd, per_side, history, sorted(p["codex"], key=lambda s: s.mtime, reverse=True))
+        claude_rows = list_claude_for_codex(cwd, per_side, history, sorted(p["claude"], key=lambda s: s.mtime, reverse=True))
+        if not codex_rows and not claude_rows:
+            continue
+        out.append({"cwd": cwd, "name": os.path.basename(cwd), "updated": datetime.fromtimestamp(p["mtime"]).strftime("%m-%d %H:%M"),
+                    "codex": codex_rows, "claude": claude_rows})
+        if len(out) >= projects:
+            break
+    return {"projects": out, "generated_at": time.time()}
 
 
 # ----------------------------------------------------------------- transfers
