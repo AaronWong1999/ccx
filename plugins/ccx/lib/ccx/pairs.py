@@ -132,10 +132,8 @@ def pull(here_tool: str, here_id: str, budget: int = HOOK_BUDGET) -> Optional[di
         return None
     other = OTHER[here_tool]
     o = pair[other]
-    if other == "codex":
-        s = codex.find(o["id"])
-        if s and codex.size_of(s) == o.get("size"):
-            return None  # unchanged since last time: no need to read the thread
+    # Rollout size is not a valid change detector for paginated history: new
+    # items may be in the history DB, and a missing path returns -1 every time.
     s, us = session_units(other, o["id"])
     if not s:
         return None
@@ -157,6 +155,10 @@ def continue_from(here_tool: str, here_id: str, here_cwd: str, other_id: str) ->
     here = side(here_tool, here_id) if (claude.find(here_id) if here_tool == "claude" else codex.find(here_id)) \
         else {"id": here_id, "cwd": here_cwd, "cursor": 0}
     here["cwd"] = here_cwd or here["cwd"]
+    if here_tool == "codex":
+        # In-conversation imports stay in the current thread's own workspace.
+        # A foreign Claude folder remains reference context, never a silent move.
+        codex.ensure_thread_project(here_id, here["cwd"])
     there = {"id": s.id, "cwd": s.cwd, "cursor": len(us)}
     if other == "codex":
         there["size"] = codex.size_of(s)
@@ -174,8 +176,6 @@ def status(s: Session) -> Tuple[str, Optional[str]]:
         return "new", None
     mine, partner = pair[s.tool], pair[OTHER[s.tool]]["id"]
     if s.tool == "codex":
-        if codex.size_of(s) == mine.get("size"):
-            return "linked", partner
         us = codex.units(codex.items(s.id))
     else:
         us = claude.units(s.path) if s.path else []

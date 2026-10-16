@@ -9,7 +9,7 @@ import subprocess
 from datetime import datetime
 from typing import Dict, List, Optional
 
-from . import claude, codex, pairs
+from . import claude, codex, pairs, repairs
 from .common import NAME, OTHER, Session, git_snapshot, real, same_dir
 
 STATUS = {"new": "not linked", "linked": "linked", "updated": "has new progress", "mirror": "imported copy"}
@@ -80,7 +80,7 @@ def menu_data(projects: int = 8, per_side: int = 6) -> dict:
                     "claude": rows("claude", newest(p["claude"]))})
         if len(out) >= projects:
             break
-    return {"projects": out}
+    return {"projects": out, "pending_history_repairs": len(repairs.retry_pending())}
 
 
 # ---------------------------------------------------------------- transfers
@@ -133,13 +133,33 @@ def transfer(tool: str, session_id: str, open_app: bool = True) -> dict:
     if pair:
         target, action = pair[dst]["id"], "linked"
     else:
+        # Capture the source cursor BEFORE the import. A running Claude turn may
+        # finish while Codex imports; those late records still need delivery.
+        source_side = pairs.side(tool, src.id)
+        if dst == "codex" and codex.import_history().get(str(src.path)):
+            # An earlier native import is only a snapshot, not proof that today's
+            # source progress was delivered. Re-read it once in the first hook.
+            source_side["cursor"] = 0
         target = _import_to_codex(src) if dst == "codex" else _import_to_claude(src)
-        sides = {tool: pairs.side(tool, src.id), dst: pairs.side(dst, target)}
+        sides = {tool: source_side, dst: pairs.side(dst, target)}
         pairs.link(sides["claude"], sides["codex"])
         action = "created"
     res = {"action": action, "message": _message(action, tool, src.title),
            "source": {"tool": tool, "id": src.id, "title": src.title},
            "target": {"tool": dst, "id": target, "deep_link": deep_link(dst, target)}, "cwd": src.cwd}
+    if dst == "codex":
+        # Save the pair before grouping: if grouping fails, retry repairs this
+        # thread instead of importing another copy. Also repairs pre-0.0.9 pairs.
+        try:
+            res["target"]["project_id"] = codex.ensure_thread_project(target, src.cwd)
+            res["target"]["history_status"] = repairs.prepare(target)
+        except (RuntimeError, TimeoutError) as e:
+            raise RuntimeError(f"The conversation is linked to Codex thread {target}, but desktop preparation failed: "
+                               f"{e}. Retry this transfer to repair it without importing again.") from e
+        if res["target"]["history_status"] == "busy":
+            res["message"] += (" Older history needs Codex's native format migration, queued until this thread "
+                               "is released. Quit Codex when convenient; ccx retries in the background. "
+                               "Your conversation and ongoing work are not replaced.")
     if open_app:
         res["opened"] = open_in_app(dst, target)
     return res

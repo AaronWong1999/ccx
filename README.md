@@ -111,9 +111,23 @@ The ⇄ menu lists recent projects and both sides' sessions: ○ new, not linked
                  ⇄ menu bar app and `ccx` CLI (same code)
 ```
 
-A Claude session A and a Codex thread T form a pair, and each side keeps a cursor of how much the other side has received. When you send a message in A, the prompt hook adds T's new progress to that message and moves the cursor, so every piece of progress arrives exactly once and never bounces back. Saying "continue X from …" links the conversation you're in to X; the menu bar and `/to-…` use the apps' native import instead. Session titles are searched across all projects, so a typed name or a screenshot is enough.
+A Claude session A and a Codex thread T form a pair, and each side keeps a cursor of how much the other side has received. When you send a message in A, the prompt hook adds T's new progress to that message and moves the cursor, to avoid repeatedly forwarding the same entries. This is a best-effort context handoff, not an exactly-once delivery guarantee; use the history reader to recover omitted text. Saying "continue X from …" links the conversation you're in to X; the menu bar and `/to-…` use the apps' native import instead. Session titles are searched across all projects, so a typed name or a screenshot is enough.
 
-Claude 会话 A 和 Codex 线程 T 组成一对，两边各记一个"对面已经收到多少"的位置。你在 A 里发消息时，hook 会把 T 的新进展加到这条消息里，然后移动位置。所以每条进展只送达一次，也不会来回反弹。在对话里说"从 … 接着 X 干"，会把当前对话和 X 关联起来；菜单栏和 `/to-…` 则用两个 app 自带的导入功能。会话标题会在所有项目里搜索，所以说出名称或给一张截图就够了。
+Claude 会话 A 和 Codex 线程 T 组成一对，两边各记一个"对面已经收到多少"的位置。你在 A 里发消息时，hook 会把 T 的新进展加到这条消息里，然后移动位置。这样可以避免重复转发同一批记录；这是尽力交接上下文，并不保证严格的只送达一次。省略的文字可通过历史阅读工具补读。在对话里说"从 … 接着 X 干"，会把当前对话和 X 关联起来；菜单栏和 `/to-…` 则用两个 app 自带的导入功能。会话标题会在所有项目里搜索，所以说出名称或给一张截图就够了。
+
+## History and project grouping · 历史与项目归属
+
+On transfer to Codex, ccx attaches the thread to the desktop project matching its actual working folder, creating that local project if needed. This is separate from `cwd`; existing user-assigned projects are kept. Reopening an older ccx pair repairs missing project membership without importing another conversation. A running desktop may need reopening to refresh its cached project list.
+
+发到 Codex 时，ccx 会按实际工作目录关联桌面版项目；项目不存在时会创建。项目归属与 `cwd` 是两回事，已有的手动项目归属会保留。重新打开旧关联会话也会补齐归属，不会再导入一份。桌面版可能需要重新打开一次才能刷新缓存中的项目列表。
+
+Some Codex versions import legacy history but use the newer item-pagination API to expand older turns. This causes a permanent “Retry” button. ccx uses Codex's own targeted `migrate-rollouts` command before opening new imports and verifies item paging afterwards. If an older thread still has an active writer, ccx queues the migration and retries from the menu bar every minute. It never kills Codex or rewrites a live database: quit Codex when convenient, leave ccx running, and reopen Codex after the “History repair pending” notice disappears. `ccx repair` retries manually.
+
+部分 Codex 版本导入的是旧历史格式，界面却用新分页接口展开旧消息，导致始终显示“重试”。ccx 会在打开新导入会话前调用 Codex 自带的定向历史迁移，并验证分页可读。如果旧会话仍被进程占用，就排队并通过菜单栏每分钟重试，不会杀掉 Codex 或改写正在使用的数据库。方便时退出 Codex，保留 ccx 运行，等“历史修复待完成”提示消失后再打开 Codex。也可运行 `ccx repair` 手动重试。
+
+**Sync is task context, not a mirrored chat UI.** Progress arriving through a prompt hook is available to the model but does not become additional native chat bubbles. To read both sources, use **Read linked history…** in the ⇄ menu (or `ccx history --open`). This exports a local snapshot without moving the sync cursors. Agents can use `read_session` to page through text omitted from a condensed sync. Tool output remains condensed and images are not copied. Rollout file size is never used to skip updates: paginated history may change only in Codex's database.
+
+**同步的是任务上下文，并非聊天界面的逐条镜像。** Hook 带来的进展模型能读取，但不会变成新的原生聊天气泡。要阅读两边内容，点 ⇄ 菜单里的“查看两边历史”（或运行 `ccx history --open`），会生成本机快照，不消耗同步游标。模型也可用 `read_session` 分页补读同步摘要省略的文字。工具输出仍有压缩，图片不会复制。同步不再按旧记录文件大小跳过检查，因为新历史数据可能只写入 Codex 数据库。
 
 ## Updates · 更新
 

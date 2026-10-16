@@ -13,7 +13,7 @@ import os
 import sys
 import traceback
 
-from . import __version__, claude, codex, pairs
+from . import __version__, claude, codex, history, pairs
 from .common import NAME, OTHER, real
 from .sync import STATUS, find_sessions, transfer
 
@@ -25,6 +25,15 @@ def tools(host: str) -> list:
                                               f"read from a screenshot); searches every project"}
     rw = {"readOnlyHint": False, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False}
     return [
+        {
+            "name": "read_session",
+            "description": f"Read {NAME[other]} history in small pages without consuming sync progress. "
+                           "Use to recover earlier or truncated context; repeat with next_offset until null.",
+            "inputSchema": {"type": "object", "required": ["session_id"], "properties": {
+                "session_id": {"type": "string"}, "offset": {"type": "integer", "default": 0},
+                "limit": {"type": "integer", "default": 6000, "maximum": 12000}}},
+            "annotations": {"title": f"Read {NAME[other]} history", "readOnlyHint": True, "openWorldHint": False},
+        },
         {
             "name": "continue_here",
             "description": (
@@ -89,6 +98,9 @@ def _list(host: str, cwd: str, query, limit: int) -> str:
 
 def call(host: str, name: str, args: dict) -> str:
     other = OTHER[host]
+    if name == "read_session":
+        return json.dumps(history.read_page(other, args["session_id"], args.get("offset", 0),
+                                            args.get("limit", 6000)), ensure_ascii=False)
     cwd = real(args.get("cwd") or os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd())
     query = (args.get("query") or "").strip() or None
     if name == "list_sessions":

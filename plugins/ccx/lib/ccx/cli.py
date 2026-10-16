@@ -8,7 +8,7 @@ import os
 import subprocess
 import sys
 
-from . import __version__, claude, codex, install
+from . import __version__, claude, codex, history, install, pairs, repairs
 from .common import NAME, OTHER, real
 from .sync import STATUS, continue_phrase, find_sessions, menu_data, transfer
 
@@ -81,6 +81,9 @@ def main(argv=None):
     rf = sub.add_parser("_refresh", help=argparse.SUPPRESS)
     rf.add_argument("--quiet", action="store_true")
     sub.add_parser("doctor", help="check the installation")
+    hi = sub.add_parser("history", help="export a readable local snapshot of both sides of linked conversations")
+    hi.add_argument("--open", action="store_true", help="open the snapshot in your browser")
+    sub.add_parser("repair", help="repair linked Codex project grouping and history format (never stops Codex)")
     au = sub.add_parser("autostart", help="start the menu bar icon at login")
     au.add_argument("state", choices=["on", "off", "status"])
     un = sub.add_parser("uninstall", help="remove the plugins, menu bar icon and `ccx` command")
@@ -128,6 +131,18 @@ def main(argv=None):
             sys.exit(install.refresh(quiet=a.quiet))
         elif a.cmd == "doctor":
             sys.exit(install.doctor())
+        elif a.cmd == "history":
+            path = history.export_linked()
+            print(path)
+            if a.open:
+                subprocess.run(["open", path], check=True)
+        elif a.cmd == "repair":
+            for pair in pairs.load():
+                side = pair["codex"]
+                codex.ensure_thread_project(side["id"], side["cwd"])
+                status = repairs.prepare(side["id"])
+                print(side["id"] + ": " + ("ready" if status == "ready" else
+                      "queued: quit Codex when convenient to release this thread; ccx will retry"))
         elif a.cmd == "autostart":
             if a.state == "status":
                 on = install.autostart(None)

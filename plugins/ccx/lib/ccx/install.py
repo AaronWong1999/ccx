@@ -14,7 +14,7 @@ import time
 from pathlib import Path
 from typing import List, Optional, Tuple
 
-from . import __version__, claude, codex, pairs
+from . import __version__, claude, codex, pairs, repairs
 from .common import HOME, STATE_DIR
 
 REPO = "aaronwong1999/ccx"
@@ -264,6 +264,10 @@ def doctor() -> int:
     c = check()
     rows.append((not c["available"], f"Version: {__version__}" + (f" (update available: {c['latest']})" if c["available"] else "")))
     rows.append((True, f"Linked sessions: {len(pairs.load())} · state in {STATE_DIR}"))
+    queued = repairs.pending()
+    if queued:
+        rows.append((False, f"History repair queued for {len(queued)} Codex thread(s): quit Codex when convenient; "
+                     "ccx retries after the writer is released. `ccx history --open` reads both sources now."))
     for ok, text in rows:
         say(ok, text)
     return 0 if all(ok for ok, _ in rows[:2]) else 1

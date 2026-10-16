@@ -42,6 +42,7 @@ struct MenuData: Decodable {
     let projects: [Project]
     let version: String?
     let codex_hook_trusted: Bool?
+    let pending_history_repairs: Int?
 }
 
 struct Release: Decodable {
@@ -92,6 +93,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.delegate = self
         menu.autoenablesItems = false
         item.menu = menu
+        if clickTest { runClickTest(); return }
         rebuild()
         refresh()
         Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in self?.refresh() }
@@ -135,6 +137,10 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
         run(["menu-data"]) { code, out, err in
             self.loading = false
             if code == 0, let d = try? JSONDecoder().decode(MenuData.self, from: Data(out.utf8)) {
+                if (self.data?.pending_history_repairs ?? 0) > 0 && (d.pending_history_repairs ?? 0) == 0 {
+                    self.notify(L("History repair complete", "历史修复完成"),
+                                L("You can reopen Codex now.", "现在可以重新打开 Codex。"))
+                }
                 self.data = d
                 self.loadedAt = Date()
                 self.lastError = nil
@@ -237,6 +243,9 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         if busy { menu.addItem(caption(L("Working…", "正在处理…"))) }
         if let d = data {
+            if (d.pending_history_repairs ?? 0) > 0 {
+                menu.addItem(action(L("History repair pending…", "历史修复待完成…"), #selector(historyRepairInfo), symbol: "exclamationmark.triangle"))
+            }
             if d.projects.isEmpty {
                 menu.addItem(caption(L("No Claude or Codex sessions yet", "还没有 Claude 或 Codex 会话")))
             } else {
@@ -265,6 +274,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         lang.submenu = langs
         menu.addItem(lang)
+        menu.addItem(action(L("Read linked history…", "查看两边历史…"), #selector(readLinkedHistory), symbol: "doc.text"))
         let login = action(L("Start at Login", "登录时自动启动"), #selector(toggleLogin))
         login.state = autostartOn ? .on : .off
         menu.addItem(login)
@@ -351,7 +361,27 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     // MARK: actions
 
+    @objc func readLinkedHistory() { work(["history", "--open"], title: "ccx", showOutput: false) }
+
+    @objc func historyRepairInfo() {
+        alert(L("History repair is queued", "历史修复已排队"),
+              L("Codex still holds an old imported thread open. Quit Codex when convenient; ccx retries every minute. Open Codex again after the pending notice disappears. Read linked history is available now.",
+                "Codex 仍占用旧导入会话。方便时退出 Codex；ccx 每分钟自动重试。待此提示消失后再打开 Codex。现在也可以通过「查看两边历史」阅读全部文字。"))
+    }
+
+    /// `--click <codex|claude> <session id>` runs exactly what clicking that session in
+    /// the menu runs, prints the outcome instead of showing it, and exits (for tests).
+    var clickTest: Bool { CommandLine.arguments.contains("--click") }
+
+    func runClickTest() {
+        let a = CommandLine.arguments, i = a.firstIndex(of: "--click")!
+        let item = NSMenuItem()
+        item.representedObject = ["from": a[i + 1], "id": a[i + 2]]
+        sessionClicked(item)
+    }
+
     func alert(_ title: String, _ text: String) {
+        if clickTest { print("ALERT: \(title)\n\(text)"); exit(1) }
         NSApp.activate(ignoringOtherApps: true)
         let a = NSAlert()
         a.messageText = title
@@ -368,6 +398,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
             self.setIcon(busy: false)
             let text = (out + err).trimmingCharacters(in: .whitespacesAndNewlines)
             if code != 0 { self.alert(L("That didn't work", "没有成功"), text) } else if showOutput { self.alert(title, text) }
+            if self.clickTest { print("OK: \(text)"); exit(0) }
             self.refresh()
         }
     }

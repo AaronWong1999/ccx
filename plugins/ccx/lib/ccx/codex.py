@@ -10,6 +10,7 @@ import os
 import select
 import subprocess
 import time
+import uuid
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
@@ -39,8 +40,10 @@ class AppServer:
         self.p = subprocess.Popen([codex_bin(), "app-server"], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                   stderr=subprocess.DEVNULL, text=True)
         self._id = 0
+        self._received = bytearray()
         self.notifications: List[dict] = []
-        self.request("initialize", {"clientInfo": {"name": "ccx", "version": __version__}})
+        self.request("initialize", {"clientInfo": {"name": "ccx", "version": __version__},
+                                    "capabilities": {"experimentalApi": True}})
         self._send({"method": "initialized"})
 
     def _send(self, obj: dict):
@@ -48,12 +51,24 @@ class AppServer:
         self.p.stdin.flush()
 
     def _read(self, timeout: float) -> Optional[dict]:
+        # TextIOWrapper.readline can read ahead: select then sees no OS bytes,
+        # even though the next notification is already in the wrapper's buffer.
+        # Buffer raw bytes ourselves, so burst responses never strand imports.
+        if b"\n" in self._received:
+            line, _, rest = self._received.partition(b"\n")
+            self._received = bytearray(rest)
+            return json.loads(line)
         r, _, _ = select.select([self.p.stdout], [], [], timeout)
         if not r:
             return None
-        line = self.p.stdout.readline()
-        if not line:
+        chunk = os.read(self.p.stdout.fileno(), 65536)
+        if not chunk:
             raise RuntimeError("Codex app-server exited unexpectedly")
+        self._received.extend(chunk)
+        if b"\n" not in self._received:
+            return None
+        line, _, rest = self._received.partition(b"\n")
+        self._received = bytearray(rest)
         return json.loads(line)
 
     def request(self, method: str, params: dict, timeout: float = 60) -> dict:
@@ -87,6 +102,9 @@ class AppServer:
     def close(self):
         if self.p.poll() is None:
             self.p.kill()
+        self.p.wait()
+        self.p.stdin.close()
+        self.p.stdout.close()
 
 
 _server: Optional[AppServer] = None
@@ -105,7 +123,7 @@ def server() -> AppServer:
 
 def _session(t: dict) -> Session:
     path = Path(t["path"]) if t.get("path") else None
-    title = first_line(t.get("name") or t.get("preview") or "")
+    title = first_line(t.get("name") or user_text(t.get("preview") or ""))
     return Session("codex", t["id"], t.get("cwd") or "", float(t.get("updatedAt") or 0), title, path)
 
 
@@ -133,10 +151,87 @@ def find(tid: str) -> Optional[Session]:
         return None
 
 
+def ensure_thread_project(tid: str, cwd: str) -> Optional[str]:
+    """Attach a projectless thread to the desktop project for its working folder.
+
+    cwd is execution context, not sidebar membership. Reuse an exact canonical
+    root match, or create a local project through Codex's project API. Never move
+    a thread the user already assigned, or collapse distinct worktrees together.
+    Called on existing pairs too, so reopening repairs older ccx imports.
+    """
+    srv = server()
+    thread = srv.request("thread/read", {"threadId": tid, "includeTurns": False})["thread"]
+    if thread.get("projectId"):
+        return thread["projectId"]
+    root = real(thread.get("cwd") or cwd) if thread.get("cwd") or cwd else ""
+    if not root or not os.path.isdir(root) or "/scratch-workspaces/" in root:
+        return None  # don't create a sidebar project for a missing/temporary folder
+    project_id, cursor = None, None
+    while True:
+        page = srv.request("project/list", {"limit": 100, "cursor": cursor})
+        match = next((p for p in page.get("data", [])
+                      if any(real(r["path"]) == root for r in p.get("roots", []) if r.get("path"))), None)
+        if match:
+            project_id = match["id"]
+            break
+        cursor = page.get("nextCursor")
+        if not cursor:
+            break
+    if project_id is None:
+        # A deterministic key makes concurrent/retried imports create one project.
+        key = str(uuid.uuid5(uuid.NAMESPACE_URL, "ccx:local-project:" + root))
+        project_id = srv.request("project/create", {
+            "idempotencyKey": key, "name": Path(root).name,
+            "roots": [{"path": root}],
+        })["project"]["id"]
+    srv.request("thread/metadata/update", {"threadId": tid, "projectId": project_id})
+    actual = srv.request("thread/read", {"threadId": tid, "includeTurns": False})["thread"].get("projectId")
+    if actual != project_id:
+        raise RuntimeError("Codex did not save the thread's project assignment; retry the transfer")
+    return project_id
+
+
 def items(tid: str) -> List[dict]:
     """Every item of every turn of a thread, in order."""
-    t = server().request("thread/read", {"threadId": tid, "includeTurns": True})["thread"]
+    srv = server()
+    meta = srv.request("thread/read", {"threadId": tid, "includeTurns": False})["thread"]
+    if meta.get("historyMode") == "paginated":
+        out, cursor = [], None
+        while True:
+            page = srv.request("thread/items/list", {"threadId": tid, "limit": 100,
+                                                    "sortDirection": "asc", "cursor": cursor})
+            out.extend(row["item"] for row in page.get("data", []))
+            cursor = page.get("nextCursor")
+            if not cursor:
+                return out
+    t = srv.request("thread/read", {"threadId": tid, "includeTurns": True})["thread"]
     return [it for turn in t.get("turns") or [] for it in turn.get("items") or []]
+
+
+def ensure_paginated_history(tid: str) -> str:
+    """Use Codex's targeted migration, without touching a live writer ourselves.
+
+    Importers still emit legacy history on some desktop versions. Those threads
+    cannot serve the items/list requests the desktop uses to expand old turns.
+    A busy thread must be retried after Codex releases it; never rewrite its DB.
+    """
+    meta = server().request("thread/read", {"threadId": tid, "includeTurns": False})["thread"]
+    if meta.get("historyMode") == "paginated":
+        return "ready"
+    proc = subprocess.run([codex_bin(), "migrate-rollouts", "--thread", tid, "--apply", "--json"],
+                          capture_output=True, text=True, timeout=180)
+    if proc.returncode:
+        raise RuntimeError("Codex history migration failed: " + clip(proc.stderr or proc.stdout, 500))
+    outcomes = json.loads(proc.stdout).get("outcomes", [])
+    outcome = next((o for o in outcomes if o.get("thread_id") == tid), {})
+    if outcome.get("status") == "skipped_busy":
+        return "busy"
+    actual = server().request("thread/read", {"threadId": tid, "includeTurns": False})["thread"]
+    if actual.get("historyMode") != "paginated":
+        raise RuntimeError("Codex history migration did not complete: " + str(outcome.get("status", "no result")))
+    # Verify the very API used to expand the oldest imported messages.
+    server().request("thread/items/list", {"threadId": tid, "sortDirection": "asc", "limit": 1})
+    return "ready"
 
 
 def unarchive(tid: str):

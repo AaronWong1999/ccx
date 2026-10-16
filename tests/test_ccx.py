@@ -19,7 +19,7 @@ os.environ["CLAUDE_CONFIG_DIR"] = os.path.join(TMP, "claude")
 os.environ["CCX_HOME"] = os.path.join(TMP, "state")
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "plugins/ccx/lib"))
 
-from ccx import claude, codex, hook, mcp_server, pairs, sync  # noqa: E402
+from ccx import claude, codex, hook, mcp_server, pairs, repairs, sync  # noqa: E402
 from ccx.common import TAG, Session  # noqa: E402
 
 PROJ_A = os.path.join(TMP, "proj-a")
@@ -85,6 +85,12 @@ class FakeCodex:
             p = mock.patch.object(codex, name, fn)
             p.start()
             test.addCleanup(p.stop)
+        p = mock.patch.object(codex, "ensure_thread_project", return_value="project-test")
+        p.start()
+        test.addCleanup(p.stop)
+        p = mock.patch.object(repairs, "prepare", return_value="ready")
+        p.start()
+        test.addCleanup(p.stop)
 
 
 def umsg(t):
@@ -147,7 +153,7 @@ class ClaudeUnits(Base):
         p = claude_file("/tmp/scratch-xyz", "c-scratch", [user("从临时目录开始"), assistant(text("好"))])
         cp = claude.copy_with_new_id(p, PROJ_A)
         try:
-            recs = [json.loads(l) for l in open(cp)]
+            recs = [json.loads(l) for l in cp.read_text().splitlines()]
             self.assertTrue(all(r["cwd"] == PROJ_A for r in recs if "cwd" in r))
             self.assertEqual(cp.parent, claude.project_dir(PROJ_A))
             self.assertNotEqual(recs[0]["sessionId"], "c-scratch")
@@ -215,6 +221,27 @@ class PairsSync(Base):
         self.assertIn("蓝鲸-42", res["context"])
         self.assertTrue(res["context"].startswith(f"<{TAG}"))
         self.assertIsNone(pairs.pull("claude", "c-pair"))  # delivered exactly once
+
+    def test_progress_is_not_lost_when_rollout_size_is_unchanged_or_missing(self):
+        self.make_pair()
+        with mock.patch.object(codex, "size_of", return_value=-1):
+            self.cx.append("x-pair", umsg("new DB item"), amsg("saved"))
+            result = pairs.pull("claude", "c-pair")
+            self.assertIn("new DB item", result["context"])
+            self.cx.append("x-pair", amsg("another DB item"))
+            self.assertEqual(pairs.status(self.cx.find("x-pair"))[0], "updated")
+            self.assertIn("another DB item", pairs.pull("claude", "c-pair")["context"])
+
+    def test_history_pages_do_not_consume_progress(self):
+        from ccx import history
+        self.make_pair()
+        before = pairs.load()
+        self.cx.append("x-pair", umsg("latest"))
+        one = history.read_page("codex", "x-pair", limit=10)
+        two = history.read_page("codex", "x-pair", offset=one["next_offset"], limit=12000)
+        self.assertIn("latest", one["text"] + two["text"])
+        self.assertEqual(pairs.load(), before)
+        self.assertIn("latest", pairs.pull("claude", "c-pair")["context"])
 
     def test_claude_progress_reaches_codex_and_no_echo(self):
         self.make_pair()
@@ -331,7 +358,7 @@ class Interfaces(Base):
 
     def test_mcp_protocol(self):
         tools = {t["name"] for t in mcp_server.tools("codex")}
-        self.assertEqual(tools, {"continue_here", "list_sessions", "send_current_session"})
+        self.assertEqual(tools, {"continue_here", "list_sessions", "send_current_session", "read_session"})
 
     def test_transfer_creates_pair_then_reopens(self):
         claude_file(PROJ_A, "c-xfer", [user("做个页面"), assistant(text("好"))], title="做个页面")
@@ -342,6 +369,153 @@ class Interfaces(Base):
         self.assertEqual(first["action"], "created")
         self.assertEqual(second["action"], "linked")
         self.assertEqual(second["target"]["id"], "x-imported")
+        self.assertEqual(second["target"]["project_id"], "project-test")
+
+    def test_grouping_failure_does_not_duplicate_import_on_retry(self):
+        claude_file(PROJ_A, "c-repair", [user("repair")])
+        self.cx.add("x-repair", PROJ_A, "repair", [umsg("repair")])
+        with mock.patch.object(sync, "_import_to_codex", return_value="x-repair") as imp, \
+                mock.patch.object(codex, "ensure_thread_project", side_effect=[RuntimeError("offline"), "project-a"]):
+            with self.assertRaisesRegex(RuntimeError, "without importing again"):
+                sync.transfer("claude", "c-repair", open_app=False)
+            result = sync.transfer("claude", "c-repair", open_app=False)
+        self.assertEqual(imp.call_count, 1)
+        self.assertEqual(result["action"], "linked")
+        self.assertEqual(result["target"]["project_id"], "project-a")
+
+    def test_source_progress_during_import_is_still_pending(self):
+        c = claude_file(PROJ_A, "c-racing", [user("start")])
+        self.cx.add("x-racing", PROJ_A, "race", [umsg("start")])
+        def import_and_finish_turn(src):
+            with open(c, "a") as f:
+                f.write(json.dumps(assistant(text("finished while importing"))) + "\n")
+            return "x-racing"
+        with mock.patch.object(sync, "_import_to_codex", side_effect=import_and_finish_turn):
+            sync.transfer("claude", "c-racing", open_app=False)
+        self.assertIn("finished while importing", pairs.pull("codex", "x-racing")["context"])
+
+    def test_codex_to_claude_preserves_folder_and_existing_pair(self):
+        self.cx.add("x-reverse", PROJ_B, "reverse", [umsg("start"), amsg("half done")])
+        with mock.patch.object(claude, "version", return_value="2.1.0"):
+            first = sync.transfer("codex", "x-reverse", open_app=False)
+            second = sync.transfer("codex", "x-reverse", open_app=False)
+        self.assertEqual(first["target"]["id"], second["target"]["id"])
+        self.assertEqual(claude.find(first["target"]["id"]).cwd, PROJ_B)
+
+
+class ProjectAssignment(unittest.TestCase):
+    def server_for(self, project_id=None, pages=None):
+        self.state = {"thread": {"id": "x", "cwd": PROJ_A, "projectId": project_id}}
+        pages = iter(pages or [{"data": [], "nextCursor": None}])
+        def request(method, args):
+            if method == "thread/read":
+                return self.state
+            if method == "project/list":
+                return next(pages)
+            if method == "project/create":
+                return {"project": {"id": "created"}}
+            if method == "thread/metadata/update":
+                self.state["thread"]["projectId"] = args["projectId"]
+                return {}
+            self.fail(method)
+        srv = mock.Mock()
+        srv.request.side_effect = request
+        return srv
+
+    def test_reuses_project_on_later_page(self):
+        srv = self.server_for(pages=[{"data": [], "nextCursor": "more"}, {"data": [
+            {"id": "existing", "roots": [{"path": PROJ_A}]}], "nextCursor": None}])
+        with mock.patch.object(codex, "server", return_value=srv):
+            self.assertEqual(codex.ensure_thread_project("x", PROJ_A), "existing")
+        self.assertNotIn("project/create", [c.args[0] for c in srv.request.call_args_list])
+
+    def test_creates_only_for_exact_root_and_stays_idempotent(self):
+        srv = self.server_for(pages=[{"data": [{"id": "parent", "roots": [{"path": TMP}]}]}])
+        with mock.patch.object(codex, "server", return_value=srv):
+            self.assertEqual(codex.ensure_thread_project("x", PROJ_A), "created")
+            self.assertEqual(codex.ensure_thread_project("x", PROJ_A), "created")
+        creates = [c.args[1] for c in srv.request.call_args_list if c.args[0] == "project/create"]
+        self.assertEqual(len(creates), 1)
+        self.assertEqual(creates[0]["roots"], [{"path": os.path.realpath(PROJ_A)}])
+
+    def test_preserves_user_assignment(self):
+        srv = self.server_for(project_id="chosen-by-user")
+        with mock.patch.object(codex, "server", return_value=srv):
+            self.assertEqual(codex.ensure_thread_project("x", PROJ_A), "chosen-by-user")
+        self.assertEqual(srv.request.call_count, 1)
+
+    def test_missing_directory_does_not_create_project(self):
+        srv = self.server_for()
+        self.state["thread"]["cwd"] = "/ccx/missing/directory"
+        with mock.patch.object(codex, "server", return_value=srv):
+            self.assertIsNone(codex.ensure_thread_project("x", PROJ_A))
+        self.assertEqual(srv.request.call_count, 1)
+
+
+class NativeHistory(unittest.TestCase):
+    def test_busy_repair_stays_queued_until_writer_is_released(self):
+        import uuid
+        tid = str(uuid.uuid4())
+        with tempfile.TemporaryDirectory() as directory, \
+                mock.patch.object(repairs, "ROOT", Path(directory)), \
+                mock.patch.object(codex, "ensure_paginated_history", side_effect=["busy", "ready"]):
+            self.assertEqual(repairs.prepare(tid), "busy")
+            self.assertEqual(repairs.pending()[0]["thread_id"], tid)
+            self.assertEqual(repairs.prepare(tid), "ready")
+            self.assertEqual(repairs.pending(), [])
+
+    def test_history_reader_escapes_imported_html(self):
+        from ccx import history
+        source = Session("claude", "x", PROJ_A, 0, "<script>bad</script>", None)
+        pair = {"claude": {"id": "x"}, "codex": {"id": "y"}}
+        with tempfile.TemporaryDirectory() as directory, \
+                mock.patch.object(history, "STATE_DIR", Path(directory)), \
+                mock.patch.object(pairs, "load", return_value=[pair]), \
+                mock.patch.object(pairs, "session_units", return_value=(source, [("user", "<img onerror=bad>")])):
+            page = Path(history.export_linked()).read_text()
+        self.assertIn("&lt;img onerror=bad&gt;", page)
+        self.assertNotIn("<script>bad", page)
+
+    def test_paginated_history_unwraps_items_and_reads_all_pages(self):
+        srv = mock.Mock()
+        srv.request.side_effect = [
+            {"thread": {"historyMode": "paginated"}},
+            {"data": [{"item": umsg("first")}], "nextCursor": "more"},
+            {"data": [{"item": amsg("last")}], "nextCursor": None},
+        ]
+        with mock.patch.object(codex, "server", return_value=srv):
+            self.assertEqual(codex.items("x"), [umsg("first"), amsg("last")])
+        self.assertEqual(srv.request.call_args_list[-1].args[1]["cursor"], "more")
+
+    def test_targeted_migration_verifies_item_paging(self):
+        srv = mock.Mock()
+        srv.request.side_effect = [{"thread": {"historyMode": "legacy"}},
+                                   {"thread": {"historyMode": "paginated"}}, {"data": []}]
+        proc = mock.Mock(returncode=0, stdout=json.dumps({"outcomes": [
+            {"thread_id": "x", "status": "migrated"}]}))
+        with mock.patch.object(codex, "server", return_value=srv), \
+                mock.patch.object(codex, "codex_bin", return_value="codex"), \
+                mock.patch.object(codex.subprocess, "run", return_value=proc) as run:
+            self.assertEqual(codex.ensure_paginated_history("x"), "ready")
+        self.assertEqual(run.call_args.args[0], ["codex", "migrate-rollouts", "--thread", "x", "--apply", "--json"])
+        self.assertEqual(srv.request.call_args.args[0], "thread/items/list")
+
+    def test_live_writer_is_queued_and_never_forced(self):
+        srv = mock.Mock()
+        srv.request.return_value = {"thread": {"historyMode": "legacy"}}
+        proc = mock.Mock(returncode=0, stdout=json.dumps({"outcomes": [
+            {"thread_id": "x", "status": "skipped_busy"}]}))
+        with mock.patch.object(codex, "server", return_value=srv), \
+                mock.patch.object(codex, "codex_bin", return_value="codex"), \
+                mock.patch.object(codex.subprocess, "run", return_value=proc):
+            self.assertEqual(codex.ensure_paginated_history("x"), "busy")
+        self.assertEqual(srv.request.call_count, 1)
+
+    def test_burst_rpc_notifications_are_not_stranded(self):
+        rpc = object.__new__(codex.AppServer)
+        rpc._received = bytearray(b'{"id":1,"result":{}}\n{"method":"import/completed"}\n')
+        self.assertEqual(rpc._read(0)["id"], 1)
+        self.assertEqual(rpc._read(0)["method"], "import/completed")
 
 
 if __name__ == "__main__":
