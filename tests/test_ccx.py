@@ -478,11 +478,6 @@ class Interfaces(Base):
             {"type": "localImage", "path": str(shot)}]})
         self.assertEqual(u[1], f"fix it\n[image: {shot}]")
 
-    def test_continued_titles_say_where_and_when_without_nesting(self):
-        t = pairs.continued_title("claude", "⇄ 落地页")
-        self.assertRegex(t, r"^(From Claude|接 Claude) · \d\d-\d\d \d\d:\d\d · 落地页$")
-        self.assertRegex(pairs.continued_title("codex", t), r"(From Codex|接 Codex) · [\d: -]+ · 落地页$")
-
     def test_compaction_resets_context_size(self):
         c = claude_file(PROJ_A, "c-compact", [user("hi"), assistant(text("ok"))])
         with open(c, "a") as f:

@@ -251,10 +251,6 @@ def ensure_thread_project(tid: str, cwd: str) -> Optional[str]:
     return project_id
 
 
-def set_name(tid: str, name: str):
-    server().request("thread/name/set", {"threadId": tid, "name": name})
-
-
 def items(tid: str) -> List[dict]:
     """Every item of every turn of a thread, in order."""
     srv = server()
