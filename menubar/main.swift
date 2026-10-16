@@ -479,11 +479,11 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // 1. The target conversation is huge and idle past its cache lifetime: the next
         //    message there re-reads all of it, however little this transfer adds.
         // 2. An unlinked long Claude session: a full import makes Codex read all of it.
-        let stale = tokens >= (from == "codex" ? 250_000 : 150_000) && idle >= 55
+        let stale = warnLongResume && tokens >= (from == "codex" ? 250_000 : 150_000) && idle >= 55
         let est = stale || (from == "claude" && !linked && own >= 50_000) ? estimate(from, id) : [:]
         let full = est["full"] ?? 0, small = max(est["condensed"] ?? 0, 1000)
         let n = est["pending"] ?? 0, added = est["pending_tokens"] ?? 0
-        let fullImport = !stale && from == "claude" && !linked && full >= 100_000
+        let fullImport = warnLongResume && !stale && from == "claude" && !linked && full >= 100_000
         if stale || fullImport {
             let k = { (t: Int) in "\(max(1, (t + 500) / 1000))k" }
             let title: String, msg: String

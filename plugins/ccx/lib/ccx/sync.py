@@ -228,6 +228,20 @@ def transfer(tool: str, session_id: str, open_app: bool = True) -> dict:
             res["message"] += (" Older history needs Codex's native format migration, queued until this thread "
                                "is released. Quit Codex when convenient; ccx retries in the background. "
                                "Your conversation and ongoing work are not replaced.")
+    # A /goal doesn't move between the apps (and ccx won't start autonomous work on
+    # its own): say so, with the command ready on the clipboard to set it there.
+    g = pairs.goal(tool, src.id)
+    if g and g["status"] != "complete":
+        there = pairs.goal(dst, target)
+        if not (there and there["objective"].strip() == g["objective"].strip() and there["status"] != "complete"):
+            res["goal"] = g
+            res["message"] += L(f"\n\nThis {NAME[tool]} conversation has an unfinished /goal ({g['status']}). Goals don't "
+                                f"carry over by themselves: to keep working toward it in {NAME[dst]}, paste the /goal "
+                                f"command that is now on your clipboard.",
+                                f"\n\n这个 {NAME[tool]} 对话有一个未完成的 /goal（{g['status']}）。目标不会自动带过去："
+                                f"要在 {NAME[dst]} 里继续这个目标，粘贴剪贴板里的 /goal 指令即可。")
+            if open_app:
+                copy_to_clipboard(f"/goal {g['objective']}")
     if open_app:
         res["opened"] = open_in_app(dst, target)
     return res

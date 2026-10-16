@@ -213,6 +213,28 @@ def _render(d: dict, skip_ids: set) -> Unit:
     return (role, "\n".join(parts)) if parts else None
 
 
+# ------------------------------------------------------------------- goal
+
+def goal(path: Path) -> Optional[dict]:
+    """The conversation's /goal as Claude Code recorded it: {"objective", "status"}
+    with status "active" or "complete"; None if never set or cleared."""
+    g = None
+    with open(path, encoding="utf-8", errors="replace") as f:
+        for line in f:
+            if '"goal' not in line and "Goal cleared" not in line:
+                continue
+            try:
+                d = json.loads(line)
+            except ValueError:
+                continue
+            a = d.get("attachment") or {}
+            if a.get("type") == "goal_status" and a.get("condition"):
+                g = {"objective": a["condition"], "status": "complete" if a.get("met") else "active"}
+            elif d.get("type") == "system" and "Goal cleared" in str(d.get("content") or ""):
+                g = None  # "/goal clear", or Claude Code cleared it after an error
+    return g
+
+
 # ------------------------------------------------------------- cost of resuming
 
 def context_state(path: Path) -> Tuple[int, float]:

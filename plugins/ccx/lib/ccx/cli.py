@@ -29,7 +29,7 @@ def pick(tool: str, cwd: str, ref):
 def run_transfer(src_tool: str, sid: str, a):
     res = transfer(src_tool, sid, open_app=not a.no_open)
     t = res["target"]
-    if res["action"] == "linked" and t["tool"] == "codex" and codex.hooks_trusted() is False:
+    if res["action"] == "linked" and t["tool"] == "codex" and not res.get("goal") and codex.hooks_trusted() is False:
         # Without the hook Codex pulls on request: have the phrase ready to paste.
         copy_to_clipboard(continue_phrase(src_tool))
         res["message"] += f" (Say “{continue_phrase(src_tool)}” there; it is on your clipboard.)"

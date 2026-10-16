@@ -251,6 +251,16 @@ def ensure_thread_project(tid: str, cwd: str) -> Optional[str]:
     return project_id
 
 
+def goal(tid: str) -> Optional[dict]:
+    """The thread's /goal from Codex itself: {"objective", "status"} (active, paused,
+    blocked, usageLimited, budgetLimited, complete), or None."""
+    try:
+        g = server().request("thread/goal/get", {"threadId": tid}).get("goal")
+    except (RuntimeError, TimeoutError):
+        return None
+    return {"objective": g["objective"], "status": g["status"]} if g and g.get("objective") else None
+
+
 def items(tid: str) -> List[dict]:
     """Every item of every turn of a thread, in order."""
     srv = server()

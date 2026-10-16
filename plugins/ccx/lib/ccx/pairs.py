@@ -53,17 +53,41 @@ def link(claude_side: dict, codex_side: dict) -> dict:
 
 
 def _set_cursor(claude_id: str, side: str, cursor: int, size: Optional[int] = None,
-                updated_at: Optional[float] = None):
+                updated_at: Optional[float] = None, goal_sent: Optional[str] = None):
     pairs = load()
     for p in pairs:
         if p["claude"]["id"] == claude_id:
             p[side]["cursor"] = cursor
+            if goal_sent is not None:
+                p[side]["goal_sent"] = goal_sent
             if size is not None:
                 p[side]["size"] = size
             if updated_at is not None:
                 p[side]["updated_at"] = updated_at
             p["synced_at"] = time.time()
     save(pairs)
+
+
+# --------------------------------------------------------------------- goal
+
+def goal(tool: str, sid: str) -> Optional[dict]:
+    """A session's /goal, read from the app itself (never set by ccx)."""
+    if tool == "codex":
+        return codex.goal(sid)
+    s = claude.find(sid)
+    return claude.goal(s.path) if s and s.path else None
+
+
+def goal_note(g: Optional[dict], tool: str) -> str:
+    if not g:
+        return ""
+    state = "completed" if g["status"] == "complete" else g["status"]
+    return (f"The user's /goal in {NAME[tool]} ({state}): \u201c{g['objective']}\u201d. Goals don't transfer between "
+            f"the apps by themselves; if the user sets it here with /goal, work toward it.\n\n")
+
+
+def _goal_key(g: Optional[dict]) -> str:
+    return f"{g['status']}:{g['objective']}" if g else ""
 
 
 # -------------------------------------------------------------------- units
@@ -152,12 +176,14 @@ def pull(here_tool: str, here_id: str, budget: int = HOOK_BUDGET) -> Optional[di
         if not s:
             return None
     new = [u for u in us[o["cursor"]:] if u]
+    g = goal(other, s.id) if new else None
+    note = goal_note(g, other) if new and _goal_key(g) != o.get("goal_sent", "") else ""
     _set_cursor(pair["claude"]["id"], other, len(us), codex.size_of(s) if other == "codex" else None,
-                s.mtime if other == "codex" else None)
+                s.mtime if other == "codex" else None, _goal_key(g) if new else None)
     if not new:
         return None
     return {"from": other, "session": s.id, "count": len(new),
-            "context": wrap(render(new, other, budget), s, pair[here_tool]["cwd"], first=False)}
+            "context": wrap(note + render(new, other, budget), s, pair[here_tool]["cwd"], first=False)}
 
 
 def continue_from(here_tool: str, here_id: str, here_cwd: str, other_id: str) -> dict:
@@ -180,13 +206,15 @@ def continue_from(here_tool: str, here_id: str, here_cwd: str, other_id: str) ->
         codex.ensure_thread_project(here_id, here["cwd"])
         if opened_workspace:
             subprocess.run(["open", f"codex://threads/{here_id}"], capture_output=True, check=False)
-    there = {"id": s.id, "cwd": s.cwd, "cursor": len(us)}
+    g = goal(other, s.id)
+    there = {"id": s.id, "cwd": s.cwd, "cursor": len(us), "goal_sent": _goal_key(g)}
     if other == "codex":
         there["size"], there["updated_at"] = codex.size_of(s), s.mtime
     link(**({"claude_side": here, "codex_side": there} if here_tool == "claude"
             else {"claude_side": there, "codex_side": here}))
     return {"from": other, "session": s.id, "title": s.title, "cwd": s.cwd,
-            "context": wrap(render([u for u in shown if u], other, FULL_BUDGET), s, here["cwd"], first=True)}
+            "context": wrap(goal_note(g, other) + render([u for u in shown if u], other, FULL_BUDGET), s, here["cwd"],
+                            first=True)}
 
 
 def pending(tool: str, sid: str) -> Tuple[int, int]:

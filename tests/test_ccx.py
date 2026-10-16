@@ -381,27 +381,9 @@ class Interfaces(Base):
         self.cx.add("x-" + sid, PROJ_A, "长任务", [umsg("长任务")])
         pairs.link(pairs.side("claude", sid), pairs.side("codex", "x-" + sid))
 
-    def test_resume_guard_stops_once_then_lets_resend_through(self):
-        from ccx import common
-        common.set_setting("warn_long_resume", True)
-        self._big_idle_pair("c-big", 800_000, 2)
-        first = self._hook("c-big", "接着干")
-        self.assertEqual(first["decision"], "block")
-        self.assertIn("800k", first["reason"])
-        self.assertIn("接着干", first["reason"])          # the message is echoed back to copy
-        self.assertNotEqual((self._hook("c-big") or {}).get("decision"), "block")
-
-    def test_resume_guard_skips_small_recent_or_disabled(self):
-        from ccx import common
-        common.set_setting("warn_long_resume", True)
-        self._big_idle_pair("c-small", 40_000, 3)
-        self._big_idle_pair("c-recent", 800_000, 0.2)
-        for sid in ("c-small", "c-recent"):
-            self.assertNotEqual((self._hook(sid) or {}).get("decision"), "block")
-        common.set_setting("warn_long_resume", False)
-        self._big_idle_pair("c-off", 800_000, 3)
-        self.assertNotEqual((self._hook("c-off") or {}).get("decision"), "block")
-        common.set_setting("warn_long_resume", True)
+    def test_hook_never_blocks_a_long_idle_conversation(self):
+        self._big_idle_pair("c-big", 800_000, 3)
+        self.assertNotEqual((self._hook("c-big", "接着干") or {}).get("decision"), "block")
 
     def test_hook_shows_a_visible_notice_and_skips_unchanged_threads(self):
         claude_file(PROJ_A, "c-note", [user("hi")], title="note")
@@ -477,6 +459,33 @@ class Interfaces(Base):
             {"type": "text", "text": f"\n# Files mentioned by the user:\n\n## a.png: {shot}\nImage attachment: true\n\n## My request:\nfix it"},
             {"type": "localImage", "path": str(shot)}]})
         self.assertEqual(u[1], f"fix it\n[image: {shot}]")
+
+    def test_claude_goal_set_met_and_cleared(self):
+        g = lambda cond, met: {"type": "attachment", "attachment": {"type": "goal_status", "condition": cond, "met": met}}
+        c = claude_file(PROJ_A, "c-goal", [user("hi"), g("ship it", False)])
+        self.assertEqual(claude.goal(c), {"objective": "ship it", "status": "active"})
+        with open(c, "a") as f:
+            f.write(json.dumps(g("ship it", True)) + "\n")
+        self.assertEqual(claude.goal(c)["status"], "complete")
+        with open(c, "a") as f:
+            f.write(json.dumps(g("next", False)) + "\n")
+            f.write(json.dumps({"type": "system", "subtype": "local_command", "commandRun": {"command": "goal", "args": "clear"},
+                                "content": "<local-command-stdout>Goal cleared: next</local-command-stdout>"}) + "\n")
+        self.assertIsNone(claude.goal(c))
+
+    def test_transfer_mentions_unfinished_goal_and_pull_carries_it_once(self):
+        claude_file(PROJ_A, "c-g2", [user("做页面")])
+        self.cx.add("x-g2", PROJ_A, "做页面", [umsg("做页面")])
+        pairs.link(pairs.side("claude", "c-g2"), pairs.side("codex", "x-g2"))
+        self.cx.append("x-g2", amsg("做了一半"))
+        goal = {"objective": "做到能发布", "status": "usageLimited"}
+        with mock.patch.object(codex, "goal", return_value=goal):
+            res = sync.transfer("codex", "x-g2", open_app=False)
+            self.assertEqual(res["goal"], goal)
+            self.assertIn("/goal", res["message"])
+            self.assertIn("做到能发布", pairs.pull("claude", "c-g2")["context"])
+            self.cx.append("x-g2", amsg("又做了一点"))
+            self.assertNotIn("做到能发布", pairs.pull("claude", "c-g2")["context"])  # unchanged goal: not repeated
 
     def test_compaction_resets_context_size(self):
         c = claude_file(PROJ_A, "c-compact", [user("hi"), assistant(text("ok"))])
