@@ -133,9 +133,9 @@ Some Codex versions import legacy history but use the newer item-pagination API 
 
 部分 Codex 版本导入的是旧历史格式，界面却用新分页接口展开旧消息，导致始终显示“重试”。ccx 会在打开新导入会话前调用 Codex 自带的定向历史迁移，并验证分页可读。如果旧会话仍被进程占用，就排队并通过菜单栏每分钟重试，不会杀掉 Codex 或改写正在使用的数据库。方便时退出 Codex，保留 ccx 运行，等“历史修复待完成”提示消失后再打开 Codex。也可运行 `ccx repair` 手动重试。
 
-**Sync is task context, not a mirrored chat UI.** Progress arriving through a prompt hook is available to the model but does not become additional native chat bubbles. The full record stays in each app; when a condensed handover leaves something out, the model can page through the other side with `read_session` (just ask it to look up the earlier discussion). Tool output remains condensed. Images you pasted travel as local file paths (`[image: ~/.ccx/images/…]`, one copy per image), so the other app can open them when it needs to; they cost nothing until opened. Rollout file size is never used to skip updates: paginated history may change only in Codex's database.
+**Sync is task context, not a mirrored chat UI.** Progress arriving through a prompt hook is available to the model but does not become additional native chat bubbles. The full record stays in each app; when a condensed handover leaves something out, the model can page through the other side with `read_session` (just ask it to look up the earlier discussion). Tool output remains condensed. Images you pasted travel as the path of the app's own cached copy (`[image: /path]`), so the other app can open them when it needs to; they cost nothing until opened. ccx stores no copies: once the system cleans that cache, the image is gone. Rollout file size is never used to skip updates: paginated history may change only in Codex's database.
 
-**同步的是任务上下文，并非聊天界面的逐条镜像。** Hook 带来的进展模型能读取，但不会变成新的原生聊天气泡。完整记录仍在各自的 app 里；压缩交接时省略的内容，模型可以用 `read_session` 到对面分页补读（让它“查一下之前的讨论”即可）。工具输出仍有压缩。你贴的图片会以本地文件路径带过去（`[image: ~/.ccx/images/…]`，每张图只存一份），对面需要时直接打开，不打开就不消耗额度。同步不再按旧记录文件大小跳过检查，因为新历史数据可能只写入 Codex 数据库。
+**同步的是任务上下文，并非聊天界面的逐条镜像。** Hook 带来的进展模型能读取，但不会变成新的原生聊天气泡。完整记录仍在各自的 app 里；压缩交接时省略的内容，模型可以用 `read_session` 到对面分页补读（让它“查一下之前的讨论”即可）。工具输出仍有压缩。你贴的图片会以该 app 自己缓存的本地路径带过去（`[image: /路径]`），对面需要时直接打开，不打开就不消耗额度。ccx 不另存副本：系统清理了缓存，图片就没了。同步不再按旧记录文件大小跳过检查，因为新历史数据可能只写入 Codex 数据库。
 
 ## Updates · 更新
 

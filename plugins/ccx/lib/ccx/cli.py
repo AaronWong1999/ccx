@@ -8,7 +8,7 @@ import os
 import subprocess
 import sys
 
-from . import __version__, claude, codex, history, install, pairs, repairs
+from . import __version__, claude, codex, install, pairs, repairs
 from .common import copy_to_clipboard, DEFAULTS, NAME, OTHER, L, real, set_setting, setting
 from .sync import (STATUS, continue_phrase, estimate, find_sessions, menu_data, new_claude_conversation, new_codex_conversation,
                    transfer)
@@ -92,8 +92,6 @@ def main(argv=None):
     rf = sub.add_parser("_refresh", help=argparse.SUPPRESS)
     rf.add_argument("--quiet", action="store_true")
     sub.add_parser("doctor", help="check the installation")
-    hi = sub.add_parser("history", help="export a readable local snapshot of both sides of linked conversations")
-    hi.add_argument("--open", action="store_true", help="open the snapshot in your browser")
     sub.add_parser("repair", help="repair linked Codex project grouping and history format (never stops Codex)")
     au = sub.add_parser("autostart", help="start the menu bar icon at login")
     au.add_argument("state", choices=["on", "off", "status"])
@@ -157,11 +155,6 @@ def main(argv=None):
             sys.exit(install.refresh(quiet=a.quiet))
         elif a.cmd == "doctor":
             sys.exit(install.doctor())
-        elif a.cmd == "history":
-            path = history.export_linked()
-            print(path)
-            if a.open:
-                subprocess.run(["open", path], check=True)
         elif a.cmd == "repair":
             for pair in pairs.load():
                 side = pair["codex"]

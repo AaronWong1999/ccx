@@ -462,23 +462,21 @@ class Interfaces(Base):
         e = sync.estimate("claude", "c-big")
         self.assertGreater(e["full"], e["condensed"] * 3)
 
-    def test_pasted_images_travel_as_lasting_files(self):
-        import base64
-        png = base64.b64encode(b"\x89PNG fake").decode()
-        c = claude_file(PROJ_A, "c-img", [user([{"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": png}},
-                                                {"type": "text", "text": "look at this"}])])
-        line = claude.units(c)[0][1]
-        path = line.split("[image: ")[1].split("]")[0]
-        self.assertEqual(Path(path).read_bytes(), b"\x89PNG fake")
-        self.assertIn("look at this", line)
-        tmp = Path(tempfile.mkdtemp()) / "codex-clipboard-1.png"
-        tmp.write_bytes(b"codex shot")
+    def test_pasted_images_point_at_the_apps_own_cache(self):
+        c = claude_file(PROJ_A, "c-img", [user([{"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": "eA=="}},
+                                                {"type": "text", "text": "look at this"}], imagePasteIds=[3])])
+        cache = Path(TMP) / "claude-tmp" / f"claude-{os.getuid()}" / c.parent.name / "c-img" / "images"
+        with mock.patch.dict(os.environ, {"CLAUDE_CODE_TMPDIR": str(Path(TMP) / "claude-tmp")}):
+            self.assertIn("[image: no longer cached]", claude.units(c)[0][1])  # cleaned up: gone, no copy kept
+            cache.mkdir(parents=True)
+            (cache / "3.png").write_bytes(b"x")
+            self.assertIn(f"[image: {cache / '3.png'}]", claude.units(c)[0][1])
+        shot = Path(tempfile.mkdtemp()) / "codex-clipboard-1.png"
+        shot.write_bytes(b"codex shot")
         u = codex._render({"type": "userMessage", "content": [
-            {"type": "text", "text": f"\n# Files mentioned by the user:\n\n## a.png: {tmp}\nImage attachment: true\n\n## My request:\nfix it"},
-            {"type": "localImage", "path": str(tmp)}]})
-        self.assertTrue(u[1].startswith("fix it\n[image: "))
-        tmp.unlink()  # macOS cleans its temp folder; the kept copy remains
-        self.assertEqual(Path(u[1].split("[image: ")[1].rstrip("]")).read_bytes(), b"codex shot")
+            {"type": "text", "text": f"\n# Files mentioned by the user:\n\n## a.png: {shot}\nImage attachment: true\n\n## My request:\nfix it"},
+            {"type": "localImage", "path": str(shot)}]})
+        self.assertEqual(u[1], f"fix it\n[image: {shot}]")
 
     def test_compaction_resets_context_size(self):
         c = claude_file(PROJ_A, "c-compact", [user("hi"), assistant(text("ok"))])
@@ -639,16 +637,6 @@ class NativeHistory(unittest.TestCase):
             self.assertEqual(repairs.pending()[0]["thread_id"], tid)
             self.assertEqual(repairs.prepare(tid), "ready")
             self.assertEqual(repairs.pending(), [])
-
-    def test_history_reader_escapes_imported_html(self):
-        from ccx import history
-        source = Session("claude", "x", PROJ_A, 0, "<script>bad</script>", None)
-        pair = {"claude": {"id": "x"}, "codex": {"id": "y"}}
-        with mock.patch.object(pairs, "load", return_value=[pair]), \
-                mock.patch.object(pairs, "session_units", return_value=(source, [("user", "<img onerror=bad>")])):
-            page = Path(history.export_linked()).read_text()
-        self.assertIn("&lt;img onerror=bad&gt;", page)
-        self.assertNotIn("<script>bad", page)
 
     def test_paginated_history_unwraps_items_and_reads_all_pages(self):
         srv = mock.Mock()

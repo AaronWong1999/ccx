@@ -197,37 +197,14 @@ def est_tokens(text: str) -> int:
 
 # ------------------------------------------------------------------ images
 
-IMAGES = STATE_DIR / "images"
-_EXT = {"image/png": "png", "image/jpeg": "jpg", "image/gif": "gif", "image/webp": "webp"}
 _FILES_MENTIONED = re.compile(r"^\s*# Files mentioned by the user:.*?## My request:\s*", re.S)
 
 
-def keep_image(data_b64: str = "", media_type: str = "image/png", path: str = "") -> Optional[str]:
-    """A lasting local copy of a pasted image, so the other app can open it later:
-    Claude keeps pasted images only inside its transcript, Codex in a temp folder
-    macOS cleans up. Stored once per image (named by content hash)."""
-    import base64
-    import hashlib
-    try:
-        if data_b64:
-            raw = base64.b64decode(data_b64)
-            ext = _EXT.get(media_type, "png")
-        elif path and os.path.isfile(path):
-            raw = Path(path).read_bytes()
-            ext = (Path(path).suffix.lstrip(".") or "png").lower()
-        else:
-            return None
-        out = IMAGES / f"{hashlib.sha256(raw).hexdigest()[:20]}.{ext}"
-        if not out.exists():
-            IMAGES.mkdir(parents=True, exist_ok=True)
-            out.write_bytes(raw)
-        return str(out)
-    except (OSError, ValueError):
-        return path or None
-
-
 def image_line(path: Optional[str]) -> str:
-    return f"[image: {path}]" if path else "[image: no longer available]"
+    """An image the user pasted, by the path of the app's own cached copy. ccx keeps
+    no copies: if the system has cleaned that cache, the image is simply gone."""
+    return f"[image: {path}]" if path and (not path.startswith("/") or os.path.exists(path)) \
+        else "[image: no longer cached]"
 
 
 def strip_files_header(text: str) -> str:

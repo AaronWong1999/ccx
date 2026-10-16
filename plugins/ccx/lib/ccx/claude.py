@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 from .common import (
-    HOME, PLAN, STATE_DIR, TAG, Session, clip, first_line, git_branch, image_line, is_injected, keep_image, now_iso, real,
+    HOME, PLAN, STATE_DIR, TAG, Session, clip, first_line, git_branch, image_line, is_injected, now_iso, real,
     same_dir, user_text, which,
 )
 
@@ -151,6 +151,9 @@ def units(path: Path, include_imported: bool = False) -> List[Unit]:
     'continue from' and for reading history)."""
     out: List[Unit] = []
     skip_ids = set()
+    # The desktop app caches pasted images as <tmp>/claude-<uid>/<project>/<session>/images/<paste id>.<ext>
+    images = Path(os.environ.get("CLAUDE_CODE_TMPDIR", "/private/tmp")) / f"claude-{os.getuid()}" \
+        / path.parent.name / path.stem / "images"
     with open(path, encoding="utf-8", errors="replace") as f:
         for line in f:
             try:
@@ -160,6 +163,7 @@ def units(path: Path, include_imported: bool = False) -> List[Unit]:
             if d.get("type") not in ("user", "assistant"):
                 continue
             # A compaction summary restates earlier records; sending it would repeat them.
+            d["_images"] = images
             if ((d.get(MARKER) and not include_imported) or d.get("isMeta") or d.get("isSidechain")
                     or d.get("isCompactSummary")):
                 out.append(None)
@@ -174,6 +178,7 @@ def _render(d: dict, skip_ids: set) -> Unit:
         typed = user_text(content) if d["type"] == "user" else ""
         return ("user", typed) if typed and TAG not in typed else None
     parts, role = [], ("user" if d["type"] == "user" else "assistant")
+    paste_ids = iter(d.get("imagePasteIds") or [])
     for c in content or []:
         t = c.get("type")
         if t == "text":
@@ -181,9 +186,9 @@ def _render(d: dict, skip_ids: set) -> Unit:
             if text.strip() and TAG not in text:
                 parts.append(text)
         elif t == "image" and role == "user":
-            src = c.get("source") or {}
-            parts.append(image_line(keep_image(src.get("data", ""), src.get("media_type", "image/png"))
-                                    if src.get("type") == "base64" else src.get("url")))
+            pid = next(paste_ids, None)
+            cached = next(iter(sorted(d["_images"].glob(f"{pid}.*"))), None) if pid is not None and d.get("_images") else None
+            parts.append(image_line(str(cached) if cached else (c.get("source") or {}).get("url")))
         elif t == "tool_use":
             if SELF_TOOL.search(c.get("name", "")):
                 skip_ids.add(c.get("id"))

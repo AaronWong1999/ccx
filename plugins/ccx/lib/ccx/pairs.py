@@ -176,6 +176,14 @@ def continue_from(here_tool: str, here_id: str, here_cwd: str, other_id: str) ->
     if here_tool == "codex":
         # In-conversation imports stay in the current thread's own workspace.
         # A foreign Claude folder remains reference context, never a silent move.
+        # A thread started with "Continue the … session from Claude (session id …)"
+        # is titled by that prompt: name it after the task instead.
+        mine = codex.find(here_id)
+        if mine and ((mine.title or "").startswith("Continue the") or other_id in (mine.title or "")):
+            try:
+                codex.set_name(here_id, s.title)
+            except (RuntimeError, TimeoutError, KeyError):
+                pass
         opened_workspace = codex.register_desktop_workspace(here["cwd"])
         codex.ensure_thread_project(here_id, here["cwd"])
         if opened_workspace:

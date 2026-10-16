@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 from . import __version__
-from .common import (HOME, PLAN, TAG, Session, clip, first_line, image_line, keep_image, real, strip_files_header,
+from .common import (HOME, PLAN, TAG, Session, clip, first_line, image_line, real, strip_files_header,
                      user_text, which)
 
 APP_BUNDLES = ("/Applications/ChatGPT.app", "/Applications/Codex.app",
@@ -251,6 +251,10 @@ def ensure_thread_project(tid: str, cwd: str) -> Optional[str]:
     return project_id
 
 
+def set_name(tid: str, name: str):
+    server().request("thread/name/set", {"threadId": tid, "name": name})
+
+
 def items(tid: str) -> List[dict]:
     """Every item of every turn of a thread, in order."""
     srv = server()
@@ -376,11 +380,8 @@ def _text(content) -> str:
     return "\n".join(c.get("text", "") for c in content or [] if isinstance(c, dict))
 
 
-def _data_url(url: str) -> Optional[str]:
-    if url.startswith("data:") and ";base64," in url:
-        head, data = url[5:].split(";base64,", 1)
-        return keep_image(data, head)
-    return url or None
+def _url(url: str) -> Optional[str]:
+    return None if url.startswith("data:") else url or None  # inline data has no file to point to
 
 
 def _render(it: dict) -> Unit:
@@ -389,8 +390,8 @@ def _render(it: dict) -> Unit:
         text = user_text(strip_files_header(_text(it.get("content"))))
         if TAG in text:
             return None
-        images = [image_line(keep_image(path=c.get("path", ""))) if c.get("type") == "localImage"
-                  else image_line(_data_url(c.get("url", ""))) for c in it.get("content") or []
+        images = [image_line(c.get("path") if c.get("type") == "localImage" else _url(c.get("url", "")))
+                  for c in it.get("content") or []
                   if isinstance(c, dict) and c.get("type") in ("localImage", "image")]
         text = "\n".join([text] * bool(text) + images)
         return ("user", text) if text else None
