@@ -5,15 +5,16 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import subprocess
 import sys
 
 from . import __version__
 from .stores import claude_sessions, codex_bin, codex_sessions, which
-from .sync import list_claude_for_codex, list_codex_for_claude, menu_data, transfer
+from .sync import continue_phrase, list_claude_for_codex, list_codex_for_claude, menu_data, transfer
 
 NAME = {"claude": "Claude", "codex": "Codex"}
 OTHER = {"claude": "codex", "codex": "claude"}
-STATUS = {"new": "未导入", "updated": "有更新", "synced": "已同步", "mirror": "从 Claude 导入的副本"}
+STATUS = {"new": "未关联", "linked": "已关联", "updated": "有新进展", "mirror": "副本"}
 
 
 def pick(tool: str, cwd: str, ref):
@@ -31,6 +32,10 @@ def pick(tool: str, cwd: str, ref):
 def run(src_tool: str, sid: str, cwd: str, a):
     res = transfer(src_tool, sid, cwd, open_app=not (a.no_open or a.cli))
     t = res["target"]
+    if res["action"] == "linked" and t["tool"] == "codex":
+        # Codex only pulls on request until its hook is trusted: have the phrase ready to paste.
+        subprocess.run(["pbcopy"], input=continue_phrase(src_tool).encode(), check=False)
+        res["message"] += "（这句话已复制到剪贴板）"
     print(f"✓ {res['message']}")
     if a.cli:
         os.chdir(res["cwd"])

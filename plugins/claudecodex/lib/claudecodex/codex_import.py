@@ -111,12 +111,3 @@ def import_history() -> List[dict]:
             if s.get("itemType") == "SESSIONS" and s.get("source") and s.get("target"):
                 out.append({**s, "completed_at_ms": h.get("completedAtMs", 0)})
     return out
-
-
-def archive_thread(thread_id: str) -> bool:
-    try:
-        with AppServer() as srv:
-            srv.request("thread/archive", {"threadId": thread_id})
-        return True
-    except Exception:
-        return False

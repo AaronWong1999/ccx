@@ -1,6 +1,6 @@
 {
   "name": "claudecodex",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "Pick a Claude Code session and continue it in Codex (or send this one to Claude). Already-imported sessions are just synced.",
   "author": { "name": "Aaron Wong" },
   "license": "MIT",

@@ -8,7 +8,7 @@ struct Row: Decodable {
     let id: String
     let title: String
     let updated: String
-    let status: String  // new | updated | synced | mirror
+    let status: String  // new | linked | updated | mirror
 }
 
 struct Project: Decodable {
@@ -122,7 +122,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
 
         menu.addItem(.separator())
-        let legend = disabled("○ 未导入   ↻ 有更新，点一下同步   ✓ 已同步")
+        let legend = disabled("○ 未关联   ✓ 已关联   ↻ 这边有新进展，对面还没收到")
         menu.addItem(legend)
         menu.addItem(.separator())
         let login = NSMenuItem(title: "登录时自动启动", action: #selector(toggleLogin), keyEquivalent: "")
@@ -166,7 +166,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     func sessionItem(_ r: Row, from: String, cwd: String) -> NSMenuItem {
-        let glyph = ["new": "○", "updated": "↻", "synced": "✓", "mirror": "·"][r.status] ?? "○"
+        let glyph = ["new": "○", "updated": "↻", "linked": "✓", "mirror": "·"][r.status] ?? "○"
         var title = r.title.count > 42 ? String(r.title.prefix(42)) + "…" : r.title
         if r.status == "mirror" { title += "（从对面导入的副本）" }
         let i = NSMenuItem(title: "", action: #selector(sessionClicked(_:)), keyEquivalent: "")
@@ -181,7 +181,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
             .foregroundColor: NSColor.tertiaryLabelColor,
         ]))
         i.attributedTitle = s
-        i.toolTip = r.status == "synced" ? "已同步：点一下直接打开" : (r.status == "updated" ? "对面有新内容：点一下同步并打开" : "点一下导入并打开")
+        i.toolTip = r.status == "new" || r.status == "mirror" ? "点一下：导入到另一边并打开，两边从此自动同步" : "已关联：点一下打开另一边的那个会话，在那边说一句话就会自动带上新进展"
         i.isEnabled = !busy
         return i
     }
@@ -199,7 +199,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
             self.setIcon(busy: false)
             if code != 0 {
                 let a = NSAlert()
-                a.messageText = "没导成"
+                a.messageText = "没成功"
                 a.informativeText = (err + out).trimmingCharacters(in: .whitespacesAndNewlines)
                 a.runModal()
             }

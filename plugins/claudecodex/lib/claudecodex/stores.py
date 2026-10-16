@@ -142,13 +142,6 @@ def claude_session(cwd: str, sid: str) -> Optional[Session]:
     return Session("claude", sid, p, s_cwd or cwd, p.stat().st_mtime, title)
 
 
-def claude_has_own_turns(path: Path) -> bool:
-    """True if the user added conversation turns that we did not write."""
-    for d in _claude_records(path):
-        if d.get("type") in ("user", "assistant") and not d.get(MARKER):
-            return True
-    return False
-
 
 def claude_version() -> str:
     b = which("claude", str(HOME / ".local/bin/claude"))
@@ -345,13 +338,3 @@ def codex_turns(path: Path) -> List[Turn]:
     while turns and turns[0][0] != "user":
         turns.pop(0)
     return [(role, "\n\n".join(chunks)) for role, chunks in turns]
-
-
-def codex_user_turn_count(path: Path) -> int:
-    n = 0
-    for d in _rollout_records(path):
-        p = d.get("payload") or {}
-        if d.get("type") == "response_item" and p.get("type") == "message" and p.get("role") == "user":
-            if not _is_injected(_content_text(p.get("content"))):
-                n += 1
-    return n
