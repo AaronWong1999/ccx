@@ -15,7 +15,8 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 from . import __version__
-from .common import HOME, PLAN, TAG, Session, clip, first_line, real, user_text, which
+from .common import (HOME, PLAN, TAG, Session, clip, first_line, image_line, keep_image, real, strip_files_header,
+                     user_text, which)
 
 APP_BUNDLES = ("/Applications/ChatGPT.app", "/Applications/Codex.app",
                str(HOME / "Applications/ChatGPT.app"), str(HOME / "Applications/Codex.app"))
@@ -375,11 +376,24 @@ def _text(content) -> str:
     return "\n".join(c.get("text", "") for c in content or [] if isinstance(c, dict))
 
 
+def _data_url(url: str) -> Optional[str]:
+    if url.startswith("data:") and ";base64," in url:
+        head, data = url[5:].split(";base64,", 1)
+        return keep_image(data, head)
+    return url or None
+
+
 def _render(it: dict) -> Unit:
     t = it.get("type")
     if t == "userMessage":
-        text = user_text(_text(it.get("content")))
-        return ("user", text) if text and TAG not in text else None
+        text = user_text(strip_files_header(_text(it.get("content"))))
+        if TAG in text:
+            return None
+        images = [image_line(keep_image(path=c.get("path", ""))) if c.get("type") == "localImage"
+                  else image_line(_data_url(c.get("url", ""))) for c in it.get("content") or []
+                  if isinstance(c, dict) and c.get("type") in ("localImage", "image")]
+        text = "\n".join([text] * bool(text) + images)
+        return ("user", text) if text else None
     if t == "agentMessage":
         text = it.get("text") or ""
         return ("assistant", text) if text.strip() and TAG not in text else None

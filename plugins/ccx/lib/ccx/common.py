@@ -193,3 +193,43 @@ def est_tokens(text: str) -> int:
     (prose, code, paths) about 3.5 characters per token."""
     wide = len(_WIDE.findall(text))
     return int(wide + (len(text) - wide) / 3.5)
+
+
+# ------------------------------------------------------------------ images
+
+IMAGES = STATE_DIR / "images"
+_EXT = {"image/png": "png", "image/jpeg": "jpg", "image/gif": "gif", "image/webp": "webp"}
+_FILES_MENTIONED = re.compile(r"^\s*# Files mentioned by the user:.*?## My request:\s*", re.S)
+
+
+def keep_image(data_b64: str = "", media_type: str = "image/png", path: str = "") -> Optional[str]:
+    """A lasting local copy of a pasted image, so the other app can open it later:
+    Claude keeps pasted images only inside its transcript, Codex in a temp folder
+    macOS cleans up. Stored once per image (named by content hash)."""
+    import base64
+    import hashlib
+    try:
+        if data_b64:
+            raw = base64.b64decode(data_b64)
+            ext = _EXT.get(media_type, "png")
+        elif path and os.path.isfile(path):
+            raw = Path(path).read_bytes()
+            ext = (Path(path).suffix.lstrip(".") or "png").lower()
+        else:
+            return None
+        out = IMAGES / f"{hashlib.sha256(raw).hexdigest()[:20]}.{ext}"
+        if not out.exists():
+            IMAGES.mkdir(parents=True, exist_ok=True)
+            out.write_bytes(raw)
+        return str(out)
+    except (OSError, ValueError):
+        return path or None
+
+
+def image_line(path: Optional[str]) -> str:
+    return f"[image: {path}]" if path else "[image: no longer available]"
+
+
+def strip_files_header(text: str) -> str:
+    """Codex prefixes a message with its attachments; the images are listed separately."""
+    return _FILES_MENTIONED.sub("", text, count=1)

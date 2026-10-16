@@ -5,7 +5,7 @@ import html
 import time
 
 from . import pairs
-from .common import NAME, STATE_DIR
+from .common import NAME
 
 
 def read_page(tool: str, sid: str, offset: int = 0, limit: int = 6000) -> dict:
@@ -33,9 +33,11 @@ def export_linked() -> str:
                                 f"<p>{html.escape(src.cwd)}</p><pre>{html.escape(body)}</pre></details>")
             except (RuntimeError, TimeoutError) as e:
                 sections.append("<p>Could not read history: " + html.escape(str(e)) + "</p>")
-    directory = STATE_DIR / "transcripts"
-    directory.mkdir(parents=True, exist_ok=True)
-    path = directory / "linked-history.html"
+    # A throwaway snapshot (rewritten on each export, in the temp folder): the
+    # conversations themselves stay in the two apps; nothing accumulates here.
+    import tempfile
+    from pathlib import Path
+    path = Path(tempfile.gettempdir()) / "ccx-linked-history.html"
     path.write_text("<!doctype html><meta charset='utf-8'><title>ccx · Linked history</title>"
                     "<style>body{max-width:960px;margin:40px auto;padding:0 24px;font:15px/1.6 system-ui}"
                     "pre{white-space:pre-wrap;overflow-wrap:anywhere;font:14px/1.7 system-ui}"
@@ -43,6 +45,6 @@ def export_linked() -> str:
                     "p{color:#666}</style><h1>ccx · Linked history</h1>"
                     "<p>Snapshot · " + time.strftime("%Y-%m-%d %H:%M:%S") + "</p>"
                     "<p>Synced progress is model context, not additional native chat bubbles. "
-                    "This local snapshot lets you read both sources. Tool output is condensed; images are not copied.</p>"
+                    "This local snapshot lets you read both sources. Tool output is condensed.</p>"
                     + ("".join(sections) or "<p>No linked sessions.</p>"), encoding="utf-8")
     return str(path)

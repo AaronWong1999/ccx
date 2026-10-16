@@ -12,7 +12,8 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 from .common import (
-    HOME, PLAN, STATE_DIR, TAG, Session, clip, first_line, git_branch, is_injected, now_iso, real, same_dir, user_text, which,
+    HOME, PLAN, STATE_DIR, TAG, Session, clip, first_line, git_branch, image_line, is_injected, keep_image, now_iso, real,
+    same_dir, user_text, which,
 )
 
 CLAUDE_HOME = Path(os.environ.get("CLAUDE_CONFIG_DIR", HOME / ".claude"))
@@ -179,6 +180,10 @@ def _render(d: dict, skip_ids: set) -> Unit:
             text = user_text(c.get("text", "")) if role == "user" else c.get("text", "")
             if text.strip() and TAG not in text:
                 parts.append(text)
+        elif t == "image" and role == "user":
+            src = c.get("source") or {}
+            parts.append(image_line(keep_image(src.get("data", ""), src.get("media_type", "image/png"))
+                                    if src.get("type") == "base64" else src.get("url")))
         elif t == "tool_use":
             if SELF_TOOL.search(c.get("name", "")):
                 skip_ids.add(c.get("id"))

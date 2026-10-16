@@ -462,6 +462,24 @@ class Interfaces(Base):
         e = sync.estimate("claude", "c-big")
         self.assertGreater(e["full"], e["condensed"] * 3)
 
+    def test_pasted_images_travel_as_lasting_files(self):
+        import base64
+        png = base64.b64encode(b"\x89PNG fake").decode()
+        c = claude_file(PROJ_A, "c-img", [user([{"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": png}},
+                                                {"type": "text", "text": "look at this"}])])
+        line = claude.units(c)[0][1]
+        path = line.split("[image: ")[1].split("]")[0]
+        self.assertEqual(Path(path).read_bytes(), b"\x89PNG fake")
+        self.assertIn("look at this", line)
+        tmp = Path(tempfile.mkdtemp()) / "codex-clipboard-1.png"
+        tmp.write_bytes(b"codex shot")
+        u = codex._render({"type": "userMessage", "content": [
+            {"type": "text", "text": f"\n# Files mentioned by the user:\n\n## a.png: {tmp}\nImage attachment: true\n\n## My request:\nfix it"},
+            {"type": "localImage", "path": str(tmp)}]})
+        self.assertTrue(u[1].startswith("fix it\n[image: "))
+        tmp.unlink()  # macOS cleans its temp folder; the kept copy remains
+        self.assertEqual(Path(u[1].split("[image: ")[1].rstrip("]")).read_bytes(), b"codex shot")
+
     def test_compaction_resets_context_size(self):
         c = claude_file(PROJ_A, "c-compact", [user("hi"), assistant(text("ok"))])
         with open(c, "a") as f:
@@ -626,9 +644,7 @@ class NativeHistory(unittest.TestCase):
         from ccx import history
         source = Session("claude", "x", PROJ_A, 0, "<script>bad</script>", None)
         pair = {"claude": {"id": "x"}, "codex": {"id": "y"}}
-        with tempfile.TemporaryDirectory() as directory, \
-                mock.patch.object(history, "STATE_DIR", Path(directory)), \
-                mock.patch.object(pairs, "load", return_value=[pair]), \
+        with mock.patch.object(pairs, "load", return_value=[pair]), \
                 mock.patch.object(pairs, "session_units", return_value=(source, [("user", "<img onerror=bad>")])):
             page = Path(history.export_linked()).read_text()
         self.assertIn("&lt;img onerror=bad&gt;", page)

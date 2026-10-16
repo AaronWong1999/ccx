@@ -124,7 +124,8 @@ def wrap(body: str, src: Session, here_cwd: str, first: bool) -> str:
     return (
         f"<{TAG} from=\"{src.tool}\" session=\"{src.id}\" title=\"{src.title}\">\n"
         f"Below is this task's {what} in {NAME[src.tool]}. Treat it as work you already did and carry on "
-        f"from it; the files on disk are the source of truth for code.\n" + (f"\n{note}\n" if note else "") +
+        f"from it; the files on disk are the source of truth for code. A line like [image: /path] is an image "
+        f"the user shared: open that file if you need to see it.\n" + (f"\n{note}\n" if note else "") +
         f"\n{body}\n\ngit status here:\n```\n{git_snapshot(here_cwd or src.cwd)}\n```\n</{TAG}>"
     )
 

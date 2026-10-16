@@ -301,7 +301,6 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         lang.submenu = langs
         menu.addItem(lang)
-        menu.addItem(action(L("Read linked history…", "查看两边历史…"), #selector(readLinkedHistory), symbol: "doc.text"))
         let login = action(L("Start at Login", "登录时自动启动"), #selector(toggleLogin))
         login.state = autostartOn ? .on : .off
         menu.addItem(login)
@@ -393,12 +392,11 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     // MARK: actions
 
-    @objc func readLinkedHistory() { work(["history", "--open"], title: "ccx", showOutput: false) }
 
     @objc func historyRepairInfo() {
         alert(L("History repair is queued", "历史修复已排队"),
-              L("Codex still holds an old imported thread open. Quit Codex when convenient; ccx retries every minute. Open Codex again after the pending notice disappears. Read linked history is available now.",
-                "Codex 仍占用旧导入会话。方便时退出 Codex；ccx 每分钟自动重试。待此提示消失后再打开 Codex。现在也可以通过「查看两边历史」阅读全部文字。"))
+              L("Codex still holds an old imported thread open. Quit Codex when convenient; ccx retries every minute. Open Codex again after the pending notice disappears.",
+                "Codex 仍占用旧导入会话。方便时退出 Codex；ccx 每分钟自动重试。待此提示消失后再打开 Codex。"))
     }
 
     /// `--click <codex|claude> <session id>` runs exactly what clicking that session in
