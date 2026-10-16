@@ -217,17 +217,14 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
         needsRebuild = false
         menu.removeAllItems()
 
-        // Title, then the tagline: the chosen language first, the other one smaller below it.
+        // Title, then the tagline in the chosen language.
         let head = NSMenuItem()
         let title = NSMutableAttributedString(string: "ccx - claudecodex", attributes: [.font: NSFont.boldSystemFont(ofSize: 13)])
         title.append(NSAttributedString(string: "  \(version)", attributes: [
             .font: NSFont.systemFont(ofSize: 11), .foregroundColor: NSColor.secondaryLabelColor]))
-        let en = "Sync task memory between Claude Code and Codex", zh = "在 Claude Code 和 Codex 之间同步任务记忆"
-        let (first, second) = L("en", "zh") == "zh" ? (zh, en) : (en, zh)
-        title.append(NSAttributedString(string: "\n" + first, attributes: [
-            .font: NSFont.systemFont(ofSize: NSFont.smallSystemFontSize), .foregroundColor: NSColor.secondaryLabelColor]))
-        title.append(NSAttributedString(string: "\n" + second, attributes: [
-            .font: NSFont.systemFont(ofSize: NSFont.smallSystemFontSize - 1), .foregroundColor: NSColor.tertiaryLabelColor]))
+        title.append(NSAttributedString(string: "\n" + L("Sync task memory between Claude Code and Codex", "在 Claude Code 和 Codex 之间同步任务记忆"),
+                                        attributes: [.font: NSFont.systemFont(ofSize: NSFont.smallSystemFontSize),
+                                                     .foregroundColor: NSColor.secondaryLabelColor]))
         head.attributedTitle = title
         head.isEnabled = false
         menu.addItem(head)
