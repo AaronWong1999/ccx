@@ -158,7 +158,9 @@ def units(path: Path, include_imported: bool = False) -> List[Unit]:
                 continue
             if d.get("type") not in ("user", "assistant"):
                 continue
-            if (d.get(MARKER) and not include_imported) or d.get("isMeta") or d.get("isSidechain"):
+            # A compaction summary restates earlier records; sending it would repeat them.
+            if ((d.get(MARKER) and not include_imported) or d.get("isMeta") or d.get("isSidechain")
+                    or d.get("isCompactSummary")):
                 out.append(None)
             else:
                 out.append(_render(d, skip_ids))
@@ -225,6 +227,10 @@ def context_state(path: Path) -> Tuple[int, float]:
                 last = datetime.fromisoformat(d["timestamp"].replace("Z", "+00:00")).timestamp()
             except ValueError:
                 pass
+        # A compaction (manual, auto or Claude Code's idle compaction) after the last
+        # model call shrank the context: what the next message reads is its result.
+        if not tokens and d.get("subtype") == "compact_boundary":
+            tokens = (d.get("compactMetadata") or {}).get("postTokens") or 1
         u = (d.get("message") or {}).get("usage") if d.get("type") == "assistant" else None
         if u and not tokens:
             tokens = u.get("input_tokens", 0) + u.get("cache_creation_input_tokens", 0) + u.get("cache_read_input_tokens", 0)

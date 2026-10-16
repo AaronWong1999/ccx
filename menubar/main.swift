@@ -137,6 +137,27 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
+    /// Blocking run for a quick query (e.g. a token estimate shown in a dialog).
+    func runNow(_ args: [String]) -> String {
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: ccx)
+        p.arguments = args
+        let out = Pipe()
+        p.standardOutput = out
+        p.standardError = FileHandle.nullDevice
+        guard (try? p.run()) != nil else { return "" }
+        let o = String(data: out.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+        p.waitUntilExit()
+        return o
+    }
+
+    /// (full, condensed) tokens the other app reads on its first reply.
+    func estimate(_ from: String, _ id: String) -> (Int, Int) {
+        let o = runNow(["estimate", from, id])
+        let d = (try? JSONSerialization.jsonObject(with: Data(o.utf8))) as? [String: Any] ?? [:]
+        return (d["full"] as? Int ?? 0, max(d["condensed"] as? Int ?? 0, 1000))
+    }
+
     func refresh() {
         if loading { return }
         loading = true
@@ -402,6 +423,16 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
+    /// The result of a transfer, shown over the app that just opened.
+    func info(_ title: String, _ text: String) {
+        NSApp.activate(ignoringOtherApps: true)
+        let a = NSAlert()
+        a.messageText = title
+        a.informativeText = text
+        a.window.level = .floating
+        a.runModal()
+    }
+
     func alert(_ title: String, _ text: String) {
         if clickTest { print("ALERT: \(title)\n\(text)"); exit(1) }
         NSApp.activate(ignoringOtherApps: true)
@@ -418,12 +449,23 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
         run(args) { code, out, err in
             self.busy = false
             self.setIcon(busy: false)
-            let text = (out + err).trimmingCharacters(in: .whitespacesAndNewlines)
+            var text = (out + err).trimmingCharacters(in: .whitespacesAndNewlines)
+            var heading = "ccx"
+            if code == 0, let d = (try? JSONSerialization.jsonObject(with: Data(out.utf8))) as? [String: Any],
+               let msg = d["message"] as? String {
+                text = msg
+                let n = d["pending"] as? Int ?? 0
+                switch d["action"] as? String ?? "" {
+                case "created": heading = L("Imported and linked", "已导入并关联")
+                case "in_sync": heading = L("Already in sync, nothing new", "已同步，没有新内容")
+                default: heading = L("Linked: \(n) new updates to bring over", "已关联：有 \(n) 条新进展待带入")
+                }
+            }
             if code != 0 { self.alert(L("That didn't work", "没有成功"), text) } else if showOutput { self.alert(title, text) }
             else if notifyResult && !self.clickTest {
-                self.notify("ccx", text.replacingOccurrences(of: "✓ ", with: ""))
+                self.info(heading, text.replacingOccurrences(of: "✓ ", with: ""))
             }
-            if self.clickTest { print("OK: \(text)"); exit(0) }
+            if self.clickTest { print("OK: \(heading) | \(text)"); exit(0) }
             self.refresh()
         }
     }
@@ -441,12 +483,13 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
             if p == "cancel" { exit(0) }
         }
         if from == "codex", tokens >= 250_000, idle >= 55, !clickTest {
+            let small = estimate(from, id).1 / 1000
             NSApp.activate(ignoringOtherApps: true)
             let a = NSAlert()
             a.messageText = L("This Claude conversation is very long", "这个 Claude 对话非常长")
             a.informativeText = L(
-                "It is about \(tokens / 1000)k tokens and has been idle for \(idle / 60) h \(idle % 60) min, so its cache has expired: your next message there re-reads all of it.\n\nA new conversation brings over the condensed progress (about 20k tokens) and stays linked.",
-                "它大约 \(tokens / 1000)k token，已闲置 \(idle / 60) 小时 \(idle % 60) 分钟，缓存已过期：在那里发下一条消息会把它全部重新读一遍。\n\n新开一个对话只带压缩后的进展（约 2 万 token），并保持关联。")
+                "It is about \(tokens / 1000)k tokens and has been idle for \(idle / 60) h \(idle % 60) min, so its cache has expired: your next message there re-reads all \(tokens / 1000)k.\n\nA new conversation brings over the condensed progress instead: about \(small)k tokens, and it stays linked.",
+                "它大约 \(tokens / 1000)k token，已闲置 \(idle / 60) 小时 \(idle % 60) 分钟，缓存已过期：在那里发下一条消息会把这 \(tokens / 1000)k 全部重新读一遍。\n\n新开一个对话只带压缩后的进展：约 \(small)k token，并保持关联。")
             a.addButton(withTitle: L("New Conversation", "新开对话"))
             a.addButton(withTitle: L("Open It Anyway", "仍然打开"))
             a.addButton(withTitle: L("Cancel", "取消"))
@@ -459,17 +502,22 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // Toward Codex: a full import of a long Claude session makes Codex read all of it
         // on its first reply; a long linked Codex thread that sat idle re-reads all of it.
         let own = Int(o["own"] ?? "") ?? 0, linked = o["linked"] == "1"
-        let fullImport = from == "claude" && !linked && own >= 250_000
+        // Unlinked Claude sessions: decide by what a full import really costs Codex
+        // (Claude's own context may already be compacted while the transcript is long).
+        let (full, small) = from == "claude" && !linked && own >= 50_000 ? estimate(from, id)
+                          : (0, from == "claude" && linked && tokens >= 150_000 && idle >= 55 ? estimate(from, id).1 : 0)
+        let fullImport = from == "claude" && !linked && full >= 100_000
         let staleCodex = from == "claude" && linked && tokens >= 150_000 && idle >= 55
         if fullImport || staleCodex {
+            let k = small / 1000
             let msg = fullImport
-                ? L("This Claude conversation is about \(own / 1000)k tokens. A full import makes Codex read all of it on its first reply.\n\nA new Codex conversation brings over the condensed progress (about 20k tokens) and stays linked.",
-                    "这个 Claude 对话大约 \(own / 1000)k token。完整导入后，Codex 第一次回复会把它全部读一遍。\n\n新开一个 Codex 对话只带压缩后的进展（约 2 万 token），并保持关联。")
-                : L("The linked Codex conversation is about \(tokens / 1000)k tokens and has been idle for \(idle / 60) h \(idle % 60) min, so its cache has likely expired: your next message there re-reads all of it.\n\nA new Codex conversation brings over the condensed progress (about 20k tokens) and stays linked.",
-                    "关联的 Codex 对话大约 \(tokens / 1000)k token，已闲置 \(idle / 60) 小时 \(idle % 60) 分钟，缓存很可能已过期：在那里发下一条消息会把它全部重新读一遍。\n\n新开一个 Codex 对话只带压缩后的进展（约 2 万 token），并保持关联。")
+                ? L("A full import makes Codex read about \(full / 1000)k tokens of this Claude conversation on its first reply.\n\nA new Codex conversation brings over the condensed progress instead: about \(k)k tokens, and it stays linked.",
+                    "完整导入后，Codex 第一次回复会读取这个 Claude 对话约 \(full / 1000)k token。\n\n新开一个 Codex 对话只带压缩后的进展：约 \(k)k token，并保持关联。")
+                : L("The linked Codex conversation is about \(tokens / 1000)k tokens and has been idle for \(idle / 60) h \(idle % 60) min, so its cache has likely expired: your next message there re-reads all \(tokens / 1000)k.\n\nA new Codex conversation brings over the condensed progress instead: about \(k)k tokens, and it stays linked.",
+                    "关联的 Codex 对话大约 \(tokens / 1000)k token，已闲置 \(idle / 60) 小时 \(idle % 60) 分钟，缓存很可能已过期：在那里发下一条消息会把这 \(tokens / 1000)k 全部重新读一遍。\n\n新开一个 Codex 对话只带压缩后的进展：约 \(k)k token，并保持关联。")
             let choice: String
             if clickTest, let p = preset {
-                print("DIALOG: \(fullImport ? "full import" : "stale Codex thread") -> \(p)")
+                print("DIALOG: \(fullImport ? "full import ~\(full / 1000)k" : "stale Codex thread") vs condensed ~\(k)k -> \(p)")
                 choice = p
             } else {
                 NSApp.activate(ignoringOtherApps: true)
@@ -489,7 +537,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
             if choice == "new" { work(["new-codex", id], title: "", showOutput: false, notifyResult: true); return }
             if choice == "cancel" { if clickTest { exit(0) }; return }
         }
-        work([from == "codex" ? "to-claude" : "to-codex", id], title: "", showOutput: false, notifyResult: true)
+        work([from == "codex" ? "to-claude" : "to-codex", id, "--json"], title: "", showOutput: false, notifyResult: true)
     }
 
     @objc func updateNow() { if let l = release?.latest { install(l, announce: true) } }

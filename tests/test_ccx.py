@@ -437,9 +437,39 @@ class Interfaces(Base):
             first = sync.transfer("claude", "c-xfer", open_app=False)
             second = sync.transfer("claude", "c-xfer", open_app=False)
         self.assertEqual(first["action"], "created")
-        self.assertEqual(second["action"], "linked")
+        self.assertEqual(second["action"], "in_sync")  # nothing new: nothing re-sent
+        self.assertEqual(second["pending"], 0)
         self.assertEqual(second["target"]["id"], "x-imported")
         self.assertEqual(second["target"]["project_id"], "project-test")
+
+    def test_relinking_reports_pending_updates_once(self):
+        c = claude_file(PROJ_A, "c-more", [user("做个页面"), assistant(text("好"))], title="做个页面")
+        self.cx.add("x-more", PROJ_A, "做个页面", [umsg("做个页面")])
+        with mock.patch.object(sync, "_import_to_codex", lambda s: "x-more"):
+            sync.transfer("claude", "c-more", open_app=False)
+            with open(c, "a") as f:
+                f.write(json.dumps(user("加个按钮")) + "\n" + json.dumps(assistant(text("按钮加好了"))) + "\n")
+            again = sync.transfer("claude", "c-more", open_app=False)
+            self.assertEqual((again["action"], again["pending"]), ("linked", 2))
+            self.assertGreater(again["pending_tokens"], 0)
+            pairs.pull("codex", "x-more")  # the next Codex prompt delivers them
+            self.assertEqual(sync.transfer("claude", "c-more", open_app=False)["action"], "in_sync")
+
+    def test_estimate_full_vs_condensed(self):
+        claude_file(PROJ_A, "c-big", [x for i in range(300) for x in
+                                      (user(f"step {i} " + "detail " * 200), assistant(text("done " * 300)))])
+        e = sync.estimate("claude", "c-big")
+        self.assertGreater(e["full"], e["condensed"] * 3)
+
+    def test_compaction_resets_context_size(self):
+        c = claude_file(PROJ_A, "c-compact", [user("hi"), assistant(text("ok"))])
+        with open(c, "a") as f:
+            f.write(json.dumps({"type": "system", "subtype": "compact_boundary", "timestamp": "2026-01-01T00:00:00Z",
+                                "compactMetadata": {"trigger": "idle", "preTokens": 900000, "postTokens": 14000}}) + "\n")
+            f.write(json.dumps({"type": "user", "isCompactSummary": True, "timestamp": "2026-01-01T00:00:01Z",
+                                "message": {"role": "user", "content": "This session is being continued..."}}) + "\n")
+        self.assertEqual(claude.context_state(c)[0], 14000)
+        self.assertIsNone(claude.units(c)[-1])
 
     def test_grouping_failure_does_not_duplicate_import_on_retry(self):
         claude_file(PROJ_A, "c-repair", [user("repair")])
@@ -450,7 +480,7 @@ class Interfaces(Base):
                 sync.transfer("claude", "c-repair", open_app=False)
             result = sync.transfer("claude", "c-repair", open_app=False)
         self.assertEqual(imp.call_count, 1)
-        self.assertEqual(result["action"], "linked")
+        self.assertIn(result["action"], ("linked", "in_sync"))
         self.assertEqual(result["target"]["project_id"], "project-a")
 
     def test_source_progress_during_import_is_still_pending(self):

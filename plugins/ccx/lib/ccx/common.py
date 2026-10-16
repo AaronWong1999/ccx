@@ -183,3 +183,13 @@ def folder_note(here: str, there: str, there_tool: str) -> str:
     return (f"NOTE: the {NAME[there_tool]} session worked in a different folder, {there}; you are in {here}. "
             f"Its changes are in {there}, not here. Tell the user and ask whether to continue in {there} "
             f"or to use this only as reference. Do not edit the other folder on your own.")
+
+
+_WIDE = re.compile(r"[\u3000-\u9fff\uac00-\ud7af\uff00-\uffef]")
+
+
+def est_tokens(text: str) -> int:
+    """Rough token count: CJK characters are about one token each, other text
+    (prose, code, paths) about 3.5 characters per token."""
+    wide = len(_WIDE.findall(text))
+    return int(wide + (len(text) - wide) / 3.5)

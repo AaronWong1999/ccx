@@ -11,7 +11,7 @@ from datetime import datetime
 from typing import Dict, List, Optional
 
 from . import claude, codex, pairs, repairs
-from .common import copy_to_clipboard, L, NAME, OTHER, Session, git_snapshot, real, same_dir
+from .common import copy_to_clipboard, est_tokens, L, NAME, OTHER, Session, git_snapshot, real, same_dir
 
 STATUS = {"new": "not linked", "linked": "linked", "updated": "has new progress", "mirror": "imported copy"}
 
@@ -165,6 +165,21 @@ def _import_to_claude(src: Session) -> str:
     return claude.write_session(src.cwd, turns, f"⇄ {src.title or 'Codex thread'}").id
 
 
+IMPORT_OVERHEAD = 1.8  # native imports keep tool output ccx clips: measured ~215k vs ~118k rendered
+
+
+def estimate(tool: str, session_id: str) -> dict:
+    """Rough tokens the other app reads on the first reply: after a full native
+    import vs. a new conversation that continues from the condensed progress."""
+    s, us = pairs.session_units(tool, session_id, include_imported=True)
+    us = [u for u in us if u]
+    if not s or not us:
+        return {"full": 0, "condensed": 0}
+    full = int(est_tokens("\n".join(t for _, t in us)) * IMPORT_OVERHEAD)
+    condensed = est_tokens(pairs.render(us, tool, pairs.FULL_BUDGET)) + 2_000
+    return {"full": full, "condensed": min(condensed, full)}
+
+
 def transfer(tool: str, session_id: str, open_app: bool = True) -> dict:
     """Bring `tool`'s session to the other app: native import + pair the first
     time; afterwards just open the partner."""
@@ -173,8 +188,12 @@ def transfer(tool: str, session_id: str, open_app: bool = True) -> dict:
         raise RuntimeError(f"{NAME[tool]} session {session_id} not found")
     dst = OTHER[tool]
     pair = pairs.find(tool, src.id)
+    pending = (0, 0)
     if pair:
         target, action = pair[dst]["id"], "linked"
+        pending = pairs.pending(tool, src.id)
+        if not pending[0]:
+            action = "in_sync"
     else:
         # Capture the source cursor BEFORE the import. A running Claude turn may
         # finish while Codex imports; those late records still need delivery.
@@ -187,7 +206,9 @@ def transfer(tool: str, session_id: str, open_app: bool = True) -> dict:
         sides = {tool: source_side, dst: pairs.side(dst, target)}
         pairs.link(sides["claude"], sides["codex"])
         action = "created"
-    res = {"action": action, "message": _message(action, tool, src.title),
+        pending = (0, estimate(tool, src.id)["full"]) if dst == "codex" else (0, 0)
+    res = {"action": action, "message": _message(action, tool, src.title, pending),
+           "pending": pending[0], "pending_tokens": pending[1],
            "source": {"tool": tool, "id": src.id, "title": src.title},
            "target": {"tool": dst, "id": target, "deep_link": deep_link(dst, target)}, "cwd": src.cwd}
     if dst == "codex":
@@ -211,11 +232,27 @@ def transfer(tool: str, session_id: str, open_app: bool = True) -> dict:
     return res
 
 
-def _message(action: str, tool: str, title: str) -> str:
+def _k(tokens: int) -> str:
+    return f"{max(1, round(tokens / 1000))}k"
+
+
+def _message(action: str, tool: str, title: str, pending=(0, 0)) -> str:
     dst = OTHER[tool]
+    n, tokens = pending
     if action == "created":
+        cost = L(f" Its first reply there reads about {_k(tokens)} tokens of history.",
+                 f"它在那边第一次回复时大约读取 {_k(tokens)} token 的历史。") if tokens else ""
         return L(f"Imported {NAME[tool]} \u201c{title}\u201d into {NAME[dst]} and linked them; they stay in sync from now on.",
-                 f"已把 {NAME[tool]} 的「{title}」导入 {NAME[dst]} 并关联，之后两边会自动同步。")
+                 f"已把 {NAME[tool]} 的「{title}」导入 {NAME[dst]} 并关联，之后两边会自动同步。") + cost
+    if action == "in_sync":
+        return L(f"\u201c{title}\u201d is already in sync with {NAME[dst]}: nothing new to bring over, nothing was added. "
+                 f"Opened the {NAME[dst]} conversation.",
+                 f"「{title}」已经和 {NAME[dst]} 同步过了，没有新内容，这次没有追加任何数据。已为你打开 {NAME[dst]} 的会话。")
+    if n:
+        return L(f"\u201c{title}\u201d is linked; opened it in {NAME[dst]}. {n} new updates (about {_k(tokens)} tokens, condensed) "
+                 f"come along with your next message there, once. Nothing is re-sent.",
+                 f"「{title}」已关联，已在 {NAME[dst]} 打开。你在那边发下一条消息时，会一次性带入 {n} 条新进展"
+                 f"（压缩后约 {_k(tokens)} token），已同步过的不会重复发送。")
     return L(f"\u201c{title}\u201d is already linked to a {NAME[dst]} conversation, opened it. Send any message there "
              f"(e.g. \u201ccontinue\u201d) and the {NAME[tool]} progress comes along.",
              f"「{title}」已关联到 {NAME[dst]} 的会话，已为你打开。在那里随便说一句（比如\u201c继续\u201d），"

@@ -16,7 +16,7 @@ import time
 from typing import List, Optional, Tuple
 
 from . import claude, codex
-from .common import NAME, OTHER, PLAN, STATE_DIR, TAG, Session, clip, folder_note, git_snapshot
+from .common import NAME, OTHER, PLAN, STATE_DIR, TAG, Session, clip, est_tokens, folder_note, git_snapshot
 
 PAIRS = STATE_DIR / "pairs.json"
 HOOK_BUDGET = 24_000   # chars injected automatically with a prompt
@@ -186,6 +186,21 @@ def continue_from(here_tool: str, here_id: str, here_cwd: str, other_id: str) ->
             else {"claude_side": there, "codex_side": here}))
     return {"from": other, "session": s.id, "title": s.title, "cwd": s.cwd,
             "context": wrap(render([u for u in shown if u], other, FULL_BUDGET), s, here["cwd"], first=True)}
+
+
+def pending(tool: str, sid: str) -> Tuple[int, int]:
+    """(updates, estimated tokens) of `tool`'s progress its partner hasn't received
+    yet; the next prompt over there brings them in. Does not advance the cursor."""
+    pair = find(tool, sid)
+    if not pair:
+        return 0, 0
+    if tool == "codex":
+        t = codex.find(sid)
+        if not t or (pair[tool].get("updated_at") == t.mtime and time.time() - t.mtime > 5):
+            return 0, 0
+    s, us = session_units(tool, sid)
+    new = [u for u in us[pair[tool]["cursor"]:] if u] if s else []
+    return len(new), (est_tokens(render(new, tool, HOOK_BUDGET)) + 500 if new else 0)
 
 
 def status(s: Session) -> Tuple[str, Optional[str]]:

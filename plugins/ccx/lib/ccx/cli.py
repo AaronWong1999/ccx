@@ -10,7 +10,7 @@ import sys
 
 from . import __version__, claude, codex, history, install, pairs, repairs
 from .common import copy_to_clipboard, DEFAULTS, NAME, OTHER, L, real, set_setting, setting
-from .sync import (STATUS, continue_phrase, find_sessions, menu_data, new_claude_conversation, new_codex_conversation,
+from .sync import (STATUS, continue_phrase, estimate, find_sessions, menu_data, new_claude_conversation, new_codex_conversation,
                    transfer)
 
 
@@ -74,6 +74,9 @@ def main(argv=None):
     ls.add_argument("-q", "--query", help="search titles in every project")
     ls.add_argument("-n", type=int, default=8)
     sub.add_parser("menu-data", help=argparse.SUPPRESS)
+    es = sub.add_parser("estimate", help=argparse.SUPPRESS)
+    es.add_argument("tool", choices=("claude", "codex"))
+    es.add_argument("session")
     nc = sub.add_parser("new-claude", help="open a new Claude conversation that continues a Codex thread")
     nc.add_argument("thread")
     nx = sub.add_parser("new-codex", help="open Codex to continue a Claude session in a new thread")
@@ -123,6 +126,8 @@ def main(argv=None):
             d["version"] = __version__
             d["codex_hook_trusted"] = codex.hooks_trusted()
             print(json.dumps(d, ensure_ascii=False))
+        elif a.cmd == "estimate":
+            print(json.dumps(estimate(a.tool, a.session)))
         elif a.cmd == "new-claude":
             new_claude_conversation(a.thread)
             print("✓ " + L("Opened a new Claude conversation; press Return to continue there.",

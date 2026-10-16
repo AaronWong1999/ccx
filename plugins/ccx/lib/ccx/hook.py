@@ -87,13 +87,13 @@ def guard(host: str, sid: str, data: dict) -> bool:
         f"• Send the same message again to continue here anyway.\n"
         f"• Or run /compact first to shrink this conversation.\n"
         f"• Or start a new conversation in this folder and say “continue from {NAME['codex' if host == 'claude' else 'claude']}”: it brings over the "
-        f"condensed progress (about 20k tokens) and stays linked.\n\n"
+        f"condensed progress (about 20–30k tokens) and stays linked.\n\n"
         f"Your message:\n{prompt}\n\n(Turn this off in the ⇄ menu: “Warn before resuming long conversations”.)",
         f"ccx 先拦下了这条消息，帮你省额度。这个对话大约 {k}k token，已经闲置 {hours} 小时，缓存已过期，"
         f"在这里继续会把这 {k}k token 全部重新读一遍。\n\n"
         f"• 再发一次同样的消息，就照常在这里继续；\n"
         f"• 或者先运行 /compact 压缩这个对话；\n"
-        f"• 或者在这个目录新开一个对话，说「接着 {NAME['codex' if host == 'claude' else 'claude']} 继续」：只带压缩后的进展（约 2 万 token），并保持关联。\n\n"
+        f"• 或者在这个目录新开一个对话，说「接着 {NAME['codex' if host == 'claude' else 'claude']} 继续」：只带压缩后的进展（约 2–3 万 token），并保持关联。\n\n"
         f"你的消息：\n{prompt}\n\n（可在 ⇄ 菜单里关闭：「继续超长对话前提醒」）")
     print(json.dumps({"decision": "block", "reason": reason}, ensure_ascii=False))
     _log(f"{host} session={sid} paused resume: {k}k tokens idle {hours}h")
