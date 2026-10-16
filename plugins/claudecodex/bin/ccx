@@ -1,0 +1,12 @@
+#!/bin/sh
+# Launched by GUI apps with a minimal PATH, so look for a usable python3 ourselves.
+SELF="$0"
+[ -L "$SELF" ] && SELF="$(readlink "$SELF")"
+DIR="$(cd "$(dirname "$SELF")/.." && pwd)"
+for py in /opt/homebrew/bin/python3 /usr/local/bin/python3 python3 /usr/bin/python3; do
+  if command -v "$py" >/dev/null 2>&1 && "$py" -c 'import sys; sys.exit(sys.version_info < (3, 9))' 2>/dev/null; then
+    PYTHONPATH="$DIR/lib" exec "$py" -m claudecodex "$@"
+  fi
+done
+echo "claudecodex: 需要 python3 >= 3.9" >&2
+exit 1

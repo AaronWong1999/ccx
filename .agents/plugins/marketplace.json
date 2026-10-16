@@ -1,0 +1,12 @@
+{
+  "name": "claudecodex",
+  "interface": { "displayName": "ClaudeCodex" },
+  "plugins": [
+    {
+      "name": "claudecodex",
+      "source": { "source": "local", "path": "./plugins/claudecodex" },
+      "policy": { "installation": "AVAILABLE", "authentication": "ON_INSTALL" },
+      "category": "Developer Tools"
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "claudecodex": {
+      "command": "/bin/sh",
+      "args": ["./bin/ccx-mcp", "--host", "codex"],
+      "cwd": ".",
+      "env_vars": ["PATH", "HOME", "CODEX_HOME", "CLAUDE_CONFIG_DIR"],
+      "tool_timeout_sec": 300
+    }
+  }
+}

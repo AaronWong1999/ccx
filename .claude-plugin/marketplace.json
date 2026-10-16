@@ -1,0 +1,11 @@
+{
+  "name": "claudecodex",
+  "owner": { "name": "Aaron Wong" },
+  "plugins": [
+    {
+      "name": "claudecodex",
+      "source": "./plugins/claudecodex",
+      "description": "Continue Codex sessions in Claude Code, and back"
+    }
+  ]
+}

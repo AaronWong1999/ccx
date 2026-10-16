@@ -1,38 +1,52 @@
-# claudecodex (`ccx`)
+# claudecodex
 
-一个命令把当前项目的对话在 **Claude Code ⇄ Codex** 之间互转，一边额度用完，另一边直接续上。
+在 **Claude 桌面版** 和 **Codex 桌面版** 之间互相导入会话。一边额度用完，就在另一边选中那个会话，接着干。之前导入过的只会同步新内容，不会重复导入。
+
+装好以后，两个 app 里都多了这几个命令：
+
+| 在哪 | 说什么（或输入命令） | 效果 |
+|---|---|---|
+| Claude | `/from-codex` 或"导入 codex 的会话" | 弹出选择框，列出本项目的 Codex 会话 → 选一个 → 导入/同步 → 自动跳到那个会话 |
+| Claude | `/to-codex` 或"切到 codex" | 把当前会话发到 Codex，并在 Codex 里打开 |
+| Codex | `$from-claude` 或"导入 claude 的会话" | 列出本项目的 Claude 会话 → 选一个 → 导入/同步 → 在 Codex 里打开 |
+| Codex | `$to-claude` 或"切到 claude" | 把当前线程发到 Claude，并在 Claude 桌面版里打开 |
+
+列表里每个会话都会标出状态：**未导入**、**对面有新内容，可同步**、**已同步**。
+
+## 安装
 
 ```bash
-cd 你的项目
-ccx            # 自动判断：最近用的是哪边，就转到另一边并直接打开
+git clone <this repo> && cd claudecodex && ./install.sh
 ```
 
-## 命令
+`install.sh` 会把这个仓库作为**本地插件市场**，加到 Claude Code 和 Codex 里，并安装 `claudecodex` 插件。插件是本地安装的，不经过任何商店审核。装完后新开的会话或线程里就能用。另外它还会装一个终端命令 `ccx`：
 
-| 命令 | 作用 |
-|---|---|
-| `ccx` / `ccx switch` | 取当前目录下两边最近的那个会话，转到另一边 |
-| `ccx to-codex [id]` | Claude → Codex |
-| `ccx to-claude [id]` | Codex → Claude |
-| `ccx ls [-a]` | 列出当前项目（或全部项目）两边的会话 |
-| `--open cli\|app\|none` | 转完后：在终端续上（默认）/ 打开桌面版 / 只转换 |
-| `ccx install` | 安装 `ccx` 命令 + Claude 的 `/to-codex` skill + Codex 的 `to-claude` skill |
+```bash
+ccx            # 当前项目：最近用的那边 → 另一边，然后打开桌面版
+ccx ls         # 两边的会话和同步状态
+ccx to-codex [id] / ccx to-claude [id]
+ccx --cli ...  # 在终端里续上，不打开桌面版
+```
 
-装好 skill 以后，在 app 里直接说"切到 codex" / "切到 claude"就行。
+## 两个 app 开着也能用
 
-## 原理
+不用先关掉任何一个 app。
 
-- **Claude → Codex**：调用 Codex 自带的 app-server 导入器（`externalAgentConfig/import`，类型 `SESSIONS`），和官方 `codex-plugin-cc` 的 `/codex:transfer` 是同一个接口。导入是完整的，Codex 桌面版和 `codex resume` 都能看到。
-- **Codex → Claude**：Claude Code 没有导入接口，所以 `ccx` 读 `~/.codex/sessions/**/rollout-*.jsonl(.zst)`，把对话压缩（保留所有用户消息和 assistant 回复，工具调用和输出截断成摘要），写成 `~/.claude/projects/<项目>/<新id>.jsonl`，再用 `claude --resume` 打开。末尾会附上导入时的 git 状态。
+- **→ Codex**：用的是 Codex 自带的导入接口（`externalAgentConfig/import`，Codex 桌面版自己的"从 Claude 导入"和官方 `codex-plugin-cc` 的 `/codex:transfer` 用的也是它），数据由 Codex 自己写。之后用 `codex://threads/<id>` 打开。
+- **→ Claude**：写一个**新的** Claude Code 会话文件，再用 Claude 桌面版自带的 `claude://resume?session=<id>` 深链接，让 app 自己导入并打开。
+- **同步**：
+  - Codex → Claude：上次导入后，如果那个 Claude 会话没被动过（文件修改时间没变，也没有你自己加的对话），就原地更新；否则另建一个新会话，旧的不碰。
+  - Claude → Codex：重新导入一份，旧线程如果没被继续聊过就归档。如果旧线程正在 Codex 里打开，Codex 会拒绝归档（"active writer"），这时旧线程保留不动。
 
-代码状态两边共享同一个工作区，不需要迁移。
+## 实现
 
-## 要求
+- `plugins/claudecodex/`：一个插件目录，同时带有 `.claude-plugin/` 和 `.codex-plugin/` 两套清单。
+- `lib/claudecodex/mcp_server.py`：只用 Python 标准库的 MCP 服务器，提供三个工具：`list_sessions`（只读）、`import_session`、`send_current_session`。
+- `lib/claudecodex/sync.py`：判断该新导入、同步还是不用动，导入关系记在 `~/.claudecodex/links.json`。导入状态也会读 Codex 自己的导入历史，所以 Codex app 或官方插件之前导入过的会话，也会显示为"已同步"。
+- 需要 Python ≥ 3.9（macOS 自带的就够）。Codex 会话是 zstd 压缩的：Python 3.14 能直接读，更老的版本需要 `brew install zstd`。
 
-- Python ≥ 3.10（3.14 自带 zstd；更老的版本需要系统里有 `zstd` 命令）
-- `codex` 和 `claude` 命令都已登录。Codex CLI 版本要能识别桌面版用的模型，太旧就 `codex update`。
+## 限制
 
-## 已知限制
-
-- Codex → Claude 是有损的：工具输出被截断，Codex 的推理内容是加密的不会带过去。
-- Claude 桌面版侧边栏可能不显示 `ccx` 写入的会话，用 `claude --resume <id>` 打开。
+- Codex → Claude 的转换是有损的：保留所有用户消息和回复，工具调用和工具输出会截断成摘要，Codex 加密的推理内容不会带过去。
+- `claude://resume` 深链接和 Claude Code 会话文件的格式都不是公开文档里的接口，Claude 以后更新可能会改。
+- 所有数据只在本机处理，用的都是两个 app 自己提供的插件机制、导入接口和深链接，不碰账号和登录信息。
