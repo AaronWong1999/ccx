@@ -7,12 +7,6 @@
 <p align="center"><b>Sync task memory between Claude and Codex.</b><br>在 Claude 和 Codex 之间同步任务记忆。</p>
 
 <p align="center">
-  <b>Hit your Claude Code usage limit? Keep going in Codex. Codex runs out? Back to Claude.</b><br>
-  <b>Same task, same conversation, no waiting for the 5-hour reset.</b><br>
-  撞上 Claude Code 的额度上限？切到 Codex 接着干；Codex 也用完了，再切回 Claude。同一个任务、同一段对话，不用干等 5 小时额度恢复。
-</p>
-
-<p align="center">
   <a href="https://github.com/aaronwong1999/ccx/stargazers"><img src="https://img.shields.io/github/stars/aaronwong1999/ccx?style=social" alt="GitHub stars"></a>
   <a href="https://x.com/aaron0x10"><img src="https://img.shields.io/badge/follow-%40aaron0x10-000000?logo=x&logoColor=white" alt="Follow @aaron0x10 on X"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="MIT license"></a>
@@ -27,16 +21,18 @@
 
 ## Why ccx · 为什么需要它
 
-You're deep in a task in Claude Code and hit the usage limit. Until now you had two choices: wait hours for the reset, or open Codex and explain everything again from scratch. With ccx you click ⇄ in the menu bar and Codex picks up right where Claude stopped: your requests, the plan, the files touched, the step it was on. When Codex runs out, open the same Claude conversation and Codex's progress is already there. Two subscriptions, one continuous workday.
+<p align="center">
+  <b>Hit your Claude Code usage limit? Keep going in Codex. Codex runs out? Back to Claude.</b><br>
+  <b>Same task, same conversation, no waiting for the 5-hour reset.</b><br>
+  撞上 Claude Code 的额度上限？切到 Codex 接着干；Codex 也用完了，再切回 Claude。同一个任务、同一段对话，不用干等 5 小时额度恢复。
+</p>
 
-你在 Claude Code 里干到一半，额度用完了。以前只有两条路：干等几个小时恢复，或者打开 Codex 从头再解释一遍。有了 ccx，点一下菜单栏的 ⇄，Codex 就从 Claude 停下的地方接着干：你的需求、计划、改过的文件、做到哪一步，全都带过去。Codex 也用完了？打开原来那个 Claude 对话，Codex 的进展已经在里面了。两份订阅，一整天不断档。
-
-| | Without ccx · 没有 ccx | With ccx · 有了 ccx |
+| | Without ccx<br>没有 ccx | With ccx<br>有了 ccx |
 |---|---|---|
-| Claude Code hits the usage limit · 额度用完 | Wait for the 5-hour reset · 干等恢复 | Continue in Codex in one click · 一键到 Codex 接着干 |
-| Switching apps · 换 app | Re-explain the task, paste context · 重新解释、复制粘贴 | The other side already knows · 对面已经知道进展 |
-| Coming back · 切回来 | Start a new chat · 新开对话 | Same conversation, with the other app's progress · 还是原来的对话，带上对面的进展 |
-| Long conversations · 长对话 | Re-reading everything burns usage · 整段重读很费额度 | Condensed handover, cost shown before you choose · 压缩交接，费用先告诉你 |
+| Claude Code hits the usage limit<br>额度用完 | Wait for the 5-hour reset<br>干等恢复 | Continue in Codex in one click<br>一键到 Codex 接着干 |
+| Switching apps<br>换 app | Re-explain the task, paste context<br>重新解释、复制粘贴 | The other side already knows<br>对面已经知道进展 |
+| Coming back<br>切回来 | Start a new chat<br>新开对话 | Same conversation, with the other app's progress<br>还是原来的对话，带上对面的进展 |
+| Long conversations<br>长对话 | Re-reading everything burns usage<br>整段重读很费额度 | Condensed handover, cost shown before you choose<br>压缩交接，费用先告诉你 |
 
 ccx links a Claude Code session with a Codex thread on your Mac and keeps them in sync in both directions. It works inside both **desktop apps**, adds a ⇄ menu bar icon for one-click switching, and runs entirely on your Mac: no account, no server, no telemetry.
 
@@ -48,16 +44,16 @@ ccx 在你的 Mac 上把一个 Claude Code 会话和一个 Codex 线程关联起
 
 **需要：** macOS 13 及以上的 Mac，以及 **Claude** 桌面版和/或 **Codex** 桌面版。要在两边之间来回切换当然需要两个都装，但先装一个也可以，另一个之后再装。不需要另外安装 Claude Code 或 Codex 的命令行工具、Homebrew，也不需要 `sudo`：ccx 用的是两个桌面版自带的那一份。
 
-- Claude: [claude.com/download](https://claude.com/download). Open it once and click **Code**, so it downloads Claude Code. · 下载后打开一次并点 **Code**，让它下载 Claude Code。
-- Codex: [openai.com/codex](https://openai.com/codex) (the Codex / ChatGPT desktop app · Codex / ChatGPT 桌面版).
+- Claude: [claude.com/download](https://claude.com/download). Open it once and click **Code**, so it downloads Claude Code.<br>下载后打开一次并点 **Code**，让它下载 Claude Code。
+- Codex: [openai.com/codex](https://openai.com/codex) (the Codex / ChatGPT desktop app).<br>Codex / ChatGPT 桌面版。
 
-**The easy way:** paste this into Claude Code or Codex. It runs the installer for you. **最简单：** 把下面这段话贴给 Claude Code 或 Codex，它会帮你运行安装命令。
+**The easy way:** paste this into Claude Code or Codex. It runs the installer for you.<br>**最简单：** 把下面这段话贴给 Claude Code 或 Codex，它会帮你运行安装命令。
 
 ```
 Install ccx for me: run `curl -fsSL https://raw.githubusercontent.com/aaronwong1999/ccx/main/install.sh | sh` (it needs network access and writes to my home folder), then run `~/.local/bin/ccx doctor` and tell me the result.
 ```
 
-**Or run it yourself** in Terminal. **或者自己在终端运行：**
+**Or run it yourself** in Terminal.<br>**或者自己在终端运行：**
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/aaronwong1999/ccx/main/install.sh | sh
@@ -73,7 +69,7 @@ curl -fsSL https://raw.githubusercontent.com/aaronwong1999/ccx/main/install.sh |
 | ccx shows a result or update notice<br>ccx 显示同步结果或更新提示 | A request to allow notifications (may show as "Script Editor").<br>请求允许通知（可能显示为"脚本编辑器"） | Allow, so you see sync results.<br>允许，这样能看到同步结果 |
 | ccx opens a project in Codex for the first time<br>ccx 第一次在 Codex 里打开某个项目 | Codex: "Trust this folder?"<br>Codex："信任此文件夹吗？" | Trust it if it's your project; this is Codex's own check.<br>是你自己的项目就信任；这是 Codex 自己的检查 |
 
-Nothing else asks for passwords, admin rights or accessibility access. · 除此之外，不会要求密码、管理员权限或辅助功能权限。
+Nothing else asks for passwords, admin rights or accessibility access.<br>除此之外，不会要求密码、管理员权限或辅助功能权限。
 
 ### What the installer does · 安装脚本做了什么
 
