@@ -46,8 +46,9 @@ def is_dev_checkout() -> bool:
 
 
 def marketplace_source(dev: bool) -> str:
-    """GitHub (the apps then update the plugin themselves), or this checkout for development."""
-    return str(SRC) if dev else REPO
+    """Always this local copy: the apps install from disk (no GitHub access of their
+    own needed), and `ccx update` refreshes this copy and then both apps."""
+    return str(SRC)
 
 
 def repo_version() -> str:
@@ -63,6 +64,26 @@ def _vt(v: str) -> tuple:
 
 
 # ------------------------------------------------------------------ plugins
+
+def _registered(tool: str) -> str:
+    """How the app has the ccx marketplace registered (raw text, '' if not)."""
+    try:
+        if tool == "claude":
+            return json.dumps(json.loads((HOME / ".claude/plugins/known_marketplaces.json").read_text()).get("ccx") or "")
+        text = (codex.CODEX_HOME / "config.toml").read_text()
+        m = re.search(r"^\[marketplaces\.ccx\]\n(.*?)(?=^\[|\Z)", text, re.M | re.S)
+        return m.group(1) if m else ""
+    except (OSError, ValueError, AttributeError):
+        return ""
+
+
+def _add_marketplace(cli: str, tool: str, source: str):
+    """Register ccx's marketplace at `source`, replacing a registration elsewhere
+    (e.g. GitHub, from older versions)."""
+    have = _registered(tool)
+    if have and source not in have:
+        run([cli, "plugin", "marketplace", "remove", "ccx"])
+    run([cli, "plugin", "marketplace", "add", source])
 
 def _claude_installed(cli: str) -> Optional[str]:
     _, out = run([cli, "plugin", "list"])
@@ -109,10 +130,7 @@ def setup_claude(source: str, quiet: bool = False) -> bool:
         return False
     run([cli, "plugin", "uninstall", f"{LEGACY}@{LEGACY}"])
     run([cli, "plugin", "marketplace", "remove", LEGACY])
-    code, out = run([cli, "plugin", "marketplace", "add", source])
-    if code and "already" not in out.lower():
-        run([cli, "plugin", "marketplace", "remove", "ccx"])
-        run([cli, "plugin", "marketplace", "add", source])
+    _add_marketplace(cli, "claude", source)
     run([cli, "plugin", "marketplace", "update", "ccx"])
     run([cli, "plugin", "install", "ccx@ccx"])
     run([cli, "plugin", "update", "ccx@ccx"])
@@ -135,14 +153,12 @@ def setup_codex(source: str, quiet: bool = False) -> bool:
         return False
     run([cli, "plugin", "remove", f"{LEGACY}@{LEGACY}"])
     run([cli, "plugin", "marketplace", "remove", LEGACY])
-    code, out = run([cli, "plugin", "marketplace", "add", source])
-    if code and "already" not in out.lower():
-        run([cli, "plugin", "marketplace", "remove", "ccx"])
-        run([cli, "plugin", "marketplace", "add", source])
+    _add_marketplace(cli, "codex", source)
     run([cli, "plugin", "marketplace", "upgrade", "ccx"])
     code, out = run([cli, "plugin", "add", "ccx@ccx"])
     ok = code == 0
-    say(ok, "Codex plugin ccx installed (new threads pick it up)" if ok else f"Codex plugin install failed: {out[-300:]}", quiet)
+    say(ok, "Codex plugin ccx installed (new threads pick it up)" if ok
+        else f"Codex plugin install failed: {out[-300:]} (run `ccx doctor`, then `ccx setup` to retry)", quiet)
     if ok:
         # Installing ccx is the user's consent to its own sync hook; Codex otherwise
         # asks for each third-party hook to be trusted by hand (and again after updates).

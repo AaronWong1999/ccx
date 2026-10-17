@@ -23,7 +23,8 @@ APP_BUNDLES = ("/Applications/ChatGPT.app", "/Applications/Codex.app",
 SELF_SERVERS = ("ccx", "claudecodex")
 # Every interactive and scripted source; sub-agents are internal and left out.
 SOURCES = ["cli", "vscode", "exec", "appServer", "unknown"]
-DESKTOP_STATE = Path(os.environ.get("CODEX_HOME", HOME / ".codex")) / ".codex-global-state.json"
+CODEX_HOME = Path(os.environ.get("CODEX_HOME", HOME / ".codex"))
+DESKTOP_STATE = CODEX_HOME / ".codex-global-state.json"
 
 Unit = Optional[Tuple[str, str]]
 
