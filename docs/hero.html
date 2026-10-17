@@ -53,7 +53,18 @@
   .menu .sel { background: #0a64d8; color: #fff; }
   .menu .sep { height: 1px; margin: 5px 8px; background: rgba(255,255,255,.1); }
 
-  .label { margin-top: 16px; text-align: center; font-size: 17px; font-weight: 600; color: #f4f4f5; }
+  .center { height: 216px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; }
+  .big { width: 64px; height: 64px; border-radius: 50%; display: grid; place-items: center; font-size: 34px; font-weight: 800; margin-bottom: 6px; }
+  .warnc { background: rgba(255, 95, 87, .18); color: #ff6b63; border: 1.5px solid rgba(255, 95, 87, .55); }
+  .okc { background: rgba(40, 200, 64, .16); color: #4be06a; border: 1.5px solid rgba(40, 200, 64, .5); }
+  .headline { font-size: 22px; font-weight: 700; letter-spacing: -.3px; color: #f4f4f5; }
+  .sub { font-size: 15px; color: #9a9aa4; }
+  .menubar { justify-content: flex-end; height: 34px; padding-right: 26px; }
+  .menubar .x { font-size: 16px; padding: 2px 10px; background: rgba(255,255,255,.28); }
+  .menu { margin: 12px 18px 0 auto; width: 270px; font-size: 16px; }
+  .menu .it { padding: 9px 12px; }
+  .menu .cap { padding: 6px 12px 6px; font-size: 12px; }
+  .label { margin-top: 18px; text-align: center; font-size: 21px; font-weight: 600; color: #f4f4f5; }
   .label em { font-style: normal; display: inline-grid; place-items: center; width: 24px; height: 24px; margin-right: 8px;
               border-radius: 50%; background: rgba(255,255,255,.12); font-size: 13px; vertical-align: 1px; }
 
@@ -73,40 +84,37 @@
     <div class="step">
       <div class="win">
         <div class="bar"><span class="tl r"></span><span class="tl y"></span><span class="tl g"></span><span class="t">Claude Code</span></div>
-        <div class="in">
-          <div class="me">Ship the pricing page and fix the checkout bug</div>
-          <div class="ai">Pricing page done. Found the bug: the coupon is applied twice in <code>cart.ts</code>…</div>
-          <div class="warn">Usage limit reached<small>Resets in 4 h 52 min</small></div>
+        <div class="center">
+          <div class="big warnc">!</div>
+          <div class="headline">Usage limit reached</div>
+          <div class="sub">Resets in 4 h 52 min</div>
         </div>
       </div>
-      <div class="label"><em>1</em>Claude Code hits its usage limit</div>
+      <div class="label"><em>1</em>Claude runs out</div>
     </div>
 
     <div class="step">
       <div class="win">
-        <div class="menubar"><span>Wi‑Fi</span><span class="x">⇄</span><span>Fri 9:41</span></div>
+        <div class="menubar"><span class="x">⇄</span></div>
         <div class="menu">
-          <div class="h">ccx - claudecodex<i>@aaron0x10</i></div>
-          <div class="sep"></div>
-          <div class="cap">TRANSFER TO CODEX · FROM CLAUDE</div>
-          <div class="it sel">✓  Ship pricing page, fix checkout</div>
-          <div class="it">○  Refactor auth middleware</div>
-          <div class="it">○  Write release notes</div>
+          <div class="cap">TRANSFER TO CODEX</div>
+          <div class="it sel">Ship the pricing page</div>
+          <div class="it">Refactor auth</div>
         </div>
       </div>
-      <div class="label"><em>2</em>Click ⇄ in the menu bar</div>
+      <div class="label"><em>2</em>Click ⇄</div>
     </div>
 
     <div class="step">
       <div class="win">
         <div class="bar"><span class="tl r"></span><span class="tl y"></span><span class="tl g"></span><span class="t">Codex</span></div>
-        <div class="in">
-          <div class="note"><b>ccx</b> brought in 14 updates from Claude Code: the plan, the bug, where it stopped.</div>
-          <div class="me">continue</div>
-          <div class="ai">Fixing the double coupon in <code>cart.ts</code>, then running the tests.</div>
+        <div class="center">
+          <div class="big okc">✓</div>
+          <div class="headline">Picked up where Claude stopped</div>
+          <div class="sub">Same task, same progress</div>
         </div>
       </div>
-      <div class="label"><em>3</em>Codex picks up where Claude stopped</div>
+      <div class="label"><em>3</em>Codex keeps going</div>
     </div>
   </div>
 
