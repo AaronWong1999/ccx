@@ -46,6 +46,7 @@ struct MenuData: Decodable {
     let projects: [Project]
     let version: String?
     let codex_hook_trusted: Bool?
+    let needs_setup: [String]?
     let pending_history_repairs: Int?
 }
 
@@ -169,6 +170,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 }
                 self.data = d
                 self.loadedAt = Date()
+                self.finishSetup(d.needs_setup ?? [])
                 self.lastError = nil
             } else {
                 self.lastError = err.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -178,6 +180,21 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 self.rebuild()
                 if CommandLine.arguments.contains("--selftest") { self.dump(self.menu, 0); exit(self.data == nil ? 1 : 0) }
             }
+        }
+    }
+
+    /// Claude or Codex installed after ccx: set ccx up there too, once per launch.
+    var setupTried = Set<String>()
+    func finishSetup(_ apps: [String]) {
+        let todo = apps.filter { !setupTried.contains($0) }
+        if todo.isEmpty || clickTest { return }
+        setupTried.formUnion(todo)
+        run(["_refresh", "--quiet"]) { code, _, _ in
+            if code == 0 {
+                let names = todo.map { $0 == "claude" ? "Claude" : "Codex" }.joined(separator: " & ")
+                self.notify("ccx", L("ccx is now set up in \(names).", "ccx 已在 \(names) 里装好。"))
+            }
+            self.refresh()
         }
     }
 

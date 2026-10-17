@@ -70,10 +70,42 @@ def _claude_installed(cli: str) -> Optional[str]:
     return m.group(1) if m else None
 
 
+CLAUDE_APPS = ("/Applications/Claude.app", str(HOME / "Applications/Claude.app"))
+
+
+def claude_app() -> bool:
+    return any(Path(a).exists() for a in CLAUDE_APPS)
+
+
+_UNSET = object()
+
+
+def needs_setup(codex_trusted=_UNSET) -> List[str]:
+    """Apps that are here now but don't have ccx yet (installed after ccx was)."""
+    out = []
+    if claude.desktop_cli():
+        try:
+            known = json.loads((HOME / ".claude/plugins/installed_plugins.json").read_text())
+            known = known.get("plugins", known)
+        except (OSError, ValueError):
+            known = {}
+        if "ccx@ccx" not in known:
+            out.append("claude")
+    try:
+        codex.codex_bin()
+        if (codex.hooks_trusted() if codex_trusted is _UNSET else codex_trusted) is None:
+            out.append("codex")
+    except RuntimeError:
+        pass
+    return out
+
+
 def setup_claude(source: str, quiet: bool = False) -> bool:
     cli = claude.desktop_cli()
     if not cli:
-        say(False, "Claude desktop app not found; skipping the Claude plugin", quiet)
+        say(False, "Claude: the desktop app is installed, but Claude Code isn't downloaded yet. Open Claude and click "
+                   "Code once; ccx then finishes setup by itself (or run `ccx setup`)." if claude_app()
+            else "Claude: desktop app not installed (https://claude.com/download); skipping", quiet)
         return False
     run([cli, "plugin", "uninstall", f"{LEGACY}@{LEGACY}"])
     run([cli, "plugin", "marketplace", "remove", LEGACY])
@@ -99,7 +131,7 @@ def setup_codex(source: str, quiet: bool = False) -> bool:
     try:
         cli = codex.codex_bin()
     except RuntimeError:
-        say(False, "Codex desktop app not found; skipping the Codex plugin", quiet)
+        say(False, "Codex: desktop app not installed (https://openai.com/codex); skipping", quiet)
         return False
     run([cli, "plugin", "remove", f"{LEGACY}@{LEGACY}"])
     run([cli, "plugin", "marketplace", "remove", LEGACY])
@@ -215,9 +247,16 @@ def setup(dev: bool = False, quiet: bool = False) -> int:
     if build_menubar(quiet, force=True) and not AGENT.exists():
         autostart(True)
     if not quiet:
-        print("\nDone. In Claude or Codex, start a new conversation and say "
-              "“continue the <name> session from Codex/Claude”, or click ⇄ in the menu bar.\n"
-              f"Like it? Star it: {REPO_URL}")
+        if ok_claude and ok_codex:
+            print("\nDone. ccx is set up in both apps. Start a new conversation (or keep using an existing one) "
+                  "and click ⇄ in the menu bar to move a conversation to the other app, or say "
+                  "“continue the <name> session from Codex/Claude”.")
+        elif ok_claude or ok_codex:
+            print(f"\nccx is set up in {'Claude' if ok_claude else 'Codex'}. Install the "
+                  f"{'Codex' if ok_claude else 'Claude'} desktop app too: ccx finishes setting it up by itself.")
+        else:
+            print("\nccx is installed, but neither app could be set up yet (see above). `ccx doctor` shows what's missing.")
+        print(f"Like it? Star it: {REPO_URL}")
     return 0 if (ok_claude or ok_codex) else 1
 
 
@@ -246,7 +285,8 @@ def refresh(quiet: bool = False) -> int:
 def doctor() -> int:
     rows = [(sys.version_info >= (3, 9), f"Python {sys.version.split()[0]} ({sys.executable})")]
     cli = claude.desktop_cli()
-    rows.append((bool(cli), f"Claude Code: {cli or 'Claude desktop app not found'}"))
+    rows.append((bool(cli), f"Claude Code: {cli}" if cli else "Claude Code: " + (
+        "open Claude and click Code once" if claude_app() else "Claude desktop app not installed")))
     if cli:
         v = _claude_installed(cli)
         rows.append((bool(v), f"Claude plugin: ccx {v}" if v else "Claude plugin: not installed (run `ccx setup`)"))
@@ -267,7 +307,7 @@ def doctor() -> int:
     queued = repairs.pending()
     if queued:
         rows.append((False, f"History repair queued for {len(queued)} Codex thread(s): quit Codex when convenient; "
-                     "ccx retries after the writer is released. `ccx history --open` reads both sources now."))
+                     "ccx retries after the writer is released."))
     for ok, text in rows:
         say(ok, text)
     return 0 if all(ok for ok, _ in rows[:2]) else 1
