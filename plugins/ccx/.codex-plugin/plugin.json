@@ -1,7 +1,7 @@
 {
   "name": "ccx",
   "version": "0.0.27",
-  "description": "ccx - claudecodex: one task memory, synced between Codex and Claude Code. Import a Claude Code session into this thread, keep both in sync, or hand this thread to Claude.",
+  "description": "ccx - claudecodex: sync task memory between Claude and Codex. Import a Claude Code session into this thread, keep both in sync, or hand this thread to Claude.",
   "author": {
     "name": "Aaron Wong",
     "url": "https://github.com/aaronwong1999"
@@ -19,7 +19,7 @@
   "mcpServers": "./codex.mcp.json",
   "interface": {
     "displayName": "ccx - claudecodex",
-    "shortDescription": "Sync task memory between Codex and Claude Code",
+    "shortDescription": "Sync task memory between Claude and Codex",
     "longDescription": "Pairs a Claude Code session with a Codex thread so you can keep working on the same task in either app: the other side's new progress is brought into the conversation you are in. Not affiliated with OpenAI or Anthropic.",
     "developerName": "Aaron Wong",
     "category": "Developer Tools",
