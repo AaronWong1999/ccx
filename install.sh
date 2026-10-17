@@ -53,15 +53,19 @@ say "  • later, a request to allow notifications — allow it to see sync resu
 say "  • in Codex, \"Trust this folder?\" the first time ccx opens a project there — that's Codex's own check."
 say ""
 
-# --- download / update the code ---------------------------------------------
+# --- download / update the code (the newest release, never untagged commits) -
+export GIT_TERMINAL_PROMPT=0
 if [ -d "$DEST/.git" ]; then
-  git -C "$DEST" pull --ff-only --quiet || { say "Could not update $DEST (no network?). Try again later."; exit 1; }
+  git -C "$DEST" fetch --quiet --force --tags origin || { say "Could not reach github.com/$REPO (no network?). Try again later."; exit 1; }
 else
   mkdir -p "$(dirname "$DEST")"
   rm -rf "$DEST"
-  GIT_TERMINAL_PROMPT=0 git clone --quiet --depth 50 "https://github.com/$REPO.git" "$DEST" ||
+  git clone --quiet "https://github.com/$REPO.git" "$DEST" ||
     { say "Could not download ccx from github.com/$REPO (no network, or the repository isn't reachable)."; exit 1; }
 fi
+TAG="$(git -C "$DEST" tag -l 'v[0-9]*' --sort=-v:refname | head -n 1)"
+[ -n "$TAG" ] || { say "No ccx release found yet at github.com/$REPO."; exit 1; }
+git -C "$DEST" checkout --quiet --force "$TAG"
 
 # --- the `ccx` command on PATH ----------------------------------------------
 case ":$PATH:" in

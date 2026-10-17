@@ -235,6 +235,12 @@ def latest_release() -> Optional[str]:
     return max(tags, key=_vt) if tags else None
 
 
+def latest_local_tag() -> Optional[str]:
+    _, out = run(["git", "-C", str(SRC), "tag", "-l", "v*"])
+    tags = [t[1:] for t in out.split() if re.fullmatch(r"v\d+\.\d+\.\d+", t)]
+    return max(tags, key=_vt) if tags else None
+
+
 def check() -> dict:
     latest = latest_release()
     return {"current": __version__, "latest": latest,
@@ -277,10 +283,15 @@ def setup(dev: bool = False, quiet: bool = False) -> int:
 
 
 def update(quiet: bool = False) -> int:
+    """Move to the newest release tag (vX.Y.Z). Commits on main that aren't tagged
+    are never installed, so they never reach users or trigger update notices."""
     if (SRC / ".git").exists() and not is_dev_checkout():
-        code, out = run(["git", "-C", str(SRC), "pull", "--ff-only", "--quiet"])
-        if code:
-            say(False, f"could not download the update: {out[-300:]}", quiet)
+        code, out = run(["git", "-C", str(SRC), "fetch", "--quiet", "--force", "--tags", "origin"])
+        latest = None if code else latest_local_tag()
+        if latest:
+            code, out = run(["git", "-C", str(SRC), "checkout", "--quiet", "--force", f"v{latest}"])
+        if code or not latest:
+            say(False, f"could not download the update: {(out or 'no release found')[-300:]}", quiet)
             return 1
     # Re-run the (possibly new) code to refresh both apps' plugins and the menu bar.
     code, out = run([str(PLUGIN_BIN / "ccx"), "_refresh"] + (["--quiet"] if quiet else []), 900)

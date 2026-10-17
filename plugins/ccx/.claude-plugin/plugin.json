@@ -1,6 +1,6 @@
 {
   "name": "ccx",
-  "version": "0.0.25",
+  "version": "0.0.26",
   "description": "ccx - claudecodex: sync task memory between Claude Code and Codex. Import a Codex thread into this conversation, keep both in sync, or hand this conversation to Codex.",
   "author": {
     "name": "Aaron Wong",

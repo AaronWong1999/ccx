@@ -2,7 +2,7 @@
 
 ## Releasing a new version
 
-`main` is the release branch: installed copies and both apps' plugin marketplaces follow it. Do day-to-day work on another branch and merge it when a release is ready.
+**Only tags release.** Installed copies run the newest `vX.Y.Z` tag, never `main` itself, so committing and pushing to `main` reaches nobody and triggers no update notice. Both apps install the plugin from the user's local copy, so they follow the same tag. Tags must be exactly `vX.Y.Z`; anything else (for example `v0.1.0-beta`) is ignored by update checks.
 
 1. Set the same version in three places:
    - `plugins/ccx/lib/ccx/__init__.py`
@@ -10,7 +10,7 @@
    - `plugins/ccx/.codex-plugin/plugin.json`
 
    Claude only updates a plugin when the version changes, and `ccx` forces a reinstall whenever the installed version differs.
-2. Merge to `main` and push.
+2. Commit and push to `main` (nothing is released yet).
 3. Tag and push the tag:
 
    ```bash
@@ -18,7 +18,7 @@
    ```
 
    The `release` workflow checks that the tag matches the version, runs the tests, and publishes a GitHub Release.
-4. Installed copies see the new tag within a few hours (`ccx update --check` reads the repo's tags). They update themselves: `git pull`, refresh both apps' plugins, re-trust ccx's Codex hook, rebuild the menu bar app. Users who turned off automatic installs get a notification and an "Update to …" menu item instead.
+4. Installed copies see the new tag within a few hours (`ccx update --check` reads the repo's tags). They update themselves: fetch tags, check out the new tag, refresh both apps' plugins, re-trust ccx's Codex hook, rebuild the menu bar app. Users who turned off automatic installs get a notification and an "Update to …" menu item instead.
 
 ## Why an install script and not a DMG (for now)
 
