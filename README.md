@@ -1,18 +1,46 @@
-<p align="center"><img src="docs/icon.png" width="128" alt="ccx icon"></p>
+<p align="center">
+  <img src="docs/hero.png" alt="ccx - claudecodex: when Claude Code runs out of usage, keep going in Codex with the same task and context, and back" width="100%">
+</p>
 
-# ccx - claudecodex
+<h1 align="center">ccx - claudecodex</h1>
 
-**Sync task memory between Claude Code and Codex. When one runs out of usage, keep going in the other, and come back to the same conversation.**
+<p align="center">
+  <b>Hit your Claude Code usage limit? Keep going in Codex. Codex runs out? Back to Claude.</b><br>
+  <b>Same task, same conversation, no waiting for the 5-hour reset.</b><br>
+  撞上 Claude Code 的额度上限？切到 Codex 接着干；Codex 也用完了，再切回 Claude。同一个任务、同一段对话，不用干等 5 小时额度恢复。
+</p>
 
-在 Claude Code 和 Codex 之间同步任务记忆。一边额度用完就到另一边继续，回来时还是原来那个会话。
+<p align="center">
+  <a href="https://github.com/aaronwong1999/ccx/stargazers"><img src="https://img.shields.io/github/stars/aaronwong1999/ccx?style=social" alt="GitHub stars"></a>
+  <a href="https://x.com/aaron0x10"><img src="https://img.shields.io/badge/follow-%40aaron0x10-000000?logo=x&logoColor=white" alt="Follow @aaron0x10 on X"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="MIT license"></a>
+  <img src="https://img.shields.io/badge/macOS-13%2B-black?logo=apple" alt="macOS 13+">
+</p>
+
+<p align="center">
+  Built by <a href="https://x.com/aaron0x10"><b>Aaron (@aaron0x10)</b></a>, who also made <a href="https://github.com/AaronWong1999/hermesclaw">HermesClaw</a> (featured in the official <a href="https://github.com/NousResearch/hermes-agent">Hermes Agent</a> README). Follow on X for updates and new tools.<br>
+  作者 <a href="https://x.com/aaron0x10"><b>Aaron（@aaron0x10）</b></a>，也是 <a href="https://github.com/AaronWong1999/hermesclaw">HermesClaw</a> 的作者（被 Hermes Agent 官方 README 收录）。关注 X 获取更新和新工具。
+</p>
 
 > ccx is an independent open-source project, not affiliated with Anthropic or OpenAI. "Claude", "Claude Code" and "Codex" are trademarks of their owners.
->
 > ccx 是独立的开源项目，与 Anthropic、OpenAI 无关。"Claude"、"Claude Code"、"Codex" 是其所有者的商标。
 
-ccx links a Claude Code session with a Codex thread on your Mac. Whichever app you continue in, the other side's new progress is brought into the conversation you are in. You don't start over and you don't copy-paste. It works with both **desktop apps** while they are running, and it adds a menu bar icon for one-click switching.
+## Why ccx · 为什么需要它
 
-ccx 在你的 Mac 上把一个 Claude Code 会话和一个 Codex 线程关联起来。无论你在哪个 app 里继续，另一边的新进展都会带进你当前的对话。不用从头再来，也不用复制粘贴。两个**桌面版** app 开着就能用，另外还有一个菜单栏图标，点一下就能切换。
+You're deep in a task in Claude Code and hit the usage limit. Until now you had two choices: wait hours for the reset, or open Codex and explain everything again from scratch. With ccx you click ⇄ in the menu bar and Codex picks up right where Claude stopped: your requests, the plan, the files touched, the step it was on. When Codex runs out, open the same Claude conversation and Codex's progress is already there. Two subscriptions, one continuous workday.
+
+你在 Claude Code 里干到一半，额度用完了。以前只有两条路：干等几个小时恢复，或者打开 Codex 从头再解释一遍。有了 ccx，点一下菜单栏的 ⇄，Codex 就从 Claude 停下的地方接着干：你的需求、计划、改过的文件、做到哪一步，全都带过去。Codex 也用完了？打开原来那个 Claude 对话，Codex 的进展已经在里面了。两份订阅，一整天不断档。
+
+| | Without ccx · 没有 ccx | With ccx · 有了 ccx |
+|---|---|---|
+| Claude Code hits the usage limit · 额度用完 | Wait for the 5-hour reset · 干等恢复 | Continue in Codex in one click · 一键到 Codex 接着干 |
+| Switching apps · 换 app | Re-explain the task, paste context · 重新解释、复制粘贴 | The other side already knows · 对面已经知道进展 |
+| Coming back · 切回来 | Start a new chat · 新开对话 | Same conversation, with the other app's progress · 还是原来的对话，带上对面的进展 |
+| Long conversations · 长对话 | Re-reading everything burns usage · 整段重读很费额度 | Condensed handover, cost shown before you choose · 压缩交接，费用先告诉你 |
+
+ccx links a Claude Code session with a Codex thread on your Mac and keeps them in sync in both directions. It works inside both **desktop apps**, adds a ⇄ menu bar icon for one-click switching, and runs entirely on your Mac: no account, no server, no telemetry.
+
+ccx 在你的 Mac 上把一个 Claude Code 会话和一个 Codex 线程关联起来，双向同步。它直接在两个**桌面版** app 里工作，菜单栏 ⇄ 图标一点就能切换；全部在本机运行：不用注册、没有服务器、不收集数据。
 
 ## Install · 安装
 
@@ -113,6 +141,14 @@ The ⇄ menu lists recent projects and both sides' sessions: ○ new, not linked
 
 ## FAQ · 常见问题
 
+**What do I do when Claude Code hits its usage limit (or Codex hits its rate limit)?** Click ⇄ in the menu bar and pick the conversation: it continues in the other app with the task, the plan and the progress so far. When the first app's limit resets, open the original conversation and send anything; the other side's work comes back with it. Nothing is copied by hand.
+
+**Claude Code 额度用完（或者 Codex 到了速率上限）怎么办？** 点菜单栏的 ⇄，选中这个对话，它就会在另一个 app 里带着任务、计划和进度继续。原来那边额度恢复后，打开原来的对话随便说一句，另一边做的事就带回来了。全程不用手动复制。
+
+**Does it bypass usage limits?** No. You use your own Claude and ChatGPT/Codex plans, each within its own limits. ccx only moves the task between them, so the time one app spends waiting is time the other app spends working.
+
+**这是在绕过额度限制吗？** 不是。你用的是自己的 Claude 和 ChatGPT/Codex 订阅，各自在各自的额度内。ccx 只是把任务在两边之间搬运：一边在等恢复的时候，另一边接着干活。
+
 **Can it carry a big, complex task, or one that stopped because usage ran out?** Yes, that's the main use case. Both apps write every message and tool call to disk as they go, so a conversation cut off by a usage limit is complete up to the moment it stopped. ccx brings over every user message and reply, condensed tool calls and output, the latest task list in full (Claude's todos or Codex's plan), a note when the other side stopped mid-step, and `git status`. The code is already on your disk. Limits: tool output is truncated per call, Codex's encrypted reasoning can't be carried, and a very long first import keeps the most recent ~60k characters plus every user request and the task list.
 
 **能不能迁移复杂任务，或者因为额度用完而中断的会话？** 能，这正是主要用途。两个 app 每说一句话、每调用一次工具都会立刻写到磁盘，所以额度用完那一刻之前的内容都在。ccx 会带过去：所有用户消息和回复、压缩后的工具调用和输出、完整的最新任务清单（Claude 的待办或 Codex 的计划）、对面是否停在某一步中间的提示，以及 `git status`。代码本来就在你的磁盘上。限制：每次工具输出会截断；Codex 加密的推理内容带不过去；很长的会话第一次导入时，只保留最近约 6 万字符，加上你所有的提问和任务清单。
@@ -201,6 +237,12 @@ python3 -m unittest discover -s tests   # needs neither Claude nor Codex · 不�
 `plugins/ccx/` is the plugin, with both a `.claude-plugin` and a `.codex-plugin` manifest; `lib/ccx/` is the core in standard-library Python 3.9+. `menubar/` is the Swift menu bar app. Releases: [docs/RELEASING.md](docs/RELEASING.md).
 
 `plugins/ccx/` 是插件本体，同时带有 `.claude-plugin` 和 `.codex-plugin` 两套清单；`lib/ccx/` 是核心代码，只用 Python 3.9+ 标准库。`menubar/` 是 Swift 写的菜单栏程序。发布流程见 [docs/RELEASING.md](docs/RELEASING.md)。
+
+## Star History
+
+<a href="https://www.star-history.com/#aaronwong1999/ccx&Date">
+  <img src="https://api.star-history.com/svg?repos=aaronwong1999/ccx&type=Date" alt="Star History Chart" width="600">
+</a>
 
 ## Author · 作者
 

@@ -278,7 +278,7 @@ def setup(dev: bool = False, quiet: bool = False) -> int:
                   f"{'Codex' if ok_claude else 'Claude'} desktop app too: ccx finishes setting it up by itself.")
         else:
             print("\nccx is installed, but neither app could be set up yet (see above). `ccx doctor` shows what's missing.")
-        print(f"Like it? Star it: {REPO_URL}")
+        print(f"Like it? Star it: {REPO_URL} · follow the author for updates: https://x.com/aaron0x10")
     return 0 if (ok_claude or ok_codex) else 1
 
 

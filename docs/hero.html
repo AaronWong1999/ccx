@@ -1,0 +1,86 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<!-- Source of docs/hero.png (1280x640, rendered at 2x):
+     "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless --hide-scrollbars \
+       --force-device-scale-factor=2 --window-size=1280,640 --screenshot=docs/hero.png docs/hero.html -->
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { width: 1280px; height: 640px; overflow: hidden; font-family: -apple-system, "SF Pro Display", "PingFang SC", sans-serif;
+         background: radial-gradient(1200px 600px at 50% -10%, #2b2f3a 0%, #14161c 55%, #0e0f13 100%); color: #f4f4f5; }
+  .top { position: absolute; top: 46px; left: 0; right: 0; text-align: center; }
+  .top h1 { font-size: 50px; font-weight: 800; letter-spacing: -1.2px; }
+  .top h1 span { background: linear-gradient(90deg, #f0a37f, #ffffff 55%, #9fb4ff); -webkit-background-clip: text; color: transparent; }
+  .top p { margin-top: 12px; font-size: 21px; color: #b4b7c2; }
+  .top p.zh { margin-top: 6px; font-size: 17px; color: #8c909c; }
+
+  .win { position: absolute; top: 210px; width: 470px; height: 330px; border-radius: 18px; overflow: hidden;
+         background: #1c1e25; border: 1px solid #2e313b; box-shadow: 0 30px 80px rgba(0,0,0,.55); }
+  .left { left: 70px; transform: rotate(-2deg); }
+  .right { right: 70px; transform: rotate(2deg); }
+  .bar { height: 42px; display: flex; align-items: center; gap: 8px; padding: 0 16px; background: #23262f; border-bottom: 1px solid #2e313b; }
+  .dot { width: 11px; height: 11px; border-radius: 50%; background: #3a3e4a; }
+  .bar b { margin-left: 10px; font-size: 15px; font-weight: 650; }
+  .left .bar b { color: #f0a37f; } .right .bar b { color: #9fb4ff; }
+  .body { padding: 18px; display: flex; flex-direction: column; gap: 11px; font-size: 14.5px; line-height: 1.4; }
+  .msg { padding: 10px 13px; border-radius: 12px; max-width: 88%; }
+  .me { align-self: flex-end; background: #313543; color: #e8e9ee; }
+  .ai { background: transparent; color: #c9ccd6; padding-left: 0; }
+  .todo { color: #c9ccd6; font-size: 14px; line-height: 1.65; }
+  .todo i { font-style: normal; color: #7ee2a8; } .todo u { text-decoration: none; color: #f5c46b; }
+  .limit { margin-top: 2px; padding: 11px 13px; border-radius: 12px; background: rgba(239, 92, 92, .13); border: 1px solid rgba(239, 92, 92, .45);
+           color: #ff9c9c; font-weight: 600; font-size: 14.5px; }
+  .limit small { display: block; font-weight: 400; color: #d98a8a; font-size: 13px; margin-top: 2px; }
+  .sync { padding: 10px 13px; border-radius: 12px; background: rgba(159, 180, 255, .11); border: 1px solid rgba(159, 180, 255, .4); color: #c3d0ff; font-size: 14px; }
+  .sync b { color: #e3e9ff; }
+
+  .hub { position: absolute; left: 50%; top: 318px; transform: translate(-50%, -50%); width: 128px; height: 128px; border-radius: 50%;
+         background: #0b0c10; border: 2px solid #3a3e4a; display: grid; place-items: center;
+         box-shadow: 0 0 0 10px rgba(255,255,255,.03), 0 0 60px rgba(159,180,255,.35), 0 0 60px rgba(240,163,127,.25) inset; }
+  .hub svg { width: 66px; height: 66px; }
+  .wire { position: absolute; top: 316px; height: 3px; width: 120px; background: repeating-linear-gradient(90deg, #6b7080 0 10px, transparent 10px 18px); }
+  .wire.l { left: 520px; } .wire.r { right: 520px; }
+
+  .foot { position: absolute; bottom: 34px; left: 0; right: 0; display: flex; justify-content: center; gap: 26px; font-size: 16px; color: #8c909c; }
+  .foot b { color: #e9eaee; font-weight: 700; }
+  .pill { padding: 6px 14px; border-radius: 999px; border: 1px solid #343846; background: #181a21; }
+</style></head>
+<body>
+  <div class="top">
+    <h1>Out of usage? <span>Keep going in the other app.</span></h1>
+    <p>ccx syncs task memory between Claude Code and Codex, so you never wait for a reset.</p>
+    <p class="zh">额度用完不用干等：Claude Code 和 Codex 之间无缝接力，同一个任务、同一段对话</p>
+  </div>
+
+  <div class="win left">
+    <div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><b>Claude Code</b></div>
+    <div class="body">
+      <div class="msg me">Ship the pricing page and fix the checkout bug</div>
+      <div class="todo"><i>✓</i> Pricing table · <i>✓</i> Stripe webhook · <u>◐</u> Checkout bug</div>
+      <div class="msg ai">Found it: the coupon is applied twice. Patching <code>cart.ts</code>…</div>
+      <div class="limit">Usage limit reached<small>Resets in 4 h 52 min</small></div>
+    </div>
+  </div>
+
+  <div class="wire l"></div><div class="wire r"></div>
+  <div class="hub">
+    <svg viewBox="0 0 64 64" fill="none" stroke="#fff" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M48 20H16M26 10 16 20l10 10"/><path d="M16 44h32M38 34l10 10-10 10"/>
+    </svg>
+  </div>
+
+  <div class="win right">
+    <div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><b>Codex</b></div>
+    <div class="body">
+      <div class="sync"><b>⇄ ccx</b> brought in 14 updates from Claude Code: the plan, the open bug, and where it stopped</div>
+      <div class="msg me">continue</div>
+      <div class="msg ai">Picking up at the checkout bug: removing the second coupon pass in <code>cart.ts</code>, then running the tests.</div>
+      <div class="todo"><i>✓</i> Pricing table · <i>✓</i> Stripe webhook · <i>✓</i> Checkout bug</div>
+    </div>
+  </div>
+
+  <div class="foot">
+    <span class="pill"><b>ccx - claudecodex</b> · free &amp; open source</span>
+    <span class="pill">macOS · menu bar ⇄ · one-line install</span>
+    <span class="pill">by <b>@aaron0x10</b></span>
+  </div>
+</body></html>

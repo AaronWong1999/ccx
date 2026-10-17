@@ -4,6 +4,7 @@
 import AppKit
 
 let repoURL = "https://github.com/aaronwong1999/ccx"
+let authorURL = "https://x.com/aaron0x10"
 
 /// Shorten to about `width` Latin characters; CJK and other wide characters count double.
 func short(_ s: String, _ width: Int) -> String {
@@ -269,13 +270,16 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // Title, then the tagline in the chosen language.
         let head = NSMenuItem()
         let title = NSMutableAttributedString(string: "ccx - claudecodex", attributes: [.font: NSFont.boldSystemFont(ofSize: 13)])
-        title.append(NSAttributedString(string: "  \(version)", attributes: [
+        title.append(NSAttributedString(string: "  \(version) ", attributes: [
             .font: NSFont.systemFont(ofSize: 11), .foregroundColor: NSColor.secondaryLabelColor]))
+        title.append(NSAttributedString(string: "@aaron0x10", attributes: [
+            .font: NSFont.systemFont(ofSize: 11), .foregroundColor: NSColor.linkColor]))
         title.append(NSAttributedString(string: "\n" + L("Sync task memory between Claude Code and Codex", "在 Claude Code 和 Codex 之间同步任务记忆"),
                                         attributes: [.font: NSFont.systemFont(ofSize: NSFont.smallSystemFontSize),
                                                      .foregroundColor: NSColor.secondaryLabelColor]))
         head.attributedTitle = title
-        head.isEnabled = false
+        head.action = #selector(openAuthor)   // the author's X profile
+        head.target = self
         menu.addItem(head)
 
         if let r = release, r.available, let latest = r.latest {
@@ -334,6 +338,13 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
             .font: NSFont.systemFont(ofSize: NSFont.smallSystemFontSize), .foregroundColor: NSColor.secondaryLabelColor]))
         star.attributedTitle = st
         menu.addItem(star)
+        let follow = action("", #selector(openAuthor), symbol: "person.crop.circle.badge.plus")
+        let ft = NSMutableAttributedString(string: L("Follow the author on X", "在 X 上关注作者") + "\n",
+                                           attributes: [.font: NSFont.menuFont(ofSize: 0)])
+        ft.append(NSAttributedString(string: "@aaron0x10", attributes: [
+            .font: NSFont.systemFont(ofSize: NSFont.smallSystemFontSize), .foregroundColor: NSColor.secondaryLabelColor]))
+        follow.attributedTitle = ft
+        menu.addItem(follow)
         menu.addItem(NSMenuItem(title: L("Quit ccx", "退出 ccx"), action: #selector(NSApp.terminate), keyEquivalent: "q"))
     }
 
@@ -475,6 +486,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
             if code != 0 { self.alert(L("That didn't work", "没有成功"), text) } else if showOutput { self.alert(title, text) }
             else if notifyResult && !self.clickTest {
                 self.info(heading, text.replacingOccurrences(of: "✓ ", with: ""))
+                self.maybeAskForSupport()
             }
             if self.clickTest { print("OK: \(heading) | \(text)"); exit(0) }
             self.refresh()
@@ -542,6 +554,31 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc func fixHook() { work(["setup"], title: L("ccx setup", "ccx 设置"), showOutput: true) }
     @objc func refreshClicked() { refresh() }
     @objc func openRepo() { NSWorkspace.shared.open(URL(string: repoURL)!) }
+    @objc func openAuthor() { NSWorkspace.shared.open(URL(string: authorURL)!) }
+
+    /// Once, after ccx has carried a few tasks across: a friendly ask for a star or
+    /// a follow. Never again after any answer.
+    func maybeAskForSupport() {
+        let n = defaults.integer(forKey: "transfers") + 1
+        defaults.set(n, forKey: "transfers")
+        if n < 3 || defaults.bool(forKey: "askedForSupport") || clickTest { return }
+        defaults.set(true, forKey: "askedForSupport")
+        NSApp.activate(ignoringOtherApps: true)
+        let a = NSAlert()
+        a.messageText = L("ccx has carried \(n) tasks across", "ccx 已经帮你接力了 \(n) 次任务")
+        a.informativeText = L("If it saves you from waiting for usage resets, a star on GitHub helps other people find it. "
+                              + "Updates and new tools are posted on X by @aaron0x10.",
+                              "如果它帮你省掉了等额度恢复的时间，去 GitHub 点个 Star 能让更多人发现它。"
+                              + "更新和新工具会在 X 上由 @aaron0x10 发布。")
+        a.addButton(withTitle: L("Star on GitHub", "去 GitHub 点 Star"))
+        a.addButton(withTitle: L("Follow @aaron0x10", "关注 @aaron0x10"))
+        a.addButton(withTitle: L("Not Now", "以后再说"))
+        switch a.runModal() {
+        case .alertFirstButtonReturn: openRepo()
+        case .alertSecondButtonReturn: openAuthor()
+        default: break
+        }
+    }
 
     @objc func setLanguage(_ sender: NSMenuItem) {
         let code = sender.representedObject as? String ?? "en"
