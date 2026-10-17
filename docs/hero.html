@@ -5,82 +5,113 @@
        --force-device-scale-factor=2 --window-size=1280,640 --screenshot=docs/hero.png docs/hero.html -->
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { width: 1280px; height: 640px; overflow: hidden; font-family: -apple-system, "SF Pro Display", "PingFang SC", sans-serif;
-         background: radial-gradient(1200px 600px at 50% -10%, #2b2f3a 0%, #14161c 55%, #0e0f13 100%); color: #f4f4f5; }
-  .top { position: absolute; top: 46px; left: 0; right: 0; text-align: center; }
-  .top h1 { font-size: 50px; font-weight: 800; letter-spacing: -1.2px; }
-  .top h1 span { background: linear-gradient(90deg, #f0a37f, #ffffff 55%, #9fb4ff); -webkit-background-clip: text; color: transparent; }
-  .top p { margin-top: 12px; font-size: 21px; color: #b4b7c2; }
-  .top p.zh { margin-top: 6px; font-size: 17px; color: #8c909c; }
+  body { width: 1280px; height: 640px; overflow: hidden; position: relative; color: #f5f5f7;
+         font-family: -apple-system, "SF Pro Display", "SF Pro Text", "Helvetica Neue", sans-serif;
+         background: #0b0c10; -webkit-font-smoothing: antialiased; }
+  .aurora { position: absolute; inset: 0;
+    background:
+      radial-gradient(420px 260px at 30% 62%, rgba(235, 128, 86, .30), transparent 70%),
+      radial-gradient(420px 260px at 50% 55%, rgba(170, 110, 255, .26), transparent 70%),
+      radial-gradient(420px 260px at 70% 62%, rgba(92, 150, 255, .30), transparent 70%),
+      radial-gradient(900px 400px at 50% -10%, rgba(255,255,255,.07), transparent 70%); filter: blur(10px); }
 
-  .win { position: absolute; top: 210px; width: 470px; height: 330px; border-radius: 18px; overflow: hidden;
-         background: #1c1e25; border: 1px solid #2e313b; box-shadow: 0 30px 80px rgba(0,0,0,.55); }
-  .left { left: 70px; transform: rotate(-2deg); }
-  .right { right: 70px; transform: rotate(2deg); }
-  .bar { height: 42px; display: flex; align-items: center; gap: 8px; padding: 0 16px; background: #23262f; border-bottom: 1px solid #2e313b; }
-  .dot { width: 11px; height: 11px; border-radius: 50%; background: #3a3e4a; }
-  .bar b { margin-left: 10px; font-size: 15px; font-weight: 650; }
-  .left .bar b { color: #f0a37f; } .right .bar b { color: #9fb4ff; }
-  .body { padding: 18px; display: flex; flex-direction: column; gap: 11px; font-size: 14.5px; line-height: 1.4; }
-  .msg { padding: 10px 13px; border-radius: 12px; max-width: 88%; }
-  .me { align-self: flex-end; background: #313543; color: #e8e9ee; }
-  .ai { background: transparent; color: #c9ccd6; padding-left: 0; }
-  .todo { color: #c9ccd6; font-size: 14px; line-height: 1.65; }
-  .todo i { font-style: normal; color: #7ee2a8; } .todo u { text-decoration: none; color: #f5c46b; }
-  .limit { margin-top: 2px; padding: 11px 13px; border-radius: 12px; background: rgba(239, 92, 92, .13); border: 1px solid rgba(239, 92, 92, .45);
-           color: #ff9c9c; font-weight: 600; font-size: 14.5px; }
-  .limit small { display: block; font-weight: 400; color: #d98a8a; font-size: 13px; margin-top: 2px; }
-  .sync { padding: 10px 13px; border-radius: 12px; background: rgba(159, 180, 255, .11); border: 1px solid rgba(159, 180, 255, .4); color: #c3d0ff; font-size: 14px; }
-  .sync b { color: #e3e9ff; }
+  header { position: absolute; top: 44px; left: 0; right: 0; text-align: center; }
+  h1 { font-size: 84px; font-weight: 800; letter-spacing: -2.6px; line-height: 1; }
+  h1 .dim { color: #a1a1aa; font-weight: 700; }
+  .slogan { margin-top: 18px; font-size: 30px; font-weight: 500; letter-spacing: -.3px; color: #e4e4e7; }
 
-  .hub { position: absolute; left: 50%; top: 318px; transform: translate(-50%, -50%); width: 128px; height: 128px; border-radius: 50%;
-         background: #0b0c10; border: 2px solid #3a3e4a; display: grid; place-items: center;
-         box-shadow: 0 0 0 10px rgba(255,255,255,.03), 0 0 60px rgba(159,180,255,.35), 0 0 60px rgba(240,163,127,.25) inset; }
-  .hub svg { width: 66px; height: 66px; }
-  .wire { position: absolute; top: 316px; height: 3px; width: 120px; background: repeating-linear-gradient(90deg, #6b7080 0 10px, transparent 10px 18px); }
-  .wire.l { left: 520px; } .wire.r { right: 520px; }
+  .row { position: absolute; top: 236px; left: 64px; right: 64px; display: flex; gap: 28px; }
+  .step { flex: 1; }
+  .win { height: 252px; border-radius: 14px; overflow: hidden; position: relative;
+         background: rgba(30, 31, 38, .72); backdrop-filter: blur(24px);
+         border: 1px solid rgba(255,255,255,.10);
+         box-shadow: 0 0 0 .5px rgba(0,0,0,.6), 0 24px 60px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.06); }
+  .bar { height: 36px; display: flex; align-items: center; padding: 0 14px; gap: 8px;
+         background: rgba(255,255,255,.04); border-bottom: 1px solid rgba(255,255,255,.07); }
+  .tl { width: 12px; height: 12px; border-radius: 50%; }
+  .r { background: #ff5f57; } .y { background: #febc2e; } .g { background: #28c840; }
+  .bar span.t { flex: 1; text-align: center; margin-right: 52px; font-size: 13.5px; font-weight: 600; color: #d4d4d8; }
+  .in { padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; font-size: 14.5px; line-height: 1.42; }
+  .me { align-self: flex-end; max-width: 88%; padding: 8px 12px; border-radius: 12px; background: rgba(255,255,255,.10); color: #f4f4f5; }
+  .ai { color: #c4c4cc; }
+  .warn { padding: 10px 12px; border-radius: 10px; background: rgba(255, 95, 87, .14); border: 1px solid rgba(255, 95, 87, .42); color: #ffb1ab; font-weight: 600; }
+  .warn small { display: block; font-weight: 400; color: #e79a95; font-size: 13px; margin-top: 2px; }
+  .note { padding: 10px 12px; border-radius: 10px; background: rgba(92, 150, 255, .13); border: 1px solid rgba(92, 150, 255, .42); color: #c7d8ff; }
+  .note b { color: #fff; }
+  code { font-family: "SF Mono", Menlo, monospace; font-size: 13px; color: #e4e4e7; }
 
-  .foot { position: absolute; bottom: 34px; left: 0; right: 0; display: flex; justify-content: center; gap: 26px; font-size: 16px; color: #8c909c; }
-  .foot b { color: #e9eaee; font-weight: 700; }
-  .pill { padding: 6px 14px; border-radius: 999px; border: 1px solid #343846; background: #181a21; }
+  /* the menu bar step */
+  .menubar { height: 26px; display: flex; align-items: center; justify-content: flex-end; gap: 14px; padding: 0 12px;
+             background: rgba(255,255,255,.06); border-bottom: 1px solid rgba(255,255,255,.07); font-size: 13px; color: #d4d4d8; }
+  .menubar .x { padding: 1px 7px; border-radius: 5px; background: rgba(255,255,255,.22); color: #fff; font-weight: 700; }
+  .menu { margin: 8px 14px 0 auto; width: 300px; border-radius: 10px; padding: 6px; background: rgba(44, 45, 54, .92);
+          border: 1px solid rgba(255,255,255,.12); box-shadow: 0 16px 40px rgba(0,0,0,.5); font-size: 13.5px; }
+  .menu .h { padding: 4px 10px 6px; font-weight: 700; color: #fff; }
+  .menu .h i { font-style: normal; font-weight: 400; color: #8f8f99; margin-left: 6px; }
+  .menu .cap { padding: 6px 10px 3px; font-size: 11.5px; letter-spacing: .4px; color: #8f8f99; }
+  .menu .it { padding: 5px 10px; border-radius: 6px; color: #e4e4e7; }
+  .menu .sel { background: #0a64d8; color: #fff; }
+  .menu .sep { height: 1px; margin: 5px 8px; background: rgba(255,255,255,.1); }
+
+  .label { margin-top: 16px; text-align: center; font-size: 17px; font-weight: 600; color: #f4f4f5; }
+  .label em { font-style: normal; display: inline-grid; place-items: center; width: 24px; height: 24px; margin-right: 8px;
+              border-radius: 50%; background: rgba(255,255,255,.12); font-size: 13px; vertical-align: 1px; }
+
+  footer { position: absolute; bottom: 30px; left: 0; right: 0; display: flex; justify-content: center; align-items: center; gap: 14px;
+           font-size: 30px; font-weight: 600; letter-spacing: -.2px; color: #e4e4e7; }
+  footer svg { width: 34px; height: 34px; fill: #e4e4e7; }
 </style></head>
 <body>
-  <div class="top">
-    <h1>Out of usage? <span>Keep going in the other app.</span></h1>
-    <p>ccx syncs task memory between Claude Code and Codex, so you never wait for a reset.</p>
-    <p class="zh">额度用完不用干等：Claude Code 和 Codex 之间无缝接力，同一个任务、同一段对话</p>
-  </div>
+  <div class="aurora"></div>
 
-  <div class="win left">
-    <div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><b>Claude Code</b></div>
-    <div class="body">
-      <div class="msg me">Ship the pricing page and fix the checkout bug</div>
-      <div class="todo"><i>✓</i> Pricing table · <i>✓</i> Stripe webhook · <u>◐</u> Checkout bug</div>
-      <div class="msg ai">Found it: the coupon is applied twice. Patching <code>cart.ts</code>…</div>
-      <div class="limit">Usage limit reached<small>Resets in 4 h 52 min</small></div>
+  <header>
+    <h1>ccx <span class="dim">-</span> claudecodex</h1>
+    <div class="slogan">One task memory, synced between Claude Code and Codex.</div>
+  </header>
+
+  <div class="row">
+    <div class="step">
+      <div class="win">
+        <div class="bar"><span class="tl r"></span><span class="tl y"></span><span class="tl g"></span><span class="t">Claude Code</span></div>
+        <div class="in">
+          <div class="me">Ship the pricing page and fix the checkout bug</div>
+          <div class="ai">Pricing page done. Found the bug: the coupon is applied twice in <code>cart.ts</code>…</div>
+          <div class="warn">Usage limit reached<small>Resets in 4 h 52 min</small></div>
+        </div>
+      </div>
+      <div class="label"><em>1</em>Claude Code hits its usage limit</div>
+    </div>
+
+    <div class="step">
+      <div class="win">
+        <div class="menubar"><span>Wi‑Fi</span><span class="x">⇄</span><span>Fri 9:41</span></div>
+        <div class="menu">
+          <div class="h">ccx - claudecodex<i>@aaron0x10</i></div>
+          <div class="sep"></div>
+          <div class="cap">TRANSFER TO CODEX · FROM CLAUDE</div>
+          <div class="it sel">✓  Ship pricing page, fix checkout</div>
+          <div class="it">○  Refactor auth middleware</div>
+          <div class="it">○  Write release notes</div>
+        </div>
+      </div>
+      <div class="label"><em>2</em>Click ⇄ in the menu bar</div>
+    </div>
+
+    <div class="step">
+      <div class="win">
+        <div class="bar"><span class="tl r"></span><span class="tl y"></span><span class="tl g"></span><span class="t">Codex</span></div>
+        <div class="in">
+          <div class="note"><b>ccx</b> brought in 14 updates from Claude Code: the plan, the bug, where it stopped.</div>
+          <div class="me">continue</div>
+          <div class="ai">Fixing the double coupon in <code>cart.ts</code>, then running the tests.</div>
+        </div>
+      </div>
+      <div class="label"><em>3</em>Codex picks up where Claude stopped</div>
     </div>
   </div>
 
-  <div class="wire l"></div><div class="wire r"></div>
-  <div class="hub">
-    <svg viewBox="0 0 64 64" fill="none" stroke="#fff" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M48 20H16M26 10 16 20l10 10"/><path d="M16 44h32M38 34l10 10-10 10"/>
-    </svg>
-  </div>
-
-  <div class="win right">
-    <div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><b>Codex</b></div>
-    <div class="body">
-      <div class="sync"><b>⇄ ccx</b> brought in 14 updates from Claude Code: the plan, the open bug, and where it stopped</div>
-      <div class="msg me">continue</div>
-      <div class="msg ai">Picking up at the checkout bug: removing the second coupon pass in <code>cart.ts</code>, then running the tests.</div>
-      <div class="todo"><i>✓</i> Pricing table · <i>✓</i> Stripe webhook · <i>✓</i> Checkout bug</div>
-    </div>
-  </div>
-
-  <div class="foot">
-    <span class="pill"><b>ccx - claudecodex</b> · free &amp; open source</span>
-    <span class="pill">macOS · menu bar ⇄ · one-line install</span>
-    <span class="pill">by <b>@aaron0x10</b></span>
-  </div>
+  <footer>
+    <svg viewBox="0 0 16 16"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+    github.com/aaronwong1999/ccx
+  </footer>
 </body></html>

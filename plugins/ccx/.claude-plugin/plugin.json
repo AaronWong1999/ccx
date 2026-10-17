@@ -1,7 +1,7 @@
 {
   "name": "ccx",
   "version": "0.0.27",
-  "description": "ccx - claudecodex: sync task memory between Claude Code and Codex. Import a Codex thread into this conversation, keep both in sync, or hand this conversation to Codex.",
+  "description": "ccx - claudecodex: one task memory, synced between Claude Code and Codex. Import a Codex thread into this conversation, keep both in sync, or hand this conversation to Codex.",
   "author": {
     "name": "Aaron Wong",
     "url": "https://github.com/aaronwong1999"

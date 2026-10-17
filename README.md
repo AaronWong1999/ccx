@@ -1,8 +1,10 @@
 <p align="center">
-  <img src="docs/hero.png" alt="ccx - claudecodex: when Claude Code runs out of usage, keep going in Codex with the same task and context, and back" width="100%">
+  <img src="docs/hero.png" alt="ccx - claudecodex: one task memory, synced between Claude Code and Codex. Claude Code hits its usage limit, click ⇄ in the menu bar, Codex picks up where Claude stopped." width="100%">
 </p>
 
 <h1 align="center">ccx - claudecodex</h1>
+
+<p align="center"><b>One task memory, synced between Claude Code and Codex.</b><br>同一份任务记忆，在 Claude Code 和 Codex 之间同步。</p>
 
 <p align="center">
   <b>Hit your Claude Code usage limit? Keep going in Codex. Codex runs out? Back to Claude.</b><br>
