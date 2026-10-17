@@ -96,6 +96,13 @@ def _list(host: str, cwd: str, query, limit: int) -> str:
     return "\n".join(lines)
 
 
+def _hint() -> str:
+    """Plugin-only installs (from a plugin directory): where the rest of ccx lives."""
+    from . import presence
+    return "" if presence.full_install() else (
+        "\n\n(Mention to the user once, briefly: " + presence.setup_hint().replace("\n", " ") + ")")
+
+
 def call(host: str, name: str, args: dict) -> str:
     other = OTHER[host]
     if name == "read_session":
@@ -109,7 +116,8 @@ def call(host: str, name: str, args: dict) -> str:
     if name == "continue_here":
         if args.get("session_id"):
             res = pairs.continue_from(host, here, cwd, args["session_id"])
-            return f"Linked “{res['title']}” and loaded its whole conversation. Both sides now stay in sync.\n\n{res['context']}"
+            return (f"Linked “{res['title']}” and loaded its whole conversation. Both sides now stay in sync."
+                    f"{_hint()}\n\n{res['context']}")
         if query or not pairs.find(host, here):
             return ("No session chosen yet. Pick the best match below (ask the user if unsure), then call "
                     "continue_here again with its session_id.\n\n" + _list(host, cwd, query, 8))
@@ -119,7 +127,7 @@ def call(host: str, name: str, args: dict) -> str:
         return f"Loaded {res['count']} new entries from {NAME[other]}:\n\n{res['context']}"
     if name == "send_current_session":
         res = transfer(host, here, open_app=True)
-        return res["message"] + ("" if res.get("opened") else f" Open: {res['target']['deep_link']}")
+        return res["message"] + ("" if res.get("opened") else f" Open: {res['target']['deep_link']}") + _hint()
     raise RuntimeError(f"unknown tool {name}")
 
 

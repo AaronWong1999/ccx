@@ -155,7 +155,17 @@ def wrap(body: str, src: Session, here_cwd: str, first: bool) -> str:
 
 
 def pull(here_tool: str, here_id: str, budget: int = HOOK_BUDGET) -> Optional[dict]:
-    """The partner's progress since the last sync, or None. Advances the cursor."""
+    """The partner's progress since the last sync, or None. Advances the cursor.
+    Serialized across processes, so two copies of the hook (e.g. a plugin from a
+    directory next to the script-installed one) never deliver the same updates twice."""
+    import fcntl
+    STATE_DIR.mkdir(parents=True, exist_ok=True)
+    with open(STATE_DIR / "sync.lock", "w") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        return _pull(here_tool, here_id, budget)
+
+
+def _pull(here_tool: str, here_id: str, budget: int) -> Optional[dict]:
     pair = find(here_tool, here_id)
     if not pair:
         return None

@@ -14,7 +14,7 @@ import time
 from pathlib import Path
 from typing import List, Optional, Tuple
 
-from . import __version__, claude, codex, pairs, repairs
+from . import __version__, claude, codex, pairs, presence, repairs
 from .common import HOME, STATE_DIR
 
 REPO = "aaronwong1999/ccx"
@@ -85,9 +85,9 @@ def _add_marketplace(cli: str, tool: str, source: str):
         run([cli, "plugin", "marketplace", "remove", "ccx"])
     run([cli, "plugin", "marketplace", "add", source])
 
-def _claude_installed(cli: str) -> Optional[str]:
+def _claude_installed(cli: str, plugin_id: str = presence.OURS) -> Optional[str]:
     _, out = run([cli, "plugin", "list"])
-    m = re.search(r"ccx@ccx\s*\n\s*Version:\s*(\S+)", out)
+    m = re.search(re.escape(plugin_id) + r"\s*\n\s*Version:\s*(\S+)", out)
     return m.group(1) if m else None
 
 
@@ -98,23 +98,14 @@ def claude_app() -> bool:
     return any(Path(a).exists() for a in CLAUDE_APPS)
 
 
-_UNSET = object()
-
-
-def needs_setup(codex_trusted=_UNSET) -> List[str]:
+def needs_setup() -> List[str]:
     """Apps that are here now but don't have ccx yet (installed after ccx was)."""
     out = []
-    if claude.desktop_cli():
-        try:
-            known = json.loads((HOME / ".claude/plugins/installed_plugins.json").read_text())
-            known = known.get("plugins", known)
-        except (OSError, ValueError):
-            known = {}
-        if "ccx@ccx" not in known:
-            out.append("claude")
+    if claude.desktop_cli() and not presence.claude_copies():
+        out.append("claude")
     try:
         codex.codex_bin()
-        if (codex.hooks_trusted() if codex_trusted is _UNSET else codex_trusted) is None:
+        if not presence.codex_copies():
             out.append("codex")
     except RuntimeError:
         pass
@@ -130,6 +121,16 @@ def setup_claude(source: str, quiet: bool = False) -> bool:
         return False
     run([cli, "plugin", "uninstall", f"{LEGACY}@{LEGACY}"])
     run([cli, "plugin", "marketplace", "remove", LEGACY])
+    other = next((c for c in presence.claude_copies() if c != presence.OURS), None)
+    if other:
+        # Installed from a plugin directory: keep that one (it updates from the
+        # directory, which tracks our release tags) and never run a second copy.
+        if presence.OURS in presence.claude_copies():
+            run([cli, "plugin", "uninstall", presence.OURS])
+        run([cli, "plugin", "marketplace", "remove", "ccx"])
+        say(True, f"Claude: using ccx {_claude_installed(cli, other) or ''} from the plugin directory ({other}); "
+                  "no second copy installed", quiet)
+        return True
     _add_marketplace(cli, "claude", source)
     run([cli, "plugin", "marketplace", "update", "ccx"])
     run([cli, "plugin", "install", "ccx@ccx"])
@@ -153,6 +154,17 @@ def setup_codex(source: str, quiet: bool = False) -> bool:
         return False
     run([cli, "plugin", "remove", f"{LEGACY}@{LEGACY}"])
     run([cli, "plugin", "marketplace", "remove", LEGACY])
+    other = next((c for c in presence.codex_copies() if c != presence.OURS), None)
+    if other:
+        if presence.OURS in presence.codex_copies():
+            run([cli, "plugin", "remove", presence.OURS])
+        run([cli, "plugin", "marketplace", "remove", "ccx"])
+        try:
+            codex.trust_hooks()
+        except Exception:
+            pass
+        say(True, f"Codex: using ccx from the plugin directory ({other}); no second copy installed", quiet)
+        return True
     _add_marketplace(cli, "codex", source)
     run([cli, "plugin", "marketplace", "upgrade", "ccx"])
     code, out = run([cli, "plugin", "add", "ccx@ccx"])
@@ -315,8 +327,11 @@ def doctor() -> int:
     rows.append((bool(cli), f"Claude Code: {cli}" if cli else "Claude Code: " + (
         "open Claude and click Code once" if claude_app() else "Claude desktop app not installed")))
     if cli:
-        v = _claude_installed(cli)
-        rows.append((bool(v), f"Claude plugin: ccx {v}" if v else "Claude plugin: not installed (run `ccx setup`)"))
+        copies = presence.claude_copies()
+        v = _claude_installed(cli, copies[0]) if copies else None
+        rows.append((len(copies) == 1, f"Claude plugin: ccx {v} ({copies[0]})" if len(copies) == 1 else
+                     f"Claude plugin: {len(copies)} copies {copies} (run `ccx setup` to keep one)" if copies
+                     else "Claude plugin: not installed (run `ccx setup`)"))
     try:
         rows.append((True, f"Codex: {codex.codex_bin()}"))
         trusted = codex.hooks_trusted()

@@ -83,6 +83,7 @@ Nothing else asks for passwords, admin rights or accessibility access.<br>除此
 
 - **Only one app installed:** ccx sets that one up; install the other later and the menu bar icon finishes setup by itself.<br>**只装了一个 app：** 先装好这一个；之后装上另一个，菜单栏图标会自动补装。
 - **Claude installed but Code never opened:** open Claude and click **Code** once; ccx then finishes setup by itself.<br>**装了 Claude 但没点过 Code：** 打开 Claude 点一次 **Code**，ccx 会自动补装。
+- **Installed ccx from a plugin directory:** run the install command anyway to add the ⇄ menu bar and the other app's side. It keeps the plugin you already have and never installs a second copy.<br>**从插件目录装过 ccx：** 照样运行安装命令，补上菜单栏 ⇄ 和另一个 app 那一半。它会沿用你已经装好的插件，不会再装第二份。
 - **Neither app:** the installer stops with download links and changes nothing.<br>**两个都没装：** 安装脚本给出下载链接后停下，不做任何改动。
 - **Anything else:** `ccx doctor` lists what's missing, `ccx setup` repairs, and re-running the install command is always safe.<br>**其他情况：** `ccx doctor` 列出缺什么，`ccx setup` 修复，重复运行安装命令总是安全的。
 

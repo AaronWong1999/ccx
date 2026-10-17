@@ -487,6 +487,57 @@ class Interfaces(Base):
             self.cx.append("x-g2", amsg("又做了一点"))
             self.assertNotIn("做到能发布", pairs.pull("claude", "c-g2")["context"])  # unchanged goal: not repeated
 
+    def test_presence_finds_every_copy_of_the_plugin(self):
+        from ccx import presence
+        home = Path(tempfile.mkdtemp())
+        (home / ".claude/plugins").mkdir(parents=True)
+        (home / ".claude/plugins/installed_plugins.json").write_text(json.dumps(
+            {"version": 2, "plugins": {"ccx@ccx": [{}], "ccx@claude-plugins-official": [{}], "other@x": [{}]}}))
+        (home / ".codex").mkdir()
+        (home / ".codex/config.toml").write_text('[plugins."ccx@ccx"]\nenabled = true\n\n[plugins."foo@bar"]\n')
+        with mock.patch.object(presence, "HOME", home), mock.patch.object(codex, "CODEX_HOME", home / ".codex"):
+            self.assertEqual(presence.claude_copies(), ["ccx@ccx", "ccx@claude-plugins-official"])
+            self.assertEqual(presence.codex_copies(), ["ccx@ccx"])
+
+    def test_plugin_only_install_points_to_the_rest_a_few_times(self):
+        from ccx import presence
+        now = [0.0]
+        with mock.patch.object(presence, "MENU_APP", Path("/nonexistent/ccx.app")), \
+                mock.patch.object(presence, "NUDGE", Path(tempfile.mkdtemp()) / "n.json"), \
+                mock.patch.object(presence.time, "time", side_effect=lambda: now[0]):
+            self.assertTrue(presence.nudge_due())       # first time
+            now[0] = 60
+            self.assertFalse(presence.nudge_due())      # too soon
+            for _ in range(2):
+                now[0] += presence.NUDGE_GAP + 1
+                self.assertTrue(presence.nudge_due())   # a day later, twice more
+            now[0] += presence.NUDGE_GAP + 1
+            self.assertFalse(presence.nudge_due())      # shown 3 times: never again
+        self.assertIn("github.com/aaronwong1999/ccx", presence.setup_hint())
+        with mock.patch.object(presence, "MENU_APP", Path(tempfile.mkdtemp())):
+            self.assertFalse(presence.nudge_due())      # full install: no hint
+
+    def test_two_copies_of_the_hook_deliver_once(self):
+        import threading
+        claude_file(PROJ_A, "c-twice", [user("go")])
+        self.cx.add("x-twice", PROJ_A, "go", [umsg("go")])
+        pairs.link(pairs.side("claude", "c-twice"), pairs.side("codex", "x-twice"))
+        self.cx.append("x-twice", amsg("done once"))
+        got = []
+        ts = [threading.Thread(target=lambda: got.append(pairs.pull("claude", "c-twice"))) for _ in range(2)]
+        [t.start() for t in ts]; [t.join() for t in ts]
+        self.assertEqual(sum(1 for r in got if r), 1)
+
+    def test_setup_keeps_a_directory_copy_and_never_installs_a_second(self):
+        from ccx import install, presence
+        calls = []
+        with mock.patch.object(claude, "desktop_cli", return_value="/x/claude"), \
+                mock.patch.object(presence, "claude_copies", return_value=["ccx@ccx", "ccx@claude-plugins-official"]), \
+                mock.patch.object(install, "run", side_effect=lambda cmd, timeout=300: calls.append(cmd) or (0, "")):
+            self.assertTrue(install.setup_claude("/src", quiet=True))
+        self.assertIn(["/x/claude", "plugin", "uninstall", "ccx@ccx"], calls)
+        self.assertFalse(any(c[1:3] == ["plugin", "install"] for c in calls))
+
     def test_compaction_resets_context_size(self):
         c = claude_file(PROJ_A, "c-compact", [user("hi"), assistant(text("ok"))])
         with open(c, "a") as f:

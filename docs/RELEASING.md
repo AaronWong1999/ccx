@@ -46,3 +46,9 @@ Everyone who uses ccx already uses AI coding tools, so the script is the lower-f
 - The repository, plugin and app are named **ccx**; "ccx - claudecodex" is the display name.
 - Describe what it works with ("for Claude Code and Codex"), and keep the "not affiliated with Anthropic or OpenAI" line.
 - ccx only uses the apps' public plugin systems, Codex's app-server API and deep links. It reads and writes local files only and never touches accounts or credentials.
+
+## Plugin directories
+
+The plugin can also be listed in an app's plugin directory (the Claude plugin directory: claude.ai/directory/manage → Submit new → Plugin bundle; the repository must be public before the listing goes live). Track release **tags**, not `main`, so the directory ships the same versions as the install script.
+
+A directory install is only the plugin. It points people to this repository (plugin description; a short notice in Claude at most 3 times, a day apart; MCP tool results) to install the menu bar and the other app's side. The install script and `ccx setup`/`update` detect a directory copy (`ccx@<marketplace>` other than `ccx@ccx`), keep it, remove the script's own copy if both exist, and never install a second one. Syncing is serialized with a lock, so even two copies never deliver the same updates twice.

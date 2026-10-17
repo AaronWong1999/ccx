@@ -123,7 +123,7 @@ def main(argv=None):
             d = menu_data()
             d["version"] = __version__
             d["codex_hook_trusted"] = codex.hooks_trusted()
-            d["needs_setup"] = install.needs_setup(d["codex_hook_trusted"])
+            d["needs_setup"] = install.needs_setup()
             print(json.dumps(d, ensure_ascii=False))
         elif a.cmd == "estimate":
             print(json.dumps(estimate(a.tool, a.session)))
