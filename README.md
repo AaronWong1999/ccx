@@ -123,6 +123,10 @@ The ⇄ menu lists recent projects and both sides' sessions: ○ not linked yet 
 
 **要先关掉某个 app 吗？会上传什么吗？** 都不用。Codex 的数据只通过 Codex 自己的 app-server 接口读写，同步只是往当前对话里加上下文，全部在本机运行。
 
+**Behind a proxy, for example in mainland China?** ccx reaches GitHub only to install and to check for updates (every 3 hours, with `git`); syncing itself is entirely local. It uses a proxy from your environment, or else the system proxy set in System Settings → Network (what Clash and similar apps set), including for the menu bar app, which has no terminal environment. If GitHub is unreachable, the check just fails quietly and runs again later.
+
+**在代理环境下（比如中国大陆）能用吗？** ccx 只在安装和检查更新时访问 GitHub（每 3 小时一次，用 `git`），同步本身完全在本机进行。它会使用环境变量里的代理；没有的话，就用系统设置 → 网络里的系统代理（Clash 等工具设置的就是这个），菜单栏程序没有终端环境，也同样适用。如果连不上 GitHub，这次检查会静默失败，之后再试。
+
 **What if the two sides work in different folders?** ccx says so, and the model asks whether to switch folders or use the progress as reference. For two worktrees of one repo it shows both branches.
 
 **两边的工作目录不一样怎么办？** ccx 会写明这一点，模型会先问你：切换到那个目录接着干，还是只拿来参考。同一个仓库的两个 worktree 还会显示两边的分支。

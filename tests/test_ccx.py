@@ -7,6 +7,7 @@ are written to a temp dir and Codex's app-server API is replaced by a fake.
 import io
 import json
 import os
+import subprocess
 import sys
 import tempfile
 import time
@@ -537,6 +538,15 @@ class Interfaces(Base):
             self.assertTrue(install.setup_claude("/src", quiet=True))
         self.assertIn(["/x/claude", "plugin", "uninstall", "ccx@ccx"], calls)
         self.assertFalse(any(c[1:3] == ["plugin", "install"] for c in calls))
+
+    def test_git_uses_the_system_proxy_unless_one_is_set(self):
+        from ccx import common
+        out = "<dictionary> {\n  HTTPSEnable : 1\n  HTTPSPort : 7890\n  HTTPSProxy : 127.0.0.1\n}"
+        done = subprocess.CompletedProcess([], 0, out, "")
+        with mock.patch.dict(os.environ, {}, clear=True), mock.patch.object(common.subprocess, "run", return_value=done):
+            self.assertEqual(common.proxy_env()["https_proxy"], "http://127.0.0.1:7890")
+        with mock.patch.dict(os.environ, {"https_proxy": "http://mine:1"}, clear=True):
+            self.assertEqual(common.proxy_env()["https_proxy"], "http://mine:1")
 
     def test_compaction_resets_context_size(self):
         c = claude_file(PROJ_A, "c-compact", [user("hi"), assistant(text("ok"))])

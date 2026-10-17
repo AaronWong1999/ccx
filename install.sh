@@ -55,6 +55,19 @@ say ""
 
 # --- download / update the code (the newest release, never untagged commits) -
 export GIT_TERMINAL_PROMPT=0
+# git ignores the Mac's system proxy (System Settings → Network, set by apps like
+# Clash); use it unless a proxy is already set in the environment.
+if [ -z "${https_proxy:-}${HTTPS_PROXY:-}${all_proxy:-}${ALL_PROXY:-}" ]; then
+  P="$(/usr/sbin/scutil --proxy 2>/dev/null)"
+  for kind in HTTPS HTTP SOCKS; do
+    if printf '%s' "$P" | grep -q "${kind}Enable : 1"; then
+      host="$(printf '%s' "$P" | awk -v k="${kind}Proxy" '$1==k {print $3}')"
+      port="$(printf '%s' "$P" | awk -v k="${kind}Port" '$1==k {print $3}')"
+      scheme=http; [ "$kind" = SOCKS ] && scheme=socks5h
+      [ -n "$host" ] && export https_proxy="$scheme://$host:${port:-80}" http_proxy="$scheme://$host:${port:-80}" all_proxy="$scheme://$host:${port:-80}" && break
+    fi
+  done
+fi
 if [ -d "$DEST/.git" ]; then
   git -C "$DEST" fetch --quiet --force --tags origin || { say "Could not reach github.com/$REPO (no network?). Try again later."; exit 1; }
 else

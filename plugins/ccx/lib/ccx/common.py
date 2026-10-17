@@ -210,3 +210,27 @@ def image_line(path: Optional[str]) -> str:
 def strip_files_header(text: str) -> str:
     """Codex prefixes a message with its attachments; the images are listed separately."""
     return _FILES_MENTIONED.sub("", text, count=1)
+
+
+# ------------------------------------------------------------------ network
+
+def proxy_env() -> dict:
+    """The environment for reaching GitHub, with the Mac's system proxy filled in.
+
+    The menu bar app starts at login without a shell, so proxy variables set in
+    ~/.zshrc never reach it, and git ignores the system proxy (System Settings →
+    Network, which apps like Clash set). Use that proxy unless one is already set."""
+    env = dict(os.environ)
+    if any(env.get(k) for k in ("https_proxy", "HTTPS_PROXY", "all_proxy", "ALL_PROXY")):
+        return env
+    try:
+        out = subprocess.run(["/usr/sbin/scutil", "--proxy"], capture_output=True, text=True, timeout=5).stdout
+    except (OSError, subprocess.SubprocessError):
+        return env
+    conf = dict(re.findall(r"^\s*(\w+)\s*:\s*(\S+)", out, re.M))
+    for kind, scheme in (("HTTPS", "http"), ("HTTP", "http"), ("SOCKS", "socks5h")):
+        if conf.get(f"{kind}Enable") == "1" and conf.get(f"{kind}Proxy"):
+            url = f"{scheme}://{conf[kind + 'Proxy']}:{conf.get(kind + 'Port', '80')}"
+            env.update(https_proxy=url, http_proxy=url, all_proxy=url)
+            break
+    return env

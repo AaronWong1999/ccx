@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import List, Optional, Tuple
 
 from . import __version__, claude, codex, pairs, presence, repairs
-from .common import HOME, STATE_DIR
+from .common import HOME, STATE_DIR, proxy_env
 
 REPO = "aaronwong1999/ccx"
 REPO_URL = f"https://github.com/{REPO}"
@@ -29,8 +29,10 @@ LEGACY = "claudecodex"
 
 
 def run(cmd: List[str], timeout: int = 300) -> Tuple[int, str]:
+    # git talks to GitHub: give it the system proxy (the menu bar app has no shell env).
+    env = proxy_env() if cmd and cmd[0] == "git" else None
     try:
-        r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, env=env)
         return r.returncode, (r.stdout + r.stderr).strip()
     except (OSError, subprocess.TimeoutExpired) as e:
         return 1, str(e)
