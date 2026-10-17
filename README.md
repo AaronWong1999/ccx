@@ -20,12 +20,10 @@
 </p>
 
 <p align="center">
-  Built by <a href="https://x.com/aaron0x10"><b>Aaron (@aaron0x10)</b></a>, who also made <a href="https://github.com/AaronWong1999/hermesclaw">HermesClaw</a> (featured in the official <a href="https://github.com/NousResearch/hermes-agent">Hermes Agent</a> README). Follow on X for updates and new tools.<br>
-  作者 <a href="https://x.com/aaron0x10"><b>Aaron（@aaron0x10）</b></a>，也是 <a href="https://github.com/AaronWong1999/hermesclaw">HermesClaw</a> 的作者（被 Hermes Agent 官方 README 收录）。关注 X 获取更新和新工具。
+  Built by <a href="https://x.com/aaron0x10"><b>Aaron (@aaron0x10)</b></a>, who also made <a href="https://github.com/AaronWong1999/hermesclaw">HermesClaw</a> (featured in the official <a href="https://github.com/NousResearch/hermes-agent">Hermes Agent</a> README).
 </p>
 
 > ccx is an independent open-source project, not affiliated with Anthropic or OpenAI. "Claude", "Claude Code" and "Codex" are trademarks of their owners.
-> ccx 是独立的开源项目，与 Anthropic、OpenAI 无关。"Claude"、"Claude Code"、"Codex" 是其所有者的商标。
 
 ## Why ccx · 为什么需要它
 
@@ -67,117 +65,75 @@ curl -fsSL https://raw.githubusercontent.com/aaronwong1999/ccx/main/install.sh |
 
 ### What you may be asked · 可能出现的确认
 
-| When | What you see | What to do |
+| When · 时机 | What you see · 你会看到 | What to do · 怎么做 |
 |---|---|---|
-| Installing through Claude Code or Codex | The app asks to run the command. In Codex it may ask to run it outside the sandbox or with network access. | Allow it. |
-| Apple's Command Line Tools are missing (git, python3, swiftc) | A macOS window: "The xcode-select command requires the command line developer tools". | Click **Install**, accept the license, wait 5–10 minutes, then run the install command again. |
-| The menu bar icon is set to start at login | A macOS notice: "Background Items Added". | Nothing; keep it on (System Settings → General → Login Items lists it). |
-| ccx shows a result or update notice | A request to allow notifications (macOS may show it as "Script Editor"). | Allow, so you see sync results. |
-| ccx opens a project in Codex for the first time | Codex: "Trust this folder?" | Trust it if it's your project; this is Codex's own safety check. |
+| Installing through Claude Code or Codex<br>让 Claude Code 或 Codex 帮你安装 | The app asks to run the command; Codex may ask to run it outside the sandbox or with network access.<br>app 询问是否运行这条命令；Codex 可能询问是否在沙盒外运行或允许联网 | Allow it.<br>允许 |
+| Apple's Command Line Tools are missing (git, python3, swiftc)<br>缺少苹果命令行工具 | A macOS window: "The xcode-select command requires the command line developer tools".<br>macOS 弹窗："xcode-select 命令需要命令行开发者工具" | Click **Install**, accept the license, wait 5–10 minutes, then run the install command again.<br>点**安装**、同意许可，等 5–10 分钟后再运行一次安装命令 |
+| The menu bar icon is set to start at login<br>菜单栏图标设为登录时启动 | A macOS notice: "Background Items Added".<br>macOS 通知："已添加后台项目" | Nothing; keep it on (System Settings → General → Login Items).<br>不用管，保持开启（系统设置 → 通用 → 登录项） |
+| ccx shows a result or update notice<br>ccx 显示同步结果或更新提示 | A request to allow notifications (may show as "Script Editor").<br>请求允许通知（可能显示为"脚本编辑器"） | Allow, so you see sync results.<br>允许，这样能看到同步结果 |
+| ccx opens a project in Codex for the first time<br>ccx 第一次在 Codex 里打开某个项目 | Codex: "Trust this folder?"<br>Codex："信任此文件夹吗？" | Trust it if it's your project; this is Codex's own check.<br>是你自己的项目就信任；这是 Codex 自己的检查 |
 
-| 时机 | 你会看到 | 怎么做 |
-|---|---|---|
-| 让 Claude Code 或 Codex 帮你安装 | app 询问是否运行这条命令；Codex 可能询问是否在沙盒外运行或允许联网 | 允许 |
-| 电脑缺少苹果命令行工具（git、python3、swiftc） | macOS 弹窗："xcode-select 命令需要命令行开发者工具" | 点**安装**、同意许可，等 5–10 分钟，然后再运行一次安装命令 |
-| 菜单栏图标设为登录时启动 | macOS 通知："已添加后台项目" | 不用管，保持开启（系统设置 → 通用 → 登录项里能看到） |
-| ccx 显示同步结果或更新提示 | 请求允许通知（macOS 可能显示为"脚本编辑器"） | 允许，这样能看到同步结果 |
-| ccx 第一次在 Codex 里打开某个项目 | Codex："信任此文件夹吗？" | 是你自己的项目就信任；这是 Codex 自己的安全检查 |
-
-Nothing else asks for passwords, admin rights or accessibility access.
-
-除此之外，不会要求输入密码、管理员权限或辅助功能权限。
+Nothing else asks for passwords, admin rights or accessibility access. · 除此之外，不会要求密码、管理员权限或辅助功能权限。
 
 ### What the installer does · 安装脚本做了什么
 
-1. checks your Mac: macOS version, the desktop apps, Apple's Command Line Tools. With neither app installed it stops and changes nothing;
-2. downloads ccx to `~/Library/Application Support/ccx`;
-3. installs the ccx plugin into Claude and Codex from that copy. Each plugin syncs in **both directions** with a prompt hook: whenever you send a message in a linked conversation, it brings over the other side's new progress. It never blocks a message;
-4. turns that hook on in Codex. Codex asks you to approve every third-party hook by hand, so the installer approves ccx's own hook (and only that one);
-5. builds the ⇄ menu bar icon on your Mac (so no download needs a signature) and starts it at login;
-6. adds a `ccx` command in `~/.local/bin`, and adds that folder to your PATH in `~/.zprofile` if it isn't there.
-
-1. 检查你的 Mac：系统版本、两个桌面版、苹果命令行工具。如果两个 app 都没装，它会停下，不做任何改动；
-2. 把 ccx 下载到 `~/Library/Application Support/ccx`；
-3. 用这份本地副本把 ccx 插件装进 Claude 和 Codex。两边插件都用一个"发消息前"的 hook 做**双向**同步：在已关联的对话里每发一条消息，就把另一边的新进展带过来。它从不拦截你的消息；
-4. 在 Codex 里启用这个 hook。Codex 要求每个第三方 hook 都由用户手动批准，所以安装脚本替你批准 ccx 自己的 hook，而且只批准这一个；
-5. 在本机编译菜单栏 ⇄ 图标（不用下载任何需要签名的程序），并设为登录时启动；
-6. 在 `~/.local/bin` 里加一个 `ccx` 命令；如果这个目录不在 PATH 里，会写进 `~/.zprofile`。
+1. Checks macOS, the desktop apps and Apple's Command Line Tools; with neither app installed it stops and changes nothing.<br>检查系统版本、两个桌面版和苹果命令行工具；两个 app 都没装就停下，不做任何改动。
+2. Downloads the newest release of ccx to `~/Library/Application Support/ccx`.<br>把 ccx 的最新正式版下载到 `~/Library/Application Support/ccx`。
+3. Installs the ccx plugin into Claude and Codex from that copy. Its prompt hook brings the other side's new progress into a linked conversation whenever you send a message, and never blocks a message.<br>用这份副本把 ccx 插件装进 Claude 和 Codex。它的 hook 在已关联的对话里每发一条消息就带入对面的新进展，从不拦截消息。
+4. Turns that hook on in Codex, which asks for every third-party hook to be approved; the installer approves ccx's own hook and only that one.<br>在 Codex 里启用这个 hook：Codex 要求手动批准第三方 hook，安装脚本只批准 ccx 自己的这一个。
+5. Builds the ⇄ menu bar icon on your Mac (nothing downloaded needs a signature) and starts it at login.<br>在本机编译菜单栏 ⇄ 图标（不下载任何需要签名的程序），并设为登录时启动。
+6. Adds a `ccx` command in `~/.local/bin`, and puts that folder on your PATH in `~/.zprofile` if needed.<br>在 `~/.local/bin` 加一个 `ccx` 命令，必要时把这个目录写进 `~/.zprofile` 的 PATH。
 
 ### If something's missing · 缺东西时会怎样
 
-- **Only one app installed:** ccx sets that one up. Install the other app later and the menu bar icon finishes setup by itself (or run `ccx setup`).
-- **Claude installed but never opened Code:** Claude Code isn't downloaded yet. Open Claude, click **Code** once; ccx then finishes setup by itself.
-- **Neither app:** the installer stops with download links and changes nothing.
-- **Anything else:** `ccx doctor` lists what's missing; `ccx setup` repairs; re-running the install command is always safe.
-
-- **只装了一个 app：** ccx 先在这个 app 里装好。之后装上另一个 app，菜单栏图标会自动补装（也可以运行 `ccx setup`）。
-- **装了 Claude 但没点过 Code：** Claude Code 还没下载。打开 Claude 点一次 **Code**，ccx 会自动补装。
-- **两个都没装：** 安装脚本给出下载链接后停下，不做任何改动。
-- **其他情况：** `ccx doctor` 会列出缺什么；`ccx setup` 修复；重复运行安装命令也总是安全的。
-
-**Updates:** the menu bar icon checks GitHub for a newer release every 3 hours and installs it (Settings → Install Updates Automatically), or run `ccx update`. **Uninstall:** `ccx uninstall`.
-
-**更新：** 菜单栏图标每 3 小时检查一次 GitHub 上的新版本并自动安装（可在菜单里关闭"自动安装更新"），也可以运行 `ccx update`。**卸载：** `ccx uninstall`。
+- **Only one app installed:** ccx sets that one up; install the other later and the menu bar icon finishes setup by itself.<br>**只装了一个 app：** 先装好这一个；之后装上另一个，菜单栏图标会自动补装。
+- **Claude installed but Code never opened:** open Claude and click **Code** once; ccx then finishes setup by itself.<br>**装了 Claude 但没点过 Code：** 打开 Claude 点一次 **Code**，ccx 会自动补装。
+- **Neither app:** the installer stops with download links and changes nothing.<br>**两个都没装：** 安装脚本给出下载链接后停下，不做任何改动。
+- **Anything else:** `ccx doctor` lists what's missing, `ccx setup` repairs, and re-running the install command is always safe.<br>**其他情况：** `ccx doctor` 列出缺什么，`ccx setup` 修复，重复运行安装命令总是安全的。
 
 ## Use · 使用
 
-| You want to | Do this |
+| You want to · 你想 | Do this · 怎么做 |
 |---|---|
-| Claude ran out of usage; continue in Codex | In a new Codex conversation, say **"continue the ‹name› session from Claude"**, or paste a screenshot of it and say "continue this". Or click ⇄ → project → session. |
-| Codex ran out too; go back to Claude | Open the **same** Claude conversation and send anything ("continue"). Codex's progress comes in automatically. |
-| Back to Codex again | Open the same Codex conversation and send anything. |
-| Pull progress now | Claude: `/from-codex` · Codex: `$from-claude` |
-| Hand this conversation over | Claude: `/to-codex` · Codex: `$to-claude` · or click ⇄ |
+| Claude ran out; continue in Codex<br>Claude 额度用完，到 Codex 接着干 | Click ⇄ → project → session. Or in a new Codex conversation say **"continue the ‹name› session from Claude"**, or paste a screenshot and say "continue this".<br>点 ⇄ → 项目 → 会话。或者在 Codex 新开对话说**"从 Claude 把 ‹名称› 那个会话导入，接着干"**，也可以贴截图说"接着这个干" |
+| Codex ran out too; back to Claude<br>Codex 也用完了，回到 Claude | Open the **same** Claude conversation and send anything ("continue"); Codex's progress comes in.<br>打开**原来那个** Claude 对话随便说一句（比如"继续"），Codex 的进展会自动带进来 |
+| Back to Codex again<br>再回到 Codex | Open the same Codex conversation and send anything.<br>打开原来那个 Codex 对话，随便说一句 |
+| Pull progress now<br>立刻同步一下 | Claude: `/from-codex` · Codex: `$from-claude` |
+| Hand this conversation over<br>把当前对话交给另一边 | Claude: `/to-codex` · Codex: `$to-claude` · or click ⇄ · 或点 ⇄ |
 
-| 你想 | 怎么做 |
-|---|---|
-| Claude 额度用完，到 Codex 接着干 | 在 Codex 新开对话，说**"从 Claude 把 ‹名称› 那个会话导入，接着干"**，或者贴一张截图说"接着这个干"。也可以点 ⇄ → 项目 → 会话 |
-| Codex 也用完了，回到 Claude | 打开**原来那个** Claude 会话，随便说一句（比如"继续"），Codex 的进展会自动带进来 |
-| 再回到 Codex | 打开原来那个 Codex 对话，随便说一句 |
-| 立刻同步一下 | Claude：`/from-codex` · Codex：`$from-claude` |
-| 把当前对话交给另一边 | Claude：`/to-codex` · Codex：`$to-claude` · 或点 ⇄ |
+The ⇄ menu lists recent projects and both sides' sessions: ○ not linked yet (click to import and link), ✓ linked (click to open the partner), ↻ has progress the other side hasn't received. English or Chinese via Language / 语言.
 
-The ⇄ menu lists recent projects and both sides' sessions: ○ new, not linked yet (click to import and link); ✓ linked (click to open the linked conversation); ↻ updated, with progress the other side hasn't received yet. The menu can be shown in English or Chinese (Language / 语言).
-
-⇄ 菜单按项目列出两边的会话：○ 未关联（点一下导入并关联）；✓ 已关联（点一下打开关联的会话）；↻ 有更新，这边有对面还没收到的新进展。菜单可以切换成英文或中文（Language / 语言）。
+⇄ 菜单按项目列出两边的会话：○ 未关联（点一下导入并关联），✓ 已关联（点一下打开对面），↻ 有对面还没收到的新进展。可在 Language / 语言 里切换中英文。
 
 ## FAQ · 常见问题
 
-**What do I do when Claude Code hits its usage limit (or Codex hits its rate limit)?** Click ⇄ in the menu bar and pick the conversation: it continues in the other app with the task, the plan and the progress so far. When the first app's limit resets, open the original conversation and send anything; the other side's work comes back with it. Nothing is copied by hand.
+**What do I do when Claude Code hits its usage limit (or Codex hits its rate limit)?** Click ⇄ in the menu bar and pick the conversation: it continues in the other app with the task, the plan and the progress so far. When the first app's limit resets, open the original conversation and send anything; the other side's work comes back with it.
 
-**Claude Code 额度用完（或者 Codex 到了速率上限）怎么办？** 点菜单栏的 ⇄，选中这个对话，它就会在另一个 app 里带着任务、计划和进度继续。原来那边额度恢复后，打开原来的对话随便说一句，另一边做的事就带回来了。全程不用手动复制。
+**Claude Code 额度用完（或者 Codex 到了速率上限）怎么办？** 点菜单栏的 ⇄，选中这个对话，它就会在另一个 app 里带着任务、计划和进度继续。原来那边额度恢复后，打开原来的对话随便说一句，另一边做的事就带回来了。
 
-**Does it bypass usage limits?** No. You use your own Claude and ChatGPT/Codex plans, each within its own limits. ccx only moves the task between them, so the time one app spends waiting is time the other app spends working.
+**Does it bypass usage limits?** No. You use your own Claude and ChatGPT/Codex plans, each within its own limits; ccx only moves the task between them.
 
-**这是在绕过额度限制吗？** 不是。你用的是自己的 Claude 和 ChatGPT/Codex 订阅，各自在各自的额度内。ccx 只是把任务在两边之间搬运：一边在等恢复的时候，另一边接着干活。
+**这是在绕过额度限制吗？** 不是。你用的是自己的 Claude 和 ChatGPT/Codex 订阅，各自在各自的额度内；ccx 只是在两边之间搬运任务。
 
-**Can it carry a big, complex task, or one that stopped because usage ran out?** Yes, that's the main use case. Both apps write every message and tool call to disk as they go, so a conversation cut off by a usage limit is complete up to the moment it stopped. ccx brings over every user message and reply, condensed tool calls and output, the latest task list in full (Claude's todos or Codex's plan), a note when the other side stopped mid-step, and `git status`. The code is already on your disk. Limits: tool output is truncated per call, Codex's encrypted reasoning can't be carried, and a very long first import keeps the most recent ~60k characters plus every user request and the task list.
+**What exactly is carried over?** Every user message and reply, condensed tool calls and output, the latest task list (Claude's todos or Codex's plan), a note when the other side stopped mid-step, your unfinished `/goal`, pasted images (as the path of the app's own cached copy), and `git status`. The code is already on your disk. It arrives as context for the model, not as new chat bubbles; a very long first handover keeps the most recent ~60k characters plus every request, and the model can page through the rest with `read_session`. ccx never sets a `/goal` for you: when one is unfinished, the result window puts the `/goal …` command on your clipboard.
 
-**能不能迁移复杂任务，或者因为额度用完而中断的会话？** 能，这正是主要用途。两个 app 每说一句话、每调用一次工具都会立刻写到磁盘，所以额度用完那一刻之前的内容都在。ccx 会带过去：所有用户消息和回复、压缩后的工具调用和输出、完整的最新任务清单（Claude 的待办或 Codex 的计划）、对面是否停在某一步中间的提示，以及 `git status`。代码本来就在你的磁盘上。限制：每次工具输出会截断；Codex 加密的推理内容带不过去；很长的会话第一次导入时，只保留最近约 6 万字符，加上你所有的提问和任务清单。
+**具体会带过去什么？** 所有用户消息和回复、压缩后的工具调用和输出、最新任务清单（Claude 的待办或 Codex 的计划）、对面是否停在某一步中间、未完成的 `/goal`、你贴的图片（以该 app 自己缓存的路径），以及 `git status`。代码本来就在你的磁盘上。这些内容作为上下文交给模型，不会变成新的聊天气泡；很长的会话第一次交接时保留最近约 6 万字符和你所有的提问，其余部分模型可以用 `read_session` 补读。ccx 从不替你设置 `/goal`：有未完成的目标时，结果弹窗会把 `/goal …` 指令放到剪贴板。
 
-**Why can one message after switching back cost a lot of usage?** Not because of ccx: syncing adds only the condensed new progress (a few thousand tokens). But a conversation that has grown very long (hundreds of thousands of tokens) and sat idle for over an hour, while you worked in the other app, has lost its prompt cache, so the next message there re-reads all of it. ccx watches for this: the ⇄ menu offers a **new, linked conversation** instead (about 20–30k tokens of condensed progress). ccx only speaks up when you transfer from the menu; it never interrupts a conversation you simply keep using.
+**How much usage does a transfer cost? Does clicking again send everything again?** Each update is delivered once, usually a few thousand tokens; clicking again with nothing new says **already in sync** and adds nothing. The real cost is elsewhere: a very long conversation that sat idle for over an hour has lost its prompt cache, so the next message there re-reads all of it. Before a long import or a resume like that, the menu shows both numbers (for example ~215k for a full import vs ~25k for a new, linked conversation with the condensed progress) and lets you choose. ccx never interrupts a conversation you simply keep using, and it recognizes Claude Code's own compaction.
 
-**Does clicking a conversation again send everything again?** No. Each update is delivered once. After every click a window says what happened: imported (with the estimated tokens Codex reads on its first reply), linked with N new updates that arrive with your next message, or **already in sync, nothing added**. Before a long import, the dialog compares the full import with a condensed new conversation (for example ~215k vs ~25k tokens). When the conversation you transfer *to* is itself huge and idle, it shows both numbers separately: what the transfer adds (often just a few thousand tokens) and what the next message there re-reads (the whole conversation, because its cache has expired), next to the cost of a new, linked conversation. You choose. ccx also recognizes Claude Code's own compaction (including the idle compaction in 2.1.299+), so a conversation that has already been compacted isn't treated as huge.
+**传输一次花多少额度？重复点击会不会再发一遍？** 每条进展只送一次，通常几千 token；没有新内容时再点会显示**已同步**，不追加任何东西。真正的成本在别处：一个很长的对话闲置一个多小时后缓存过期，下一条消息会把它整个重读一遍。遇到这种长导入或长对话，菜单会先把两个数字列出来（例如完整导入约 215k，新开一个带压缩进展的关联对话约 25k），由你来选。你在自己的对话里正常继续时，ccx 从不打断；它也能识别 Claude Code 自己的压缩。
 
-**为什么切回来之后，一条消息可能消耗很多额度？** 原因不在 ccx：同步只带压缩后的新进展（几千 token）。真正的成本在于：一个已经很长的对话（几十万 token），在你去另一个 app 干活时闲置了一个多小时，缓存就过期了，下一条消息会把它整个重新读一遍。ccx 会处理这种情况：⇄ 菜单会建议你**新开一个关联的对话**（只带约 2–3 万 token 的压缩进展）。ccx 只在你用菜单传输时提示，你在自己的对话里正常继续时，它从不打断。
+**Do I have to close an app first? Is anything uploaded?** No and no. Codex data goes only through Codex's own app-server API, sync only adds context to the conversation you're in, and everything runs on your Mac.
 
-**What about `/goal`?** ccx reads each app's own goal state (Codex's goal API; Claude Code's goal records) but never sets or starts a goal, because a goal makes the agent work on its own and spend usage. When the conversation you transfer has an unfinished goal that the other side doesn't have yet, the result window says so and puts the `/goal …` command on your clipboard; paste it there if you want to keep going. The other side's model is also told what the goal is.
-
-**`/goal` 会一起转过去吗？** ccx 会读取两边 app 自己记录的目标状态（Codex 的目标接口、Claude Code 的目标记录），但从不替你设置或启动目标，因为目标会让 agent 自主工作、持续消耗额度。如果你传输的对话有一个未完成、而对面还没有的目标，结果弹窗会告诉你，并把 `/goal …` 指令放到剪贴板；想在对面继续就粘贴发送。对面的模型也会被告知这个目标是什么。
-
-**重复点击同一个会话，会不会把内容再堆一遍？** 不会，每条进展只送一次。每次点击后都会弹窗说明结果：已导入（附 Codex 第一次回复大约要读多少 token）、已关联且有 N 条新进展（你下一条消息时带入），或者**已同步，没有新内容，这次没有追加任何数据**。导入一个很长的对话前，弹窗会对比完整导入和新开压缩对话的消耗（例如约 215k 对比约 25k token）。如果要传去的那个对话本身已经很长又闲置了很久，弹窗会把两个数字分开写清楚：这次传输新增多少（常常只有几千 token），以及你在那边发下一条消息时要重新读多少（缓存过期，整个对话重读），再和新开一个关联对话的消耗放在一起，由你来选。ccx 也能识别 Claude Code 自己的压缩（包括 2.1.299 起的闲置自动压缩），已经压缩过的对话不会被当成超长对话。
-
-**Do I have to close an app first?** No. Codex data only goes through Codex's own app-server API, and syncing only adds context to the conversation you're in. It never edits a live session file.
-
-**要先关掉某个 app 吗？** 不用。Codex 的数据只通过 Codex 自己的 app-server 接口读写；同步只是往当前对话里加上下文，从不修改正在使用的会话文件。
+**要先关掉某个 app 吗？会上传什么吗？** 都不用。Codex 的数据只通过 Codex 自己的 app-server 接口读写，同步只是往当前对话里加上下文，全部在本机运行。
 
 **What if the two sides work in different folders?** ccx says so, and the model asks whether to switch folders or use the progress as reference. For two worktrees of one repo it shows both branches.
 
-**两边的工作目录不一样怎么办？** ccx 会写明这一点，模型会先问你：是切换到那个目录接着干，还是只拿来参考。如果是同一个仓库的两个 worktree，还会显示两边的分支。
+**两边的工作目录不一样怎么办？** ccx 会写明这一点，模型会先问你：切换到那个目录接着干，还是只拿来参考。同一个仓库的两个 worktree 还会显示两边的分支。
 
-**Is anything uploaded?** No. Everything runs locally.
+**An imported Codex conversation isn't under its project, or shows "Retry" on older history?** ccx files each imported thread under its project in the Codex sidebar, and runs Codex's own history migration so older turns open. If Codex still has that thread open, the repair waits until you quit Codex (the menu shows "History repair pending"); `ccx repair` retries by hand. ccx never kills Codex or edits its database.
 
-**会上传什么吗？** 不会，所有处理都在本机进行。
+**导入到 Codex 的对话没归到项目下，或者旧消息一直显示"重试"？** ccx 会把导入的对话归到 Codex 侧边栏对应的项目下，并调用 Codex 自带的历史迁移让旧消息能展开。如果 Codex 正开着那个对话，修复会等你退出 Codex 后进行（菜单显示"历史修复待完成"）；也可以运行 `ccx repair` 手动重试。ccx 从不强行关闭 Codex，也不改它的数据库。
 
 ## How it works · 原理
 
@@ -197,29 +153,15 @@ The ⇄ menu lists recent projects and both sides' sessions: ○ new, not linked
                  ⇄ menu bar app and `ccx` CLI (same code)
 ```
 
-A Claude session A and a Codex thread T form a pair, and each side keeps a cursor of how much the other side has received. When you send a message in A, the prompt hook adds T's new progress to that message and moves the cursor, to avoid repeatedly forwarding the same entries. This is a best-effort context handoff, not an exactly-once delivery guarantee; use the history reader to recover omitted text. Saying "continue X from …" links the conversation you're in to X; the menu bar and `/to-…` use the apps' native import instead. Session titles are searched across all projects, so a typed name or a screenshot is enough.
+A Claude session A and a Codex thread T form a pair, and each side keeps a cursor of how much the other side has received. When you send a message in A, the prompt hook adds T's new progress to that message and moves the cursor, to avoid repeatedly forwarding the same entries. This is a best-effort context handoff; the model can page through anything omitted with `read_session`. Saying "continue X from …" links the conversation you're in to X; the menu bar and `/to-…` use the apps' native import instead. Session titles are searched across all projects, so a typed name or a screenshot is enough.
 
-Claude 会话 A 和 Codex 线程 T 组成一对，两边各记一个"对面已经收到多少"的位置。你在 A 里发消息时，hook 会把 T 的新进展加到这条消息里，然后移动位置。这样可以避免重复转发同一批记录；这是尽力交接上下文，并不保证严格的只送达一次。省略的文字可通过历史阅读工具补读。在对话里说"从 … 接着 X 干"，会把当前对话和 X 关联起来；菜单栏和 `/to-…` 则用两个 app 自带的导入功能。会话标题会在所有项目里搜索，所以说出名称或给一张截图就够了。
-
-## History and project grouping · 历史与项目归属
-
-On transfer to Codex, ccx first registers the working folder in the desktop through its bundled `codex app <folder>` command and waits until it appears in the saved project index. It then attaches the thread to that desktop project's mapped server ID. Creating only an app-server project is insufficient on some Codex versions—even after restarting. Existing user-assigned projects are kept, and reopening an older ccx pair repairs backend-only membership without importing another conversation.
-
-发到 Codex 时，ccx 会先通过桌面版自带的 `codex app <目录>` 命令登记工作文件夹，等待桌面项目索引确认，再把会话关联到该项目映射的后端 ID。部分版本只创建后端项目并不足够，重启也不会自动补齐。已有的手动项目归属会保留；重新打开旧关联会话也会修复只存在于后端的归属，不会再导入一份。
-
-Some Codex versions import legacy history but use the newer item-pagination API to expand older turns. This causes a permanent “Retry” button. ccx uses Codex's own targeted `migrate-rollouts` command before opening new imports and verifies item paging afterwards. If an older thread still has an active writer, ccx queues the migration and retries from the menu bar every minute. It never kills Codex or rewrites a live database: quit Codex when convenient, leave ccx running, and reopen Codex after the “History repair pending” notice disappears. `ccx repair` retries manually.
-
-部分 Codex 版本导入的是旧历史格式，界面却用新分页接口展开旧消息，导致始终显示“重试”。ccx 会在打开新导入会话前调用 Codex 自带的定向历史迁移，并验证分页可读。如果旧会话仍被进程占用，就排队并通过菜单栏每分钟重试，不会杀掉 Codex 或改写正在使用的数据库。方便时退出 Codex，保留 ccx 运行，等“历史修复待完成”提示消失后再打开 Codex。也可运行 `ccx repair` 手动重试。
-
-**Sync is task context, not a mirrored chat UI.** Progress arriving through a prompt hook is available to the model but does not become additional native chat bubbles. The full record stays in each app; when a condensed handover leaves something out, the model can page through the other side with `read_session` (just ask it to look up the earlier discussion). Tool output remains condensed. Images you pasted travel as the path of the app's own cached copy (`[image: /path]`), so the other app can open them when it needs to; they cost nothing until opened. ccx stores no copies: once the system cleans that cache, the image is gone. Rollout file size is never used to skip updates: paginated history may change only in Codex's database.
-
-**同步的是任务上下文，并非聊天界面的逐条镜像。** Hook 带来的进展模型能读取，但不会变成新的原生聊天气泡。完整记录仍在各自的 app 里；压缩交接时省略的内容，模型可以用 `read_session` 到对面分页补读（让它“查一下之前的讨论”即可）。工具输出仍有压缩。你贴的图片会以该 app 自己缓存的本地路径带过去（`[image: /路径]`），对面需要时直接打开，不打开就不消耗额度。ccx 不另存副本：系统清理了缓存，图片就没了。同步不再按旧记录文件大小跳过检查，因为新历史数据可能只写入 Codex 数据库。
+Claude 会话 A 和 Codex 线程 T 组成一对，两边各记一个"对面已经收到多少"的位置。你在 A 里发消息时，hook 会把 T 的新进展加到这条消息里，然后移动位置。这样可以避免重复转发同一批记录；这是尽力交接上下文；省略的内容模型可以用 `read_session` 补读。在对话里说"从 … 接着 X 干"，会把当前对话和 X 关联起来；菜单栏和 `/to-…` 则用两个 app 自带的导入功能。会话标题会在所有项目里搜索，所以说出名称或给一张截图就够了。
 
 ## Updates · 更新
 
-When a new release is published, the ⇄ app installs it automatically and notifies you. You can switch this off in the menu, and then you get a notification and an "Update to x.y.z" item instead. `ccx update` does the same by hand.
+When a new release is published (checked every 3 hours), the ⇄ app installs it automatically and notifies you. You can switch this off in the menu, and then you get a notification and an "Update to x.y.z" item instead. `ccx update` does the same by hand.
 
-GitHub 上发布新版本后，⇄ 菜单栏程序会自动安装并通知你。可以在菜单里关掉自动安装，关掉后只会收到通知，菜单里出现"更新到 x.y.z"。手动更新用 `ccx update`。
+GitHub 上发布新版本后（每 3 小时检查一次），⇄ 菜单栏程序会自动安装并通知你。可以在菜单里关掉自动安装，关掉后只会收到通知，菜单里出现"更新到 x.y.z"。手动更新用 `ccx update`。
 
 ## Uninstall · 卸载
 
