@@ -48,7 +48,7 @@ if ! /usr/bin/xcode-select -p >/dev/null 2>&1; then
 fi
 
 say "Installing ccx - claudecodex. What you may see:"
-say "  • a macOS notice \"Background Items Added: ccx\" — that's the menu bar icon starting at login; keep it on;"
+say "  • a macOS notice \"Background Items Added\" — that's the menu bar icon starting at login; keep it on;"
 say "  • later, a request to allow notifications — allow it to see sync results;"
 say "  • in Codex, \"Trust this folder?\" the first time ccx opens a project there — that's Codex's own check."
 say ""

@@ -16,15 +16,17 @@ ccx 在你的 Mac 上把一个 Claude Code 会话和一个 Codex 线程关联起
 
 ## Install · 安装
 
-You need macOS 13+ and the Claude and/or Codex desktop app. You don't need to install the Claude Code or Codex CLI: ccx uses the copies bundled inside the desktop apps.
+**You need:** a Mac with macOS 13 or later, and the **Claude** desktop app and/or the **Codex** desktop app. To move work between them you want both, but you can install ccx with one and add the other later. You don't need to install the Claude Code or Codex CLI, Homebrew, or anything with `sudo`: ccx uses the copies bundled inside the desktop apps.
 
-需要 macOS 13 及以上，以及 Claude 和/或 Codex 桌面版。不需要另外安装 Claude Code 或 Codex 的命令行工具，ccx 用的是两个桌面版自带的那一份。
+**需要：** macOS 13 及以上的 Mac，以及 **Claude** 桌面版和/或 **Codex** 桌面版。要在两边之间来回切换当然需要两个都装，但先装一个也可以，另一个之后再装。不需要另外安装 Claude Code 或 Codex 的命令行工具、Homebrew，也不需要 `sudo`：ccx 用的是两个桌面版自带的那一份。
 
-**The easy way:** paste this into Claude Code or Codex. It runs the installer for you (approve the command when asked).
-**最简单的方式：** 把下面这段话贴给 Claude Code 或 Codex，它会帮你运行安装命令（弹出确认时点允许即可）。
+- Claude: [claude.com/download](https://claude.com/download). Open it once and click **Code**, so it downloads Claude Code. · 下载后打开一次并点 **Code**，让它下载 Claude Code。
+- Codex: [openai.com/codex](https://openai.com/codex) (the Codex / ChatGPT desktop app · Codex / ChatGPT 桌面版).
+
+**The easy way:** paste this into Claude Code or Codex. It runs the installer for you. **最简单：** 把下面这段话贴给 Claude Code 或 Codex，它会帮你运行安装命令。
 
 ```
-Install ccx for me: run `curl -fsSL https://raw.githubusercontent.com/aaronwong1999/ccx/main/install.sh | sh`, then run `ccx doctor` and tell me the result.
+Install ccx for me: run `curl -fsSL https://raw.githubusercontent.com/aaronwong1999/ccx/main/install.sh | sh` (it needs network access and writes to my home folder), then run `~/.local/bin/ccx doctor` and tell me the result.
 ```
 
 **Or run it yourself** in Terminal. **或者自己在终端运行：**
@@ -33,25 +35,59 @@ Install ccx for me: run `curl -fsSL https://raw.githubusercontent.com/aaronwong1
 curl -fsSL https://raw.githubusercontent.com/aaronwong1999/ccx/main/install.sh | sh
 ```
 
-The installer:
+### What you may be asked · 可能出现的确认
 
-1. puts ccx in `~/Library/Application Support/ccx`;
-2. installs the ccx plugin into Claude and Codex. Each plugin syncs in **both directions** with a prompt hook: whenever you send a message, it brings over the other side's new progress;
-3. turns that hook on in Codex. Claude Code enables a plugin's hooks as soon as the plugin is installed, but Codex asks you to approve every third-party hook by hand, so the installer approves ccx's own hook (and only that one);
-4. builds the ⇄ menu bar icon on your Mac and starts it at login;
-5. adds a `ccx` command.
+| When | What you see | What to do |
+|---|---|---|
+| Installing through Claude Code or Codex | The app asks to run the command. In Codex it may ask to run it outside the sandbox or with network access. | Allow it. |
+| Apple's Command Line Tools are missing (git, python3, swiftc) | A macOS window: "The xcode-select command requires the command line developer tools". | Click **Install**, accept the license, wait 5–10 minutes, then run the install command again. |
+| The menu bar icon is set to start at login | A macOS notice: "Background Items Added". | Nothing; keep it on (System Settings → General → Login Items lists it). |
+| ccx shows a result or update notice | A request to allow notifications (macOS may show it as "Script Editor"). | Allow, so you see sync results. |
+| ccx opens a project in Codex for the first time | Codex: "Trust this folder?" | Trust it if it's your project; this is Codex's own safety check. |
 
-If Apple's Command Line Tools are missing, it opens Apple's installer first. Run the command again when that finishes.
+| 时机 | 你会看到 | 怎么做 |
+|---|---|---|
+| 让 Claude Code 或 Codex 帮你安装 | app 询问是否运行这条命令；Codex 可能询问是否在沙盒外运行或允许联网 | 允许 |
+| 电脑缺少苹果命令行工具（git、python3、swiftc） | macOS 弹窗："xcode-select 命令需要命令行开发者工具" | 点**安装**、同意许可，等 5–10 分钟，然后再运行一次安装命令 |
+| 菜单栏图标设为登录时启动 | macOS 通知："已添加后台项目" | 不用管，保持开启（系统设置 → 通用 → 登录项里能看到） |
+| ccx 显示同步结果或更新提示 | 请求允许通知（macOS 可能显示为"脚本编辑器"） | 允许，这样能看到同步结果 |
+| ccx 第一次在 Codex 里打开某个项目 | Codex："信任此文件夹吗？" | 是你自己的项目就信任；这是 Codex 自己的安全检查 |
 
-安装脚本会做五件事：
+Nothing else asks for passwords, admin rights or accessibility access.
 
-1. 把 ccx 放到 `~/Library/Application Support/ccx`；
-2. 把 ccx 插件装进 Claude 和 Codex。两边的插件都用一个"发消息前"的 hook 做**双向**同步：你每发一条消息，就把另一边的新进展带过来；
-3. 在 Codex 里启用这个 hook。Claude Code 装好插件后，插件的 hook 自动生效；但 Codex 要求每个第三方 hook 都由用户手动批准，所以安装脚本会替你批准 ccx 自己的 hook，而且只批准这一个；
-4. 在本机编译菜单栏 ⇄ 图标，并设为登录时自动启动；
-5. 安装一个 `ccx` 命令。
+除此之外，不会要求输入密码、管理员权限或辅助功能权限。
 
-如果电脑上缺少苹果的"命令行开发者工具"，脚本会先打开系统的安装窗口，装好后再运行一次即可。
+### What the installer does · 安装脚本做了什么
+
+1. checks your Mac: macOS version, the desktop apps, Apple's Command Line Tools. With neither app installed it stops and changes nothing;
+2. downloads ccx to `~/Library/Application Support/ccx`;
+3. installs the ccx plugin into Claude and Codex from that copy. Each plugin syncs in **both directions** with a prompt hook: whenever you send a message in a linked conversation, it brings over the other side's new progress. It never blocks a message;
+4. turns that hook on in Codex. Codex asks you to approve every third-party hook by hand, so the installer approves ccx's own hook (and only that one);
+5. builds the ⇄ menu bar icon on your Mac (so no download needs a signature) and starts it at login;
+6. adds a `ccx` command in `~/.local/bin`, and adds that folder to your PATH in `~/.zprofile` if it isn't there.
+
+1. 检查你的 Mac：系统版本、两个桌面版、苹果命令行工具。如果两个 app 都没装，它会停下，不做任何改动；
+2. 把 ccx 下载到 `~/Library/Application Support/ccx`；
+3. 用这份本地副本把 ccx 插件装进 Claude 和 Codex。两边插件都用一个"发消息前"的 hook 做**双向**同步：在已关联的对话里每发一条消息，就把另一边的新进展带过来。它从不拦截你的消息；
+4. 在 Codex 里启用这个 hook。Codex 要求每个第三方 hook 都由用户手动批准，所以安装脚本替你批准 ccx 自己的 hook，而且只批准这一个；
+5. 在本机编译菜单栏 ⇄ 图标（不用下载任何需要签名的程序），并设为登录时启动；
+6. 在 `~/.local/bin` 里加一个 `ccx` 命令；如果这个目录不在 PATH 里，会写进 `~/.zprofile`。
+
+### If something's missing · 缺东西时会怎样
+
+- **Only one app installed:** ccx sets that one up. Install the other app later and the menu bar icon finishes setup by itself (or run `ccx setup`).
+- **Claude installed but never opened Code:** Claude Code isn't downloaded yet. Open Claude, click **Code** once; ccx then finishes setup by itself.
+- **Neither app:** the installer stops with download links and changes nothing.
+- **Anything else:** `ccx doctor` lists what's missing; `ccx setup` repairs; re-running the install command is always safe.
+
+- **只装了一个 app：** ccx 先在这个 app 里装好。之后装上另一个 app，菜单栏图标会自动补装（也可以运行 `ccx setup`）。
+- **装了 Claude 但没点过 Code：** Claude Code 还没下载。打开 Claude 点一次 **Code**，ccx 会自动补装。
+- **两个都没装：** 安装脚本给出下载链接后停下，不做任何改动。
+- **其他情况：** `ccx doctor` 会列出缺什么；`ccx setup` 修复；重复运行安装命令也总是安全的。
+
+**Updates:** the menu bar icon checks GitHub for a newer release every 3 hours and installs it (Settings → Install Updates Automatically), or run `ccx update`. **Uninstall:** `ccx uninstall`.
+
+**更新：** 菜单栏图标每 3 小时检查一次 GitHub 上的新版本并自动安装（可在菜单里关闭"自动安装更新"），也可以运行 `ccx update`。**卸载：** `ccx uninstall`。
 
 ## Use · 使用
 
