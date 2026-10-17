@@ -27,13 +27,12 @@
   撞上 Claude Code 的额度上限？切到 Codex 接着干；Codex 也用完了，再切回 Claude。同一个任务、同一段对话，不用干等 5 小时额度恢复。
 </p>
 
-<table width="100%">
-<tr><th width="24%"></th><th width="34%">Without ccx · 没有 ccx</th><th width="42%">With ccx · 有了 ccx</th></tr>
-<tr><td>Usage limit hit<br>额度用完</td><td>Wait for the 5-hour reset<br>干等恢复</td><td>Continue in the other app<br>切到另一个继续干</td></tr>
-<tr><td>Switching apps<br>换 app</td><td>Re-explain all context<br>重新解释全部上下文</td><td>The other side already knows<br>对面已经知道进展</td></tr>
-<tr><td>Coming back<br>切回来</td><td>Start a new chat<br>新开对话</td><td>Same conversation, same progress<br>原来的对话，同样的进展</td></tr>
-<tr><td>Long conversations<br>长对话</td><td>Re-reading all burns usage<br>整段重读很费额度</td><td>Condensed handover, cost shown first<br>压缩交接，费用先告诉你</td></tr>
-</table>
+| | Without ccx · 没有 ccx | With ccx · 有了 ccx |
+|---|---|---|
+| Usage limit hit<br>额度用完 | Wait for the 5-hour reset<br>干等恢复 | Continue in the other app<br>切到另一个继续干 |
+| Switching apps<br>换 app | Re-explain all context<br>重新解释全部上下文 | The other side already knows<br>对面已经知道进展 |
+| Coming back<br>切回来 | Start a new chat<br>新开对话 | Same conversation, same progress<br>原来的对话，同样的进展 |
+| Long conversations<br>长对话 | Re-reading all burns usage<br>整段重读很费额度 | Condensed handover, cost shown first<br>压缩交接，费用先告诉你 |
 
 ccx links a Claude Code session with a Codex thread on your Mac and keeps them in sync in both directions. It works inside both **desktop apps**, adds a ⇄ menu bar icon for one-click switching, and runs entirely on your Mac: no account, no server, no telemetry.
 
