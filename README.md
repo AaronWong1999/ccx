@@ -29,10 +29,10 @@
 
 | | Without ccx<br>没有 ccx | With ccx<br>有了 ccx |
 |---|---|---|
-| Claude Code hits the usage limit<br>额度用完 | Wait for the 5-hour reset<br>干等恢复 | Continue in Codex in one click<br>一键到 Codex 接着干 |
-| Switching apps<br>换 app | Re-explain the task, paste context<br>重新解释、复制粘贴 | The other side already knows<br>对面已经知道进展 |
-| Coming back<br>切回来 | Start a new chat<br>新开对话 | Same conversation, with the other app's progress<br>还是原来的对话，带上对面的进展 |
-| Long conversations<br>长对话 | Re-reading everything burns usage<br>整段重读很费额度 | Condensed handover, cost shown before you choose<br>压缩交接，费用先告诉你 |
+| Usage limit hit<br>额度用完 | Wait for the 5-hour reset<br>干等恢复 | Continue in the other app<br>切到另一个继续干 |
+| Switching apps<br>换 app | Re-explain all context<br>重新解释全部上下文 | The other side already knows<br>对面已经知道进展 |
+| Coming back<br>切回来 | Start a new chat<br>新开对话 | Same conversation, same progress<br>原来的对话，同样的进展 |
+| Long conversations<br>长对话 | Re-reading all burns usage<br>整段重读很费额度 | Condensed handover, cost shown first<br>压缩交接，费用先告诉你 |
 
 ccx links a Claude Code session with a Codex thread on your Mac and keeps them in sync in both directions. It works inside both **desktop apps**, adds a ⇄ menu bar icon for one-click switching, and runs entirely on your Mac: no account, no server, no telemetry.
 
