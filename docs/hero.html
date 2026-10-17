@@ -10,70 +10,90 @@
          background: #0b0c10; -webkit-font-smoothing: antialiased; }
   .aurora { position: absolute; inset: 0;
     background:
-      radial-gradient(420px 260px at 30% 62%, rgba(235, 128, 86, .30), transparent 70%),
-      radial-gradient(420px 260px at 50% 55%, rgba(170, 110, 255, .26), transparent 70%),
-      radial-gradient(420px 260px at 70% 62%, rgba(92, 150, 255, .30), transparent 70%),
+      radial-gradient(420px 260px at 25% 62%, rgba(235, 128, 86, .26), transparent 70%),
+      radial-gradient(420px 260px at 50% 58%, rgba(170, 110, 255, .22), transparent 70%),
+      radial-gradient(420px 260px at 75% 62%, rgba(92, 150, 255, .26), transparent 70%),
       radial-gradient(900px 400px at 50% -10%, rgba(255,255,255,.07), transparent 70%); filter: blur(10px); }
 
-  header { position: absolute; top: 44px; left: 0; right: 0; text-align: center; }
-  h1 { font-size: 84px; font-weight: 800; letter-spacing: -2.6px; line-height: 1; }
+  header { position: absolute; top: 40px; left: 0; right: 0; text-align: center; }
+  h1 { font-size: 80px; font-weight: 800; letter-spacing: -2.4px; line-height: 1; }
   h1 .dim { color: #a1a1aa; font-weight: 700; }
-  .slogan { margin-top: 18px; font-size: 30px; font-weight: 500; letter-spacing: -.3px; color: #e4e4e7; }
+  .slogan { margin-top: 16px; font-size: 30px; font-weight: 500; letter-spacing: -.3px; color: #e4e4e7; }
 
-  .row { position: absolute; top: 236px; left: 64px; right: 64px; display: flex; gap: 28px; }
+  .row { position: absolute; top: 226px; left: 56px; right: 56px; display: flex; gap: 26px; }
   .step { flex: 1; }
-  .win { height: 252px; border-radius: 14px; overflow: hidden; position: relative;
-         background: rgba(30, 31, 38, .72); backdrop-filter: blur(24px);
+  .win { height: 262px; border-radius: 14px; overflow: hidden; position: relative;
+         background: rgba(30, 31, 38, .74); backdrop-filter: blur(24px);
          border: 1px solid rgba(255,255,255,.10);
          box-shadow: 0 0 0 .5px rgba(0,0,0,.6), 0 24px 60px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.06); }
-  .bar { height: 36px; display: flex; align-items: center; padding: 0 14px; gap: 8px;
+  .bar { height: 38px; display: flex; align-items: center; padding: 0 14px; gap: 8px;
          background: rgba(255,255,255,.04); border-bottom: 1px solid rgba(255,255,255,.07); }
   .tl { width: 12px; height: 12px; border-radius: 50%; }
   .r { background: #ff5f57; } .y { background: #febc2e; } .g { background: #28c840; }
-  .bar span.t { flex: 1; text-align: center; margin-right: 52px; font-size: 13.5px; font-weight: 600; color: #d4d4d8; }
-  .in { padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; font-size: 14.5px; line-height: 1.42; }
-  .me { align-self: flex-end; max-width: 88%; padding: 8px 12px; border-radius: 12px; background: rgba(255,255,255,.10); color: #f4f4f5; }
-  .ai { color: #c4c4cc; }
-  .warn { padding: 10px 12px; border-radius: 10px; background: rgba(255, 95, 87, .14); border: 1px solid rgba(255, 95, 87, .42); color: #ffb1ab; font-weight: 600; }
-  .warn small { display: block; font-weight: 400; color: #e79a95; font-size: 13px; margin-top: 2px; }
-  .note { padding: 10px 12px; border-radius: 10px; background: rgba(92, 150, 255, .13); border: 1px solid rgba(92, 150, 255, .42); color: #c7d8ff; }
-  .note b { color: #fff; }
-  code { font-family: "SF Mono", Menlo, monospace; font-size: 13px; color: #e4e4e7; }
+  .bar .t { flex: 1; display: flex; justify-content: center; align-items: center; gap: 7px; margin-right: 52px;
+            font-size: 13.5px; font-weight: 600; }
+  .bar .t svg { width: 15px; height: 15px; }
+  .in { padding: 16px 18px; display: flex; flex-direction: column; gap: 12px; font-size: 15px; line-height: 1.42; }
+  .me { align-self: flex-end; max-width: 86%; padding: 8px 13px; border-radius: 14px; background: rgba(255,255,255,.11); color: #f4f4f5; }
+  .ai { color: #c9c9d1; }
+  code { font-family: "SF Mono", Menlo, monospace; font-size: 13.5px; color: #e4e4e7; }
+  .banner { display: flex; gap: 11px; align-items: center; padding: 11px 13px; border-radius: 11px; }
+  .banner svg { flex: none; width: 22px; height: 22px; }
+  .banner b { display: block; font-size: 15px; }
+  .banner small { font-size: 13px; }
+  .warn { background: rgba(255, 95, 87, .13); border: 1px solid rgba(255, 95, 87, .42); color: #ffb1ab; }
+  .warn small { color: #e79a95; }
+  .note { background: rgba(92, 150, 255, .13); border: 1px solid rgba(92, 150, 255, .42); color: #c7d8ff; }
+  .note b { color: #fff; } .note small { color: #a9bfee; }
+  .done { display: flex; gap: 8px; align-items: center; color: #9be7b0; font-size: 14px; }
+  .done svg { width: 17px; height: 17px; }
 
-  /* the menu bar step */
-  .menubar { height: 26px; display: flex; align-items: center; justify-content: flex-end; gap: 14px; padding: 0 12px;
-             background: rgba(255,255,255,.06); border-bottom: 1px solid rgba(255,255,255,.07); font-size: 13px; color: #d4d4d8; }
-  .menubar .x { padding: 1px 7px; border-radius: 5px; background: rgba(255,255,255,.22); color: #fff; font-weight: 700; }
-  .menu { margin: 8px 14px 0 auto; width: 300px; border-radius: 10px; padding: 6px; background: rgba(44, 45, 54, .92);
-          border: 1px solid rgba(255,255,255,.12); box-shadow: 0 16px 40px rgba(0,0,0,.5); font-size: 13.5px; }
-  .menu .h { padding: 4px 10px 6px; font-weight: 700; color: #fff; }
-  .menu .h i { font-style: normal; font-weight: 400; color: #8f8f99; margin-left: 6px; }
-  .menu .cap { padding: 6px 10px 3px; font-size: 11.5px; letter-spacing: .4px; color: #8f8f99; }
-  .menu .it { padding: 5px 10px; border-radius: 6px; color: #e4e4e7; }
-  .menu .sel { background: #0a64d8; color: #fff; }
-  .menu .sep { height: 1px; margin: 5px 8px; background: rgba(255,255,255,.1); }
+  /* step 2: the real ccx menu */
+  .menubar { height: 30px; display: flex; align-items: center; justify-content: flex-end; gap: 16px; padding: 0 14px;
+             background: rgba(255,255,255,.07); border-bottom: 1px solid rgba(255,255,255,.07); color: #d4d4d8; font-size: 13px; }
+  .mbicon { width: 26px; height: 22px; border-radius: 6px; display: grid; place-items: center; background: rgba(255,255,255,.24); }
+  .mbicon svg { width: 17px; height: 17px; }
+  .menus { position: relative; height: 230px; }
+  .menu { position: absolute; border-radius: 11px; padding: 6px; background: rgb(46, 47, 56);
+          border: 1px solid rgba(255,255,255,.13); box-shadow: 0 18px 44px rgba(0,0,0,.55); font-size: 13.5px; color: #ececf0; }
+  .main { top: 10px; right: 12px; width: 186px; }
+  .sub { top: 92px; right: 194px; width: 160px; z-index: 2; }
+  .hd { padding: 4px 9px 6px; }
+  .hd b { font-weight: 700; } .hd i { font-style: normal; color: #9a9aa4; font-size: 11.5px; margin-left: 5px; }
+  .hd i u { text-decoration: none; color: #6ea8ff; }
+  .hd div { font-size: 11.5px; color: #9a9aa4; margin-top: 2px; }
+  .sep { height: 1px; margin: 4px 8px; background: rgba(255,255,255,.1); }
+  .cap { padding: 4px 9px 2px; font-size: 11px; color: #8f8f99; }
+  .it { display: flex; align-items: center; gap: 6px; padding: 4px 9px; border-radius: 6px; }
+  .it .chev { margin-left: auto; color: #9a9aa4; font-size: 13px; }
+  .it .up { color: #3d8bff; font-size: 13px; }
+  .it.sel { background: #0a64d8; color: #fff; } .it.sel .chev, .it.sel .up { color: #fff; }
+  .it.dim { color: #b8b8c0; }
 
-  .center { height: 216px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; }
-  .big { width: 64px; height: 64px; border-radius: 50%; display: grid; place-items: center; font-size: 34px; font-weight: 800; margin-bottom: 6px; }
-  .warnc { background: rgba(255, 95, 87, .18); color: #ff6b63; border: 1.5px solid rgba(255, 95, 87, .55); }
-  .okc { background: rgba(40, 200, 64, .16); color: #4be06a; border: 1.5px solid rgba(40, 200, 64, .5); }
-  .headline { font-size: 22px; font-weight: 700; letter-spacing: -.3px; color: #f4f4f5; }
-  .sub { font-size: 15px; color: #9a9aa4; }
-  .menubar { justify-content: flex-end; height: 34px; padding-right: 26px; }
-  .menubar .x { font-size: 16px; padding: 2px 10px; background: rgba(255,255,255,.28); }
-  .menu { margin: 12px 18px 0 auto; width: 270px; font-size: 16px; }
-  .menu .it { padding: 9px 12px; }
-  .menu .cap { padding: 6px 12px 6px; font-size: 12px; }
-  .label { margin-top: 18px; text-align: center; font-size: 21px; font-weight: 600; color: #f4f4f5; }
-  .label em { font-style: normal; display: inline-grid; place-items: center; width: 24px; height: 24px; margin-right: 8px;
-              border-radius: 50%; background: rgba(255,255,255,.12); font-size: 13px; vertical-align: 1px; }
+  .label { margin-top: 18px; display: flex; justify-content: center; align-items: center; gap: 10px;
+           font-size: 18px; font-weight: 600; color: #f4f4f5; }
+  .label .n { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; }
+  .label .n svg { width: 16px; height: 16px; }
+  .n1 { background: rgba(255, 95, 87, .2); color: #ff6b63; } .n2 { background: rgba(255,255,255,.16); color: #fff; }
+  .n3 { background: rgba(40, 200, 64, .2); color: #4be06a; }
 
-  footer { position: absolute; bottom: 30px; left: 0; right: 0; display: flex; justify-content: center; align-items: center; gap: 14px;
+  footer { position: absolute; bottom: 28px; left: 0; right: 0; display: flex; justify-content: center; align-items: center; gap: 14px;
            font-size: 30px; font-weight: 600; letter-spacing: -.2px; color: #e4e4e7; }
   footer svg { width: 34px; height: 34px; fill: #e4e4e7; }
 </style></head>
 <body>
   <div class="aurora"></div>
+
+  <svg width="0" height="0" style="position:absolute">
+    <symbol id="swap" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M18 8H6M9.5 4.5 6 8l3.5 3.5"/><path d="M6 16h12M14.5 12.5 18 16l-3.5 3.5"/></symbol>
+    <symbol id="term" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="3" y="4" width="18" height="16" rx="3"/><path d="m7.5 10 3 2.5-3 2.5M13 15h3.5"/></symbol>
+    <symbol id="alert" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="9.5"/><path d="M12 7.5v5.5M12 16.5v.01"/></symbol>
+    <symbol id="check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="9.5"/><path d="m8 12.3 2.8 2.8L16.2 9.5"/></symbol>
+  </svg>
 
   <header>
     <h1>ccx <span class="dim">-</span> claudecodex</h1>
@@ -83,38 +103,53 @@
   <div class="row">
     <div class="step">
       <div class="win">
-        <div class="bar"><span class="tl r"></span><span class="tl y"></span><span class="tl g"></span><span class="t">Claude Code</span></div>
-        <div class="center">
-          <div class="big warnc">!</div>
-          <div class="headline">Usage limit reached</div>
-          <div class="sub">Resets in 4 h 52 min</div>
+        <div class="bar"><span class="tl r"></span><span class="tl y"></span><span class="tl g"></span>
+          <span class="t" style="color:#f0a37f"><svg><use href="#term"/></svg>Claude Code</span></div>
+        <div class="in">
+          <div class="me">Ship the pricing page and fix the checkout bug</div>
+          <div class="ai">Found it: the coupon is applied twice in <code>cart.ts</code>…</div>
+          <div class="banner warn"><svg><use href="#alert"/></svg><span><b>Usage limit reached</b><small>Resets in 4 h 52 min</small></span></div>
         </div>
       </div>
-      <div class="label"><em>1</em>Claude runs out</div>
+      <div class="label"><span class="n n1"><svg><use href="#alert"/></svg></span>Claude Code hits its usage limit</div>
     </div>
 
     <div class="step">
       <div class="win">
-        <div class="menubar"><span class="x">⇄</span></div>
-        <div class="menu">
-          <div class="cap">TRANSFER TO CODEX</div>
-          <div class="it sel">Ship the pricing page</div>
-          <div class="it">Refactor auth</div>
+        <div class="menubar"><span>Wi‑Fi</span><span class="mbicon"><svg style="color:#fff"><use href="#swap"/></svg></span><span>Fri 9:41</span></div>
+        <div class="menus">
+          <div class="menu main">
+            <div class="hd"><b>ccx - claudecodex</b>
+              <div>0.0.27 <u style="text-decoration:none;color:#6ea8ff">@aaron0x10</u></div></div>
+            <div class="sep"></div>
+            <div class="cap">Recent Projects</div>
+            <div class="it sel">shop-app <span class="up">↻</span><span class="chev">›</span></div>
+            <div class="it dim">landing-site<span class="chev">›</span></div>
+            <div class="it dim">api-server<span class="chev">›</span></div>
+          </div>
+          <div class="menu sub">
+            <div class="cap">To Codex · from Claude</div>
+            <div class="it sel"><span class="up">↻</span> Ship pricing</div>
+            <div class="it dim">✓ Refactor auth</div>
+            <div class="it dim">○ Release notes</div>
+          </div>
         </div>
       </div>
-      <div class="label"><em>2</em>Click ⇄</div>
+      <div class="label"><span class="n n2"><svg><use href="#swap"/></svg></span>Click ⇄ in the menu bar</div>
     </div>
 
     <div class="step">
       <div class="win">
-        <div class="bar"><span class="tl r"></span><span class="tl y"></span><span class="tl g"></span><span class="t">Codex</span></div>
-        <div class="center">
-          <div class="big okc">✓</div>
-          <div class="headline">Picked up where Claude stopped</div>
-          <div class="sub">Same task, same progress</div>
+        <div class="bar"><span class="tl r"></span><span class="tl y"></span><span class="tl g"></span>
+          <span class="t" style="color:#9fb4ff"><svg><use href="#term"/></svg>Codex</span></div>
+        <div class="in">
+          <div class="banner note"><svg><use href="#swap"/></svg><span><b>14 updates from Claude Code</b><small>The plan, the bug, where it stopped</small></span></div>
+          <div class="me">continue</div>
+          <div class="ai">Removing the second coupon pass in <code>cart.ts</code>…</div>
+          <div class="done"><svg><use href="#check"/></svg>Tests pass · checkout fixed</div>
         </div>
       </div>
-      <div class="label"><em>3</em>Codex keeps going</div>
+      <div class="label"><span class="n n3"><svg><use href="#check"/></svg></span>Codex picks up where Claude stopped</div>
     </div>
   </div>
 
