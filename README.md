@@ -27,7 +27,7 @@
   撞上 Claude Code 的额度上限？切到 Codex 接着干；Codex 也用完了，再切回 Claude。同一个任务、同一段对话，不用干等 5 小时额度恢复。
 </p>
 
-| | Without ccx<br>没有 ccx | With ccx<br>有了 ccx |
+| | Without ccx · 没有 ccx | With ccx · 有了 ccx |
 |---|---|---|
 | Usage limit hit<br>额度用完 | Wait for the 5-hour reset<br>干等恢复 | Continue in the other app<br>切到另一个继续干 |
 | Switching apps<br>换 app | Re-explain all context<br>重新解释全部上下文 | The other side already knows<br>对面已经知道进展 |
