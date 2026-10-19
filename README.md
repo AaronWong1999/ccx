@@ -15,7 +15,7 @@
 
 <p align="center">
   <img src="docs/hero.png" alt="Claude Code hits its usage limit, click ⇄ in the menu bar, Codex picks up where Claude stopped." width="49%">
-  <a href="https://github.com/user-attachments/assets/9e60b0bd-ebd3-4480-836a-341ef51e1ce8"><img src="docs/demo.png" alt="Watch the 30-second demo · 看 30 秒演示" width="49%"></a>
+  <a href="#demo--演示"><img src="docs/demo.png" alt="Watch the 30-second demo · 看 30 秒演示" width="49%"></a>
 </p>
 
 ## Why ccx · 为什么需要它
@@ -98,6 +98,10 @@ Nothing else asks for passwords, admin rights or accessibility access.<br>
 
 The ⇄ menu lists recent projects and both sides' sessions: ○ not linked yet (click to import and link), ✓ linked (click to open the partner), ↻ has progress the other side hasn't received. English or Chinese via Language / 语言.<br>
 ⇄ 菜单按项目列出两边的会话：○ 未关联（点一下导入并关联），✓ 已关联（点一下打开对面），↻ 有对面还没收到的新进展。可在 Language / 语言 里切换中英文。
+
+## Demo · 演示
+
+https://github.com/user-attachments/assets/9e60b0bd-ebd3-4480-836a-341ef51e1ce8
 
 ## FAQ · 常见问题
 
