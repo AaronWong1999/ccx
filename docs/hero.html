@@ -1,113 +1,145 @@
 <!doctype html>
 <html><head><meta charset="utf-8">
-<!-- Source of docs/hero.png (1280x640, rendered at 2x):
+<!-- Source of docs/hero.png (1280x640, rendered at 2x). Same light look as the launch video:
      "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless --hide-scrollbars \
        --force-device-scale-factor=2 --window-size=1280,640 --screenshot=docs/hero.png docs/hero.html -->
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { width: 1280px; height: 640px; overflow: hidden; position: relative; color: #f5f5f7;
+  :root { --ink: #111113; --ink2: #6E6E73; --claude: #D97757; --codex: #2F6BFF; --red: #E5484D; --green: #1F9D55;
+          --grad: linear-gradient(135deg, #F08A5D 0%, #A55CFF 52%, #3F7BFF 100%); }
+  body { width: 1280px; height: 640px; overflow: hidden; position: relative; color: var(--ink);
          font-family: -apple-system, "SF Pro Display", "SF Pro Text", "Helvetica Neue", sans-serif;
-         background: #0b0c10; -webkit-font-smoothing: antialiased; }
-  .aurora { position: absolute; inset: 0;
-    background:
-      radial-gradient(420px 260px at 25% 62%, rgba(235, 128, 86, .26), transparent 70%),
-      radial-gradient(420px 260px at 50% 58%, rgba(170, 110, 255, .22), transparent 70%),
-      radial-gradient(420px 260px at 75% 62%, rgba(92, 150, 255, .26), transparent 70%),
-      radial-gradient(900px 400px at 50% -10%, rgba(255,255,255,.07), transparent 70%); filter: blur(10px); }
+         background: #F4F4F1; -webkit-font-smoothing: antialiased; }
+  .glow { position: absolute; inset: 0; background:
+      radial-gradient(560px 360px at 12% 92%, rgba(240, 128, 90, .26), transparent 70%),
+      radial-gradient(560px 360px at 88% 92%, rgba(63, 123, 255, .22), transparent 70%),
+      radial-gradient(640px 300px at 50% 108%, rgba(165, 92, 255, .20), transparent 70%); }
+  .dots { position: absolute; inset: 0; background-image: radial-gradient(rgba(17,17,19,.12) 1px, transparent 1.1px);
+          background-size: 20px 20px; -webkit-mask-image: radial-gradient(ellipse 75% 70% at 50% 50%, #000 30%, transparent 85%); }
 
-  header { position: absolute; top: 40px; left: 0; right: 0; text-align: center; }
-  h1 { font-size: 80px; font-weight: 800; letter-spacing: -2.4px; line-height: 1; }
-  h1 .dim { color: #a1a1aa; font-weight: 700; }
-  .slogan { margin-top: 16px; font-size: 30px; font-weight: 500; letter-spacing: -.3px; color: #e4e4e7; }
+  header { position: absolute; top: 34px; left: 0; right: 0; display: flex; flex-direction: column; align-items: center; }
+  .lockup { display: flex; align-items: center; gap: 22px; }
+  .icon { width: 72px; height: 72px; border-radius: 17px; background: var(--grad); display: grid; place-items: center; position: relative;
+          box-shadow: 0 4px 9px rgba(60,30,140,.18), 0 9px 29px rgba(130,80,255,.32), inset 0 1.5px 0 rgba(255,255,255,.5), inset 0 -2px 6px rgba(0,0,0,.14); }
+  .icon::before { content: ""; position: absolute; inset: 0; border-radius: inherit;
+                  background: radial-gradient(120% 70% at 30% 0%, rgba(255,255,255,.35), transparent 55%); }
+  .icon svg { width: 45px; height: 45px; color: #fff; position: relative; }
+  h1 { font-size: 70px; font-weight: 800; letter-spacing: -2.8px; line-height: 1; margin-top: -6px; white-space: pre; }
+  h1 .dash { color: #A1A1A6; }
+  h1 .grad { background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent; padding-bottom: 6px; }
+  .slogan { margin-top: 14px; font-size: 28px; font-weight: 600; letter-spacing: -.5px; }
+  .slogan .c1 { color: var(--claude); } .slogan .c2 { color: var(--codex); }
 
-  .row { position: absolute; top: 226px; left: 56px; right: 56px; display: flex; gap: 26px; }
-  .step { flex: 1; }
-  .win { height: 262px; border-radius: 14px; overflow: hidden; position: relative;
-         background: rgba(30, 31, 38, .74); backdrop-filter: blur(24px);
-         border: 1px solid rgba(255,255,255,.10);
-         box-shadow: 0 0 0 .5px rgba(0,0,0,.6), 0 24px 60px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.06); }
-  .bar { height: 38px; display: flex; align-items: center; padding: 0 14px; gap: 8px;
-         background: rgba(255,255,255,.04); border-bottom: 1px solid rgba(255,255,255,.07); }
-  .tl { width: 12px; height: 12px; border-radius: 50%; }
+  .row { position: absolute; top: 190px; left: 56px; right: 56px; display: flex; gap: 22px; }
+  .step { flex: 1; min-width: 0; }
+  .win { height: 246px; border-radius: 14px; overflow: hidden; position: relative; border: 1px solid rgba(0,0,0,.09);
+         box-shadow: 0 1px 2px rgba(0,0,0,.06), 0 10px 24px rgba(20,20,45,.09), 0 28px 64px rgba(20,20,45,.14); }
+  .claude { background: #FBFAF7; } .codex { background: #FFFFFF; }
+  .bar { height: 36px; display: flex; align-items: center; padding: 0 13px; gap: 7px; border-bottom: 1px solid rgba(0,0,0,.07); }
+  .claude .bar { background: #F3F1EB; } .codex .bar { background: #F6F6F7; }
+  .tl { width: 11px; height: 11px; border-radius: 50%; box-shadow: inset 0 0 0 .5px rgba(0,0,0,.15); }
   .r { background: #ff5f57; } .y { background: #febc2e; } .g { background: #28c840; }
-  .bar .t { flex: 1; display: flex; justify-content: center; align-items: center; gap: 7px; margin-right: 52px;
-            font-size: 13.5px; font-weight: 600; }
-  .bar .t svg { width: 15px; height: 15px; }
-  .in { padding: 16px 18px; display: flex; flex-direction: column; gap: 12px; font-size: 15px; line-height: 1.42; }
-  .me { align-self: flex-end; max-width: 86%; padding: 8px 13px; border-radius: 14px; background: rgba(255,255,255,.11); color: #f4f4f5; }
-  .ai { color: #c9c9d1; }
-  code { font-family: "SF Mono", Menlo, monospace; font-size: 13.5px; color: #e4e4e7; }
-  .banner { display: flex; gap: 11px; align-items: center; padding: 11px 13px; border-radius: 11px; }
-  .banner svg { flex: none; width: 22px; height: 22px; }
-  .banner b { display: block; font-size: 15px; }
-  .banner small { font-size: 13px; }
-  .warn { background: rgba(255, 95, 87, .13); border: 1px solid rgba(255, 95, 87, .42); color: #ffb1ab; }
-  .warn small { color: #e79a95; }
-  .note { background: rgba(92, 150, 255, .13); border: 1px solid rgba(92, 150, 255, .42); color: #c7d8ff; }
-  .note b { color: #fff; } .note small { color: #a9bfee; }
-  .done { display: flex; gap: 8px; align-items: center; color: #9be7b0; font-size: 14px; }
+  .bar .t { flex: 1; display: flex; justify-content: center; align-items: center; gap: 7px; margin-right: 46px;
+            font-size: 13.5px; font-weight: 650; color: #3A3A3C; }
+  .glyph { width: 17px; height: 17px; border-radius: 5px; display: grid; place-items: center; }
+  .glyph svg { width: 12px; height: 12px; color: #fff; }
+  .in { padding: 14px 16px; display: flex; flex-direction: column; gap: 11px; font-size: 14.5px; line-height: 1.42; color: #3A3A3C; }
+  .me { align-self: flex-end; max-width: 88%; text-wrap: balance; padding: 7px 12px; border-radius: 13px; color: var(--ink); }
+  .claude .me { background: #EFEBE2; } .codex .me { background: #F1F1F3; }
+  code { font-family: "SF Mono", Menlo, monospace; font-size: 12.5px; color: #1D1D1F; background: rgba(0,0,0,.055); padding: 1px 5px; border-radius: 5px; }
+  .banner { display: flex; gap: 10px; align-items: center; padding: 10px 12px; border-radius: 11px; }
+  .banner > svg { flex: none; width: 21px; height: 21px; }
+  .banner b { display: block; font-size: 14.5px; font-weight: 700; }
+  .banner small { font-size: 12.5px; }
+  .warn { background: #FFF0EF; border: 1px solid #F6B9B6; color: #C22F33; box-shadow: 0 6px 18px rgba(229,72,77,.14); }
+  .warn > svg { color: var(--red); } .warn small { color: #B65A5C; }
+  .note { background: #F6F9FF; border: 1px solid rgba(47,107,255,.28); box-shadow: 0 8px 22px rgba(47,107,255,.10); }
+  .note .gi { flex: none; width: 26px; height: 26px; border-radius: 8px; background: var(--grad); display: grid; place-items: center; }
+  .note .gi svg { width: 16px; height: 16px; color: #fff; }
+  .note b { color: var(--ink); } .note small { color: #4A63AE; }
+  .done { display: flex; gap: 7px; align-items: center; color: var(--green); font-size: 14px; font-weight: 650; }
   .done svg { width: 17px; height: 17px; }
 
-  /* step 2: the real ccx menu */
-  .menubar { height: 30px; display: flex; align-items: center; justify-content: flex-end; gap: 16px; padding: 0 14px;
-             background: rgba(255,255,255,.07); border-bottom: 1px solid rgba(255,255,255,.07); color: #d4d4d8; font-size: 13px; }
-  .mbicon { width: 26px; height: 22px; border-radius: 6px; display: grid; place-items: center; background: rgba(255,255,255,.24); }
-  .mbicon svg { width: 17px; height: 17px; }
-  .menus { position: relative; height: 230px; }
-  .menu { position: absolute; border-radius: 11px; padding: 6px; background: rgb(46, 47, 56);
-          border: 1px solid rgba(255,255,255,.13); box-shadow: 0 18px 44px rgba(0,0,0,.55); font-size: 13.5px; color: #ececf0; }
-  .main { top: 10px; right: 12px; width: 186px; }
-  .sub { top: 92px; right: 194px; width: 160px; z-index: 2; }
-  .hd { padding: 4px 9px 6px; }
-  .hd b { font-weight: 700; } .hd i { font-style: normal; color: #9a9aa4; font-size: 11.5px; margin-left: 5px; }
-  .hd i u { text-decoration: none; color: #6ea8ff; }
-  .hd div { font-size: 11.5px; color: #9a9aa4; margin-top: 2px; }
-  .sep { height: 1px; margin: 4px 8px; background: rgba(255,255,255,.1); }
-  .cap { padding: 4px 9px 2px; font-size: 11px; color: #8f8f99; }
-  .it { display: flex; align-items: center; gap: 6px; padding: 4px 9px; border-radius: 6px; }
-  .it .chev { margin-left: auto; color: #9a9aa4; font-size: 13px; }
-  .it .up { color: #3d8bff; font-size: 13px; }
-  .it.sel { background: #0a64d8; color: #fff; } .it.sel .chev, .it.sel .up { color: #fff; }
-  .it.dim { color: #b8b8c0; }
+  /* step 2: the real ccx menu, on a light desktop */
+  .desk { background:
+      radial-gradient(60% 80% at 10% 30%, #FFD3BF 0%, rgba(255,211,191,0) 65%),
+      radial-gradient(60% 80% at 95% 95%, #BFD4FF 0%, rgba(191,212,255,0) 65%),
+      radial-gradient(55% 65% at 55% 50%, #E4D6FF 0%, rgba(228,214,255,0) 70%), #F5F0EC; }
+  .menubar { height: 30px; display: flex; align-items: center; justify-content: flex-end; gap: 14px; padding: 0 13px;
+             background: rgba(255,255,255,.62); border-bottom: 1px solid rgba(0,0,0,.06); color: #1D1D1F; font-size: 12.5px; font-weight: 500; }
+  .menubar .wifi { width: 16px; height: 13px; }
+  .mbicon { width: 26px; height: 21px; border-radius: 6px; display: grid; place-items: center; background: rgba(0,0,0,.13); }
+  .mbicon svg { width: 16px; height: 16px; color: #1D1D1F; }
+  .menus { position: relative; height: 214px; }
+  .menu { position: absolute; border-radius: 10px; padding: 5px; background: rgba(246,246,248,.97); color: #1D1D1F;
+          border: 1px solid rgba(0,0,0,.13); box-shadow: 0 1px 2px rgba(0,0,0,.06), 0 14px 36px rgba(40,40,90,.22); font-size: 13px; }
+  .main { top: 8px; right: 10px; width: 178px; }
+  .sub { top: 86px; right: 182px; width: 170px; z-index: 2; }
+  .hd { padding: 3px 8px 5px; }
+  .hd b { font-weight: 700; } .hd div { font-size: 11px; color: #8E8E93; margin-top: 1px; } .hd u { text-decoration: none; color: #0A64D8; }
+  .sep { height: 1px; margin: 3px 8px; background: rgba(0,0,0,.1); }
+  .cap { padding: 3px 8px 2px; font-size: 10.5px; color: #8E8E93; letter-spacing: .3px; white-space: nowrap; }
+  .it { display: flex; align-items: center; gap: 5px; padding: 3px 8px; border-radius: 5px; }
+  .it .chev { margin-left: auto; color: #8E8E93; font-size: 12px; }
+  .it .up { color: #0A64D8; font-size: 12px; font-weight: 700; }
+  .it.sel { background: #0A64D8; color: #fff; } .it.sel .chev, .it.sel .up { color: #fff; }
+  .it.dim { color: #A1A1A6; }
 
-  .label { margin-top: 18px; display: flex; justify-content: center; align-items: center; gap: 10px;
-           font-size: 18px; font-weight: 600; color: #f4f4f5; }
-  .label .n { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; }
-  .label .n svg { width: 16px; height: 16px; }
-  .n1 { background: rgba(255, 95, 87, .2); color: #ff6b63; } .n2 { background: rgba(255,255,255,.16); color: #fff; }
-  .n3 { background: rgba(40, 200, 64, .2); color: #4be06a; }
+  .label { margin-top: 15px; display: flex; justify-content: center; align-items: center; gap: 9px;
+           font-size: 16.5px; font-weight: 650; letter-spacing: -.2px; color: var(--ink); white-space: nowrap; }
+  .label .n { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; flex: none; }
+  .label .n svg { width: 15px; height: 15px; }
+  .n1 { background: rgba(229,72,77,.12); color: var(--red); } .n2 { background: rgba(0,0,0,.07); color: var(--ink); }
+  .n3 { background: rgba(31,157,85,.12); color: var(--green); }
 
-  footer { position: absolute; bottom: 28px; left: 0; right: 0; display: flex; justify-content: center; align-items: center; gap: 14px;
-           font-size: 30px; font-weight: 600; letter-spacing: -.2px; color: #e4e4e7; }
-  footer svg { width: 34px; height: 34px; fill: #e4e4e7; }
+  /* the same two buttons as the video's end card */
+  footer { position: absolute; top: 522px; left: 0; right: 0; display: flex; justify-content: center; gap: 16px;
+           font-size: 21px; letter-spacing: -.3px; }
+  .btn { height: 56px; border-radius: 16px; display: flex; align-items: stretch; overflow: hidden; }
+  .gh { background: #111113; color: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.25), 0 14px 32px rgba(20,20,45,.26); }
+  .gh .url { display: flex; align-items: center; gap: 12px; padding: 0 22px; font-weight: 650; }
+  .gh .url svg { width: 27px; height: 27px; fill: #fff; }
+  .gh .star { display: flex; align-items: center; gap: 9px; padding: 0 24px; font-weight: 700;
+              border-left: 1px solid rgba(255,255,255,.16); background: rgba(255,255,255,.07); }
+  .gh .star svg { width: 24px; height: 24px; }
+  .x { background: #fff; color: var(--ink); border: 1px solid rgba(0,0,0,.14); align-items: center; gap: 11px; padding: 0 24px; font-weight: 700;
+       box-shadow: 0 1px 2px rgba(0,0,0,.05), 0 12px 28px rgba(20,20,45,.10); }
+  .x svg { width: 21px; height: 21px; fill: var(--ink); }
+  .x b { font-weight: 700; } .x span { font-weight: 600; opacity: .75; }
 </style></head>
 <body>
-  <div class="aurora"></div>
+  <div class="glow"></div>
+  <div class="dots"></div>
 
   <svg width="0" height="0" style="position:absolute">
-    <symbol id="swap" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+    <symbol id="swap" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
       <path d="M18 8H6M9.5 4.5 6 8l3.5 3.5"/><path d="M6 16h12M14.5 12.5 18 16l-3.5 3.5"/></symbol>
-    <symbol id="term" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+    <symbol id="term" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
       <rect x="3" y="4" width="18" height="16" rx="3"/><path d="m7.5 10 3 2.5-3 2.5M13 15h3.5"/></symbol>
     <symbol id="alert" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
       <circle cx="12" cy="12" r="9.5"/><path d="M12 7.5v5.5M12 16.5v.01"/></symbol>
     <symbol id="check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
       <circle cx="12" cy="12" r="9.5"/><path d="m8 12.3 2.8 2.8L16.2 9.5"/></symbol>
+    <symbol id="star" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round">
+      <path d="M12 2.8l2.85 5.78 6.38.93-4.62 4.5 1.09 6.35L12 17.36l-5.7 3 1.09-6.35-4.62-4.5 6.38-.93z"/></symbol>
   </svg>
 
   <header>
-    <h1>ccx <span class="dim">-</span> claudecodex</h1>
-    <div class="slogan">Sync task context between Claude and Codex.</div>
+    <div class="lockup">
+      <div class="icon"><svg><use href="#swap"/></svg></div>
+      <h1>ccx <span class="dash">-</span> <span class="grad">claudecodex</span></h1>
+    </div>
+    <div class="slogan">Sync task context between <span class="c1">Claude</span> and <span class="c2">Codex.</span></div>
   </header>
 
   <div class="row">
     <div class="step">
-      <div class="win">
+      <div class="win claude">
         <div class="bar"><span class="tl r"></span><span class="tl y"></span><span class="tl g"></span>
-          <span class="t" style="color:#f0a37f"><svg><use href="#term"/></svg>Claude Code</span></div>
+          <span class="t"><span class="glyph" style="background:var(--claude)"><svg><use href="#term"/></svg></span>Claude Code</span></div>
         <div class="in">
           <div class="me">Ship the pricing page and fix the checkout bug</div>
-          <div class="ai">Found it: the coupon is applied twice in <code>cart.ts</code>…</div>
+          <div>Found it: the coupon is applied twice in <code>cart.ts</code>…</div>
           <div class="banner warn"><svg><use href="#alert"/></svg><span><b>Usage limit reached</b><small>Resets in 4 h 52 min</small></span></div>
         </div>
       </div>
@@ -115,20 +147,22 @@
     </div>
 
     <div class="step">
-      <div class="win">
-        <div class="menubar"><span>Wi‑Fi</span><span class="mbicon"><svg style="color:#fff"><use href="#swap"/></svg></span><span>Fri 9:41</span></div>
+      <div class="win desk">
+        <div class="menubar">
+          <svg class="wifi" viewBox="0 0 20 16" fill="none" stroke="#1D1D1F" stroke-width="2" stroke-linecap="round"><path d="M2 5.5a12 12 0 0 1 16 0M5 9a7.5 7.5 0 0 1 10 0M8 12.4a3 3 0 0 1 4 0"/></svg>
+          <span class="mbicon"><svg><use href="#swap"/></svg></span><span>Fri 9:41</span></div>
         <div class="menus">
           <div class="menu main">
             <div class="hd"><b>ccx - claudecodex</b>
-              <div>0.0.31 <u style="text-decoration:none;color:#6ea8ff">@aaron0x10</u></div></div>
+              <div>0.0.31 <u>@aaron0x10</u></div></div>
             <div class="sep"></div>
-            <div class="cap">Recent Projects</div>
+            <div class="cap">RECENT PROJECTS</div>
             <div class="it sel">shop-app <span class="up">↻</span><span class="chev">›</span></div>
-            <div class="it dim">landing-site<span class="chev">›</span></div>
-            <div class="it dim">api-server<span class="chev">›</span></div>
+            <div class="it">landing-site<span class="chev">›</span></div>
+            <div class="it">api-server <span class="up">↻</span><span class="chev">›</span></div>
           </div>
           <div class="menu sub">
-            <div class="cap">To Codex · from Claude</div>
+            <div class="cap">TO CODEX · FROM CLAUDE</div>
             <div class="it sel"><span class="up">↻</span> Ship pricing</div>
             <div class="it dim">✓ Refactor auth</div>
             <div class="it dim">○ Release notes</div>
@@ -139,13 +173,13 @@
     </div>
 
     <div class="step">
-      <div class="win">
+      <div class="win codex">
         <div class="bar"><span class="tl r"></span><span class="tl y"></span><span class="tl g"></span>
-          <span class="t" style="color:#9fb4ff"><svg><use href="#term"/></svg>Codex</span></div>
+          <span class="t"><span class="glyph" style="background:var(--ink)"><svg><use href="#term"/></svg></span>Codex</span></div>
         <div class="in">
-          <div class="banner note"><svg><use href="#swap"/></svg><span><b>14 updates from Claude Code</b><small>The plan, the bug, where it stopped</small></span></div>
+          <div class="banner note"><span class="gi"><svg><use href="#swap"/></svg></span><span><b>14 updates from Claude Code</b><small>The plan, the bug, where it stopped</small></span></div>
           <div class="me">continue</div>
-          <div class="ai">Removing the second coupon pass in <code>cart.ts</code>…</div>
+          <div>Removing the second coupon pass in <code>cart.ts</code>…</div>
           <div class="done"><svg><use href="#check"/></svg>Tests pass · checkout fixed</div>
         </div>
       </div>
@@ -154,7 +188,13 @@
   </div>
 
   <footer>
-    <svg viewBox="0 0 16 16"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
-    github.com/aaronwong1999/ccx
+    <div class="btn gh">
+      <div class="url"><svg viewBox="0 0 16 16"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>github.com/aaronwong1999/ccx</div>
+      <div class="star"><svg><use href="#star"/></svg>Star</div>
+    </div>
+    <div class="btn x">
+      <svg viewBox="0 0 24 24"><path d="M17.75 3h3.07l-6.7 7.66L22 21h-6.17l-4.83-6.32L5.47 21H2.4l7.17-8.2L2 3h6.33l4.37 5.77L17.75 3zm-1.08 16.17h1.7L7.4 4.74H5.58l11.09 14.43z"/></svg>
+      <b>Follow <span>@aaron0x10</span></b>
+    </div>
   </footer>
 </body></html>
