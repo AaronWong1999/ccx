@@ -27,9 +27,16 @@
   撞上 Claude Code 的额度上限？切到 Codex 接着干；Codex 也用完了，再切回 Claude。同一个任务、同一段对话，不用干等 5 小时额度恢复。
 </p>
 
+<p align="center">
+  <b>Stuck on a problem one side can't crack? Hand it to the other.</b><br>
+  <b>Claude and Codex each have their strengths, and the other one starts with the full context.</b><br>
+  某个问题一边怎么都搞不定？交给另一边试试。Claude 和 Codex 各有专长，接手的那一边带着完整上下文直接上手。
+</p>
+
 | | Without ccx · 没有 ccx | With ccx · 有了 ccx |
 |---|---|---|
 | Usage limit hit<br>额度用完 | Wait for the 5-hour reset<br>干等恢复 | Continue in the other app<br>切到另一个继续干 |
+| Stuck on a problem<br>卡在某个问题上 | Keep retrying the same model, or paste everything over by hand<br>在同一个模型上反复重试，或手动把来龙去脉贴过去 | Let the other model take a shot, already up to speed<br>换另一个模型试试，它已经了解来龙去脉 |
 | Switching apps<br>换 app | Re-explain all context<br>重新解释全部上下文 | The other side already knows<br>对面已经知道进展 |
 | Coming back<br>切回来 | Start a new chat<br>新开对话 | Same conversation, same progress<br>原来的对话，同样的进展 |
 
@@ -94,6 +101,7 @@ Nothing else asks for passwords, admin rights or accessibility access.<br>除此
 | Claude ran out; continue in Codex<br>Claude 额度用完，到 Codex 接着干 | Click ⇄ → project → session. Or in a new Codex conversation say **"continue the ‹name› session from Claude"**, or paste a screenshot and say "continue this".<br>点 ⇄ → 项目 → 会话。或者在 Codex 新开对话说**"从 Claude 把 ‹名称› 那个会话导入，接着干"**，也可以贴截图说"接着这个干" |
 | Codex ran out too; back to Claude<br>Codex 也用完了，回到 Claude | Open the **same** Claude conversation and send anything ("continue"); Codex's progress comes in.<br>打开**原来那个** Claude 对话随便说一句（比如"继续"），Codex 的进展会自动带进来 |
 | Back to Codex again<br>再回到 Codex | Open the same Codex conversation and send anything.<br>打开原来那个 Codex 对话，随便说一句 |
+| One side is stuck; let the other try<br>一边卡住了，让另一边试试 | Same switch: click ⇄, or `/to-codex` · `$to-claude`. Once it's solved, open the original conversation and send anything; the fix comes back with it.<br>一样的切换：点 ⇄，或者 `/to-codex` · `$to-claude`。搞定后打开原来的对话随便说一句，解决过程会一起带回来 |
 | Pull progress now<br>立刻同步一下 | Claude: `/from-codex` · Codex: `$from-claude` |
 | Hand this conversation over<br>把当前对话交给另一边 | Claude: `/to-codex` · Codex: `$to-claude` · or click ⇄ · 或点 ⇄ |
 
