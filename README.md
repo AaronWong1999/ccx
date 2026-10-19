@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/hero.png" alt="Claude Code hits its usage limit, click ⇄ in the menu bar, Codex picks up where Claude stopped." width="49%">
+  <img src="docs/hero.png" alt="ccx - claudecodex: sync task context between Claude and Codex. 1. Claude hits its limit. 2. Click ⇄ in the menu bar. 3. Codex picks up the task." width="49%">
   <a href="https://github.com/user-attachments/assets/9e60b0bd-ebd3-4480-836a-341ef51e1ce8"><img src="docs/demo.png" alt="Watch the 30-second demo · 看 30 秒演示" width="49%"></a>
 </p>
 
