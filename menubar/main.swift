@@ -274,7 +274,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
             .font: NSFont.systemFont(ofSize: 11), .foregroundColor: NSColor.secondaryLabelColor]))
         title.append(NSAttributedString(string: "@aaron0x10", attributes: [
             .font: NSFont.systemFont(ofSize: 11), .foregroundColor: NSColor.linkColor]))
-        title.append(NSAttributedString(string: "\n" + L("Sync task memory between Claude and Codex.", "在 Claude 和 Codex 之间同步任务记忆。"),
+        title.append(NSAttributedString(string: "\n" + L("Sync task context between Claude and Codex.", "在 Claude 和 Codex 之间同步任务上下文。"),
                                         attributes: [.font: NSFont.systemFont(ofSize: NSFont.smallSystemFontSize),
                                                      .foregroundColor: NSColor.secondaryLabelColor]))
         head.attributedTitle = title
