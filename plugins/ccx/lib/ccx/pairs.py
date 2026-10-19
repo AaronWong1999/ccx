@@ -135,10 +135,13 @@ def render(items: List[Tuple[str, str]], src_tool: str, budget: int) -> str:
     if plan and not any(plan.strip() in k for k in kept):
         head.append(f"Latest task list:\n{plan[len(PLAN):].strip()}")
     tail = []
-    last = items[-1][1] if items else ""
-    if items and items[-1][0] == "assistant" and last.lstrip().startswith(("[tool", "[ran", "[result", "[edited", "[output")):
+    last = items[-1][1].lstrip().lower() if items else ""
+    if items and items[-1][0] == "assistant" and last.startswith((
+            "[tool", "[ran", "[result", "[edited", "[output", "you've hit your", "you have hit your",
+            "api error: 429", "已达到会话限额", "已达到用量上限")):
         tail.append(f"NOTE: {NAME[src_tool]} stopped in the middle of a step (for example it ran out of usage). "
-                    f"Its last action is above; check whether it finished before you go on.")
+                    "Check its last edits and test results, then resume the unfinished step; "
+                    "do not restart work that is already complete.")
     return "\n\n".join(head + kept + tail)
 
 
@@ -188,12 +191,13 @@ def _pull(here_tool: str, here_id: str, budget: int) -> Optional[dict]:
     new = [u for u in us[o["cursor"]:] if u]
     g = goal(other, s.id) if new else None
     note = goal_note(g, other) if new and _goal_key(g) != o.get("goal_sent", "") else ""
+    # Prepare all context before consuming the delta. If rendering fails, the
+    # hook logs and skips this run; the next prompt must still receive it.
+    result = {"from": other, "session": s.id, "count": len(new),
+              "context": wrap(note + render(new, other, budget), s, pair[here_tool]["cwd"], first=False)} if new else None
     _set_cursor(pair["claude"]["id"], other, len(us), codex.size_of(s) if other == "codex" else None,
                 s.mtime if other == "codex" else None, _goal_key(g) if new else None)
-    if not new:
-        return None
-    return {"from": other, "session": s.id, "count": len(new),
-            "context": wrap(note + render(new, other, budget), s, pair[here_tool]["cwd"], first=False)}
+    return result
 
 
 def continue_from(here_tool: str, here_id: str, here_cwd: str, other_id: str) -> dict:
@@ -220,11 +224,11 @@ def continue_from(here_tool: str, here_id: str, here_cwd: str, other_id: str) ->
     there = {"id": s.id, "cwd": s.cwd, "cursor": len(us), "goal_sent": _goal_key(g)}
     if other == "codex":
         there["size"], there["updated_at"] = codex.size_of(s), s.mtime
+    context = wrap(goal_note(g, other) + render([u for u in shown if u], other, FULL_BUDGET), s, here["cwd"], first=True)
     link(**({"claude_side": here, "codex_side": there} if here_tool == "claude"
             else {"claude_side": there, "codex_side": here}))
     return {"from": other, "session": s.id, "title": s.title, "cwd": s.cwd,
-            "context": wrap(goal_note(g, other) + render([u for u in shown if u], other, FULL_BUDGET), s, here["cwd"],
-                            first=True)}
+            "context": context}
 
 
 def pending(tool: str, sid: str) -> Tuple[int, int]:

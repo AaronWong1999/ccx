@@ -129,12 +129,12 @@ def main(argv=None):
             print(json.dumps(estimate(a.tool, a.session)))
         elif a.cmd == "new-claude":
             new_claude_conversation(a.thread)
-            print("✓ " + L("Opened a new Claude conversation; press Return to continue there.",
-                           "已打开一个新的 Claude 对话，按回车即可接着干。"))
+            print("✓ " + L("Opened a new Claude conversation with the prompt filled in. Dismiss this dialog, then send it in Claude to continue.",
+                           "已打开一个新的 Claude 对话，接着干的指令已填入输入框。关闭此提示后，在 Claude 里点击发送即可继续。"))
         elif a.cmd == "new-codex":
             new_codex_conversation(a.session)
-            print("✓ " + L("Opened Codex in this project. The prompt to continue is on your clipboard: paste it into a new chat and send.",
-                           "已在这个项目里打开 Codex，接着干的指令已复制到剪贴板：在新对话里粘贴并发送即可。"))
+            print("✓ " + L("Opened a new Codex conversation with the prompt filled in. Dismiss this dialog, then send it in Codex to continue.",
+                           "已打开一个新的 Codex 对话，接着干的指令已填入输入框。关闭此提示后，在 Codex 里点击发送即可继续。"))
         elif a.cmd == "config":
             if a.key and a.value is not None:
                 v = {"true": True, "on": True, "false": False, "off": False}.get(a.value.lower(), a.value)

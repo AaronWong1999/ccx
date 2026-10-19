@@ -15,6 +15,7 @@ import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
 from unittest import mock
+from urllib.parse import parse_qs, urlparse
 
 TMP = tempfile.mkdtemp(prefix="ccx-test-")
 os.environ["CLAUDE_CONFIG_DIR"] = os.path.join(TMP, "claude")
@@ -227,6 +228,36 @@ class PairsSync(Base):
         self.assertTrue(res["context"].startswith(f"<{TAG}"))
         self.assertIsNone(pairs.pull("claude", "c-pair"))  # delivered exactly once
 
+    def test_failed_context_generation_does_not_consume_progress(self):
+        for target, sid in (("claude", "c-pair"), ("codex", "x-pair")):
+            for step in ("render", "wrap"):
+                with self.subTest(target=target, step=step):
+                    self.make_pair()
+                    if target == "claude":
+                        self.cx.append("x-pair", amsg("must survive failed handoff"))
+                    else:
+                        with claude.find("c-pair").path.open("a") as f:
+                            f.write(json.dumps(assistant(text("must survive failed handoff"))) + "\n")
+                    before = pairs.load()
+                    with mock.patch.object(pairs, step, side_effect=RuntimeError("context generation failed")):
+                        with self.assertRaisesRegex(RuntimeError, "context generation failed"):
+                            pairs.pull(target, sid)
+                    self.assertEqual(pairs.load(), before)
+                    self.assertIn("must survive failed handoff", pairs.pull(target, sid)["context"])
+                    self.assertIsNone(pairs.pull(target, sid))
+
+    def test_failed_initial_context_does_not_replace_existing_pair(self):
+        self.make_pair()
+        self.cx.add("x-new", PROJ_A, "New source", [umsg("new task"), amsg("new progress")])
+        before = pairs.load()
+        with mock.patch.object(pairs, "wrap", side_effect=RuntimeError("context generation failed")):
+            with self.assertRaisesRegex(RuntimeError, "context generation failed"):
+                pairs.continue_from("claude", "c-pair", PROJ_A, "x-new")
+        self.assertEqual(pairs.load(), before)
+        result = pairs.continue_from("claude", "c-pair", PROJ_A, "x-new")
+        self.assertIn("new progress", result["context"])
+        self.assertEqual(pairs.find("claude", "c-pair")["codex"]["id"], "x-new")
+
     def test_progress_is_not_lost_when_rollout_size_is_unchanged_or_missing(self):
         self.make_pair()
         with mock.patch.object(codex, "size_of", return_value=-1):
@@ -322,6 +353,19 @@ class PairsSync(Base):
         out = pairs.render([u for u in us if u], "codex", budget=10_000)
         self.assertIn("2. 样式", out)
         self.assertNotIn("stopped in the middle", out)
+
+    def test_quota_message_keeps_failed_tests_marked_as_unfinished(self):
+        for message in ("You've hit your session limit · resets 10:10am (Asia/Shanghai)",
+                        "You've hit your limit · Please try again later.", "已达到会话限额"):
+            with self.subTest(message=message):
+                out = pairs.render([
+                    ("assistant", "Writing tests for the fix"),
+                    ("assistant", "[result] Failed Tests 2: expected undefined to be 25"),
+                    ("assistant", message),
+                ], "claude", budget=2000)
+                self.assertIn("Failed Tests 2", out)
+                self.assertIn("stopped in the middle", out)
+                self.assertIn("unfinished step", out)
 
     def test_slow_git_never_blocks(self):
         from ccx import common
@@ -588,6 +632,61 @@ class Interfaces(Base):
             second = sync.transfer("codex", "x-reverse", open_app=False)
         self.assertEqual(first["target"]["id"], second["target"]["id"])
         self.assertEqual(claude.find(first["target"]["id"]).cwd, PROJ_B)
+
+
+class NewConversations(unittest.TestCase):
+    targets = (("claude", "codex", "new", "path", "prompt"),
+               ("codex", "claude", "code", "folder", "q"))
+
+    def test_prefills_exact_session_in_project_without_using_clipboard(self):
+        for source, target, host, folder_key, prompt_key in self.targets:
+            with self.subTest(target=target):
+                session = Session(source, "source-session", "/tmp/项目 A + B/#目录", 0,
+                                  '修复 "a&b" + 100% / 登录?\n第二行', None)
+                with mock.patch.object(claude if source == "claude" else codex, "find", return_value=session), \
+                     mock.patch.object(sync, "copy_to_clipboard") as clipboard, \
+                     mock.patch.object(sync.subprocess, "run", return_value=subprocess.CompletedProcess([], 0)) as run:
+                    url = getattr(sync, f"new_{target}_conversation")(session.id)
+                parsed = urlparse(url)
+                self.assertEqual((parsed.scheme, parsed.netloc, parsed.fragment), (target, host, ""))
+                self.assertEqual(parsed.path, "/new" if target == "claude" else "")
+                self.assertEqual(parse_qs(parsed.query), {
+                    folder_key: [os.path.realpath(session.cwd)],
+                    prompt_key: [f"Continue the “{session.title}” session from {source.title()} (session id {session.id})."],
+                })
+                self.assertEqual(run.call_args.args[0], ["open", url])
+                run.assert_called_once()
+                clipboard.assert_not_called()
+
+    def test_open_failure_is_reported_instead_of_claiming_success(self):
+        for source, target, *_ in self.targets:
+            with self.subTest(target=target):
+                session = Session(source, "source-session", PROJ_A, 0, "Continue me", None)
+                with mock.patch.object(claude if source == "claude" else codex, "find", return_value=session), \
+                     mock.patch.object(sync.subprocess, "run", return_value=subprocess.CompletedProcess([], 1, "", "No app found")):
+                    with self.assertRaisesRegex(RuntimeError, "No app found"):
+                        getattr(sync, f"new_{target}_conversation")(session.id)
+
+    def test_missing_session_does_not_open_app(self):
+        for source, target, *_ in self.targets:
+            with self.subTest(target=target):
+                with mock.patch.object(claude if source == "claude" else codex, "find", return_value=None), \
+                     mock.patch.object(sync.subprocess, "run") as run:
+                    with self.assertRaisesRegex(RuntimeError, "not found"):
+                        getattr(sync, f"new_{target}_conversation")("missing")
+                run.assert_not_called()
+
+    def test_success_messages_tell_user_to_send_prefilled_prompt(self):
+        from ccx import cli
+        for target in ("claude", "codex"):
+            with self.subTest(target=target):
+                out = io.StringIO()
+                with mock.patch.object(cli, f"new_{target}_conversation"), \
+                     mock.patch.object(cli, "L", side_effect=lambda en, zh: en), redirect_stdout(out):
+                    cli.main([f"new-{target}", "source-session"])
+                self.assertIn("prompt filled in", out.getvalue())
+                self.assertIn(f"send it in {target.title()}", out.getvalue())
+                self.assertNotIn("clipboard", out.getvalue())
 
 
 class ProjectAssignment(unittest.TestCase):

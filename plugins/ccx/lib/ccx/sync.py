@@ -9,6 +9,7 @@ import subprocess
 import time
 from datetime import datetime
 from typing import Dict, List, Optional
+from urllib.parse import quote, urlencode
 
 from . import claude, codex, pairs, repairs
 from .common import copy_to_clipboard, est_tokens, L, NAME, OTHER, Session, git_snapshot, real, same_dir
@@ -24,28 +25,38 @@ def open_in_app(tool: str, sid: str) -> bool:
     return subprocess.run(["open", deep_link(tool, sid)], capture_output=True).returncode == 0
 
 
+def _open_new_conversation(url: str, app: str) -> str:
+    try:
+        result = subprocess.run(["open", url], capture_output=True, text=True, timeout=30)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        raise RuntimeError(f"Could not open a new {app} conversation: {e}") from e
+    if result.returncode:
+        raise RuntimeError(f"Could not open a new {app} conversation: " + result.stderr.strip())
+    return url
+
+
 def new_claude_conversation(codex_id: str) -> str:
     """Open a new Claude conversation in the thread's folder, prefilled to continue it."""
     t = codex.find(codex_id)
     if not t:
         raise RuntimeError(f"Codex thread {codex_id} not found")
-    from urllib.parse import quote
     prompt = f"Continue the \u201c{t.title}\u201d session from Codex (session id {t.id})."
-    url = f"claude://code/new?folder={quote(t.cwd)}&q={quote(prompt)}"
-    subprocess.run(["open", url], capture_output=True, check=False)
-    return url
+    url = "claude://code/new?" + urlencode({"folder": real(t.cwd), "q": prompt}, quote_via=quote)
+    return _open_new_conversation(url, "Claude")
 
 
 def new_codex_conversation(claude_id: str) -> str:
-    """Open Codex in the session's folder and put a 'continue from Claude' prompt on
-    the clipboard (Codex has no link that pre-fills a new chat)."""
+    """Open a new Codex chat in the session's folder with its prompt prefilled.
+
+    The native deep link leaves sending to the user and never uses the clipboard.
+    See https://learn.chatgpt.com/docs/reference/commands#deep-links.
+    """
     c = claude.find(claude_id)
     if not c:
         raise RuntimeError(f"Claude session {claude_id} not found")
     prompt = f"Continue the \u201c{c.title}\u201d session from Claude (session id {c.id})."
-    copy_to_clipboard(prompt)
-    subprocess.run([codex.codex_bin(), "app", c.cwd], capture_output=True, check=False)
-    return prompt
+    url = "codex://new?" + urlencode({"path": real(c.cwd), "prompt": prompt}, quote_via=quote)
+    return _open_new_conversation(url, "Codex")
 
 
 def continue_phrase(tool: str) -> str:
