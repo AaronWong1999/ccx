@@ -35,7 +35,7 @@
   .slogan .c1 { color: var(--claude); } .slogan .c2 { color: var(--codex); }
 
   /* how to use it: three steps, each a pared-down real screen */
-  .steps { margin-top: 44px; display: flex; gap: 36px; position: relative; }
+  .steps { margin-top: 40px; display: flex; gap: 36px; position: relative; }
   .step { flex: 1; min-width: 0; }
   .win { height: 178px; border-radius: 16px; overflow: hidden; position: relative; border: 1px solid rgba(0,0,0,.09);
          box-shadow: 0 1px 2px rgba(0,0,0,.05), 0 12px 28px rgba(20,20,45,.09), 0 30px 64px rgba(20,20,45,.12); }
@@ -91,11 +91,23 @@
   .arrow svg { width: 20px; height: 20px; color: var(--ink2); }
 
   /* where to find it: one link on each side */
-  .links { margin-top: 44px; display: flex; justify-content: space-between; align-items: center;
-           font-size: 30px; font-weight: 700; letter-spacing: -.5px; }
-  .links a { display: flex; align-items: center; gap: 14px; color: var(--ink); text-decoration: none; }
-  .links .gh { width: 36px; height: 36px; fill: var(--ink); }
-  .links .xm { width: 30px; height: 30px; fill: var(--ink); }
+  .links { margin-top: 40px; display: flex; justify-content: space-between; align-items: center;
+           font-size: 26px; letter-spacing: -.4px; }
+  .btn { height: 62px; border-radius: 17px; display: flex; align-items: stretch; overflow: hidden; color: var(--ink); text-decoration: none; }
+  .btn.gh { background: #111113; color: #fff;
+            box-shadow: inset 0 1px 0 rgba(255,255,255,.10), inset 0 -2px 0 rgba(0,0,0,.35), 0 2px 4px rgba(0,0,0,.18), 0 16px 34px rgba(20,20,45,.28); }
+  .gh .url { display: flex; align-items: center; gap: 13px; padding: 0 24px; font-weight: 650; }
+  .gh .url svg { width: 32px; height: 32px; fill: #fff; }
+  .gh .star { display: flex; align-items: center; gap: 10px; padding: 0 26px; font-weight: 700;
+              border-left: 1px solid rgba(255,255,255,.16); background: rgba(255,255,255,.15); }
+  .gh .star svg { width: 27px; height: 27px; color: #FFC933; }
+  .btn.x { background: #fff; border: 1px solid rgba(0,0,0,.13); align-items: center; gap: 13px; padding: 0 26px; font-weight: 700;
+           box-shadow: inset 0 -2px 0 rgba(0,0,0,.06), 0 2px 4px rgba(0,0,0,.05), 0 14px 30px rgba(20,20,45,.12); }
+  .btn.x svg { width: 25px; height: 25px; fill: var(--ink); }
+  .btn.x b { font-weight: 700; } .btn.x span { font-weight: 600; color: #3A3A3C; }
+  .hold { position: relative; }
+  .hand { position: absolute; left: 563px; top: 43px; width: 38px; height: 44px; z-index: 2;
+          filter: drop-shadow(0 3px 5px rgba(0,0,0,.35)); }
 </style></head>
 <body>
   <div class="glow"></div>
@@ -116,6 +128,8 @@
       <circle cx="12" cy="12" r="9.5"/><path d="M12 7.5v5.5M12 16.5v.01"/></symbol>
     <symbol id="check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
       <circle cx="12" cy="12" r="9.5"/><path d="m8 12.3 2.8 2.8L16.2 9.5"/></symbol>
+    <symbol id="star" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round">
+      <path d="M12 2.8l2.85 5.78 6.38.93-4.62 4.5 1.09 6.35L12 17.36l-5.7 3 1.09-6.35-4.62-4.5 6.38-.93z"/></symbol>
   </svg>
 
   <div class="page">
@@ -169,8 +183,12 @@
     </div>
 
     <div class="links">
-      <a><svg class="gh" viewBox="0 0 16 16"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>github.com/aaronwong1999/ccx</a>
-      <a><svg class="xm" viewBox="0 0 24 24"><path d="M17.75 3h3.07l-6.7 7.66L22 21h-6.17l-4.83-6.32L5.47 21H2.4l7.17-8.2L2 3h6.33l4.37 5.77L17.75 3zm-1.08 16.17h1.7L7.4 4.74H5.58l11.09 14.43z"/></svg>Follow @aaron0x10</a>
+      <div class="hold"><a class="btn gh">
+        <span class="url"><svg viewBox="0 0 16 16"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>github.com/aaronwong1999/ccx</span>
+        <span class="star"><svg><use href="#star"/></svg>Star</span>
+      </a>
+      <svg class="hand" viewBox="0 0 24 28"><path d="M9 1C10.1 1 11 1.9 11 3V10.2C11.3 9.5 12 9 12.8 9C13.8 9 14.6 9.7 14.6 10.7V11.3C14.9 10.7 15.6 10.3 16.4 10.3C17.4 10.3 18.2 11 18.2 12V12.6C18.5 12.1 19.1 11.8 19.8 11.8C20.8 11.8 21.6 12.6 21.6 13.6V19C21.6 23.4 18.6 27 14.4 27H12.6C10.1 27 8.6 26 7.3 24.2L3.2 18.5C2.6 17.7 2.7 16.6 3.5 16C4.3 15.4 5.4 15.5 6 16.3L7 17.6V3C7 1.9 7.9 1 9 1Z" fill="#fff" stroke="#111" stroke-width="1.3" stroke-linejoin="round"/><path d="M11 10.2V16M14.6 11.3V16M18.2 12.6V16" stroke="#111" stroke-width="1.1" stroke-linecap="round" fill="none"/></svg></div>
+      <a class="btn x"><svg viewBox="0 0 24 24"><path d="M17.75 3h3.07l-6.7 7.66L22 21h-6.17l-4.83-6.32L5.47 21H2.4l7.17-8.2L2 3h6.33l4.37 5.77L17.75 3zm-1.08 16.17h1.7L7.4 4.74H5.58l11.09 14.43z"/></svg><b>Follow <span>@aaron0x10</span></b></a>
     </div>
   </div>
 </body></html>
