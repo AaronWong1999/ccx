@@ -17,7 +17,7 @@
   <img src="docs/hero.png" alt="ccx - claudecodex: sync task context between Claude and Codex. 1. Claude hits its limit. 2. Click ⇄ in the menu bar. 3. Codex picks up the task." width="100%">
 </p>
 <p align="center">
-  <a href="https://github.com/user-attachments/assets/9e60b0bd-ebd3-4480-836a-341ef51e1ce8"><b>🎬 Watch 30 second demo，观看 30 秒演示视频</b></a>
+  <a href="https://github.com/user-attachments/assets/515f88d4-9b50-4b0d-ad6c-8485409a99d3"><b>🎬 Watch 30 second demo，观看 30 秒演示视频</b></a>
 </p>
 
 ## Why ccx · 为什么需要它
