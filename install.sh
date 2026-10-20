@@ -9,6 +9,9 @@
 # Nothing needs sudo. Re-run any time to repair; `ccx update` updates;
 # `ccx uninstall` removes.
 set -e
+# The braces make the shell read the whole script before running any of it, so a
+# download cut off midway (curl | sh) runs nothing instead of part of the script.
+{
 REPO="aaronwong1999/ccx"
 DEST="$HOME/Library/Application Support/ccx/src"
 BIN="$HOME/.local/bin"
@@ -96,3 +99,4 @@ esac
 [ $HAS_CLAUDE = 0 ] && say "Note: the Claude desktop app isn't installed; ccx sets up Codex now. Install Claude later and ccx finishes setup by itself (or run: ccx setup)."
 [ $HAS_CODEX = 0 ] && say "Note: the Codex desktop app isn't installed; ccx sets up Claude now. Install Codex later and ccx finishes setup by itself (or run: ccx setup)."
 exec "$DEST/plugins/ccx/bin/ccx" setup
+}

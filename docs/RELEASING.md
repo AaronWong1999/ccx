@@ -37,9 +37,9 @@ Everyone who uses ccx already uses AI coding tools, so the script is the lower-f
 4. Add Sparkle for app updates; plugin updates keep working as they do now.
 5. Optionally publish a Homebrew cask (casks must be notarized).
 
-## While the repository is private
+## The install script is served from `main`
 
-`raw.githubusercontent.com` and `git clone` need GitHub credentials. Run `gh auth login && gh auth setup-git`, then `gh repo clone aaronwong1999/ccx /tmp/ccx && /tmp/ccx/install.sh`. Once the repository is public, the one-line install in the README works for everyone.
+The one-line install fetches `install.sh` from `main` (`raw.githubusercontent.com/.../main/install.sh`), so a change to it reaches new installs as soon as it is pushed, with no tag; keep it working with the latest release. Everything it then installs comes from the newest tag. Installing and update checks need no GitHub account, because the repository is public. If it is ever made private again, both stop working for everyone else.
 
 ## Name and trademarks
 

@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 from .common import (
-    HOME, PLAN, STATE_DIR, TAG, Session, clip, first_line, git_branch, image_line, is_injected, now_iso, real,
+    HOME, PLAN, STATE_DIR, TAG, Session, clip, first_line, git_branch, image_line, now_iso, real,
     same_dir, user_text, which,
 )
 
@@ -240,7 +240,6 @@ def goal(path: Path) -> Optional[dict]:
 def context_state(path: Path) -> Tuple[int, float]:
     """(tokens in the conversation's context at its last model call, unix time of
     its last activity). Reads only the end of the file."""
-    import time as _time
     from datetime import datetime
     size = path.stat().st_size
     with open(path, "rb") as f:
