@@ -48,8 +48,8 @@ Install ccx for me: run `curl -fsSL https://raw.githubusercontent.com/aaronwong1
 curl -fsSL https://raw.githubusercontent.com/aaronwong1999/ccx/main/install.sh | sh
 ```
 
-**You need** a Mac with macOS 13 or later and the [Claude](https://claude.com/download) and/or [Codex](https://openai.com/codex) desktop app. Open Claude once and click **Code** so it downloads Claude Code. One app is enough to start; add the other later. No Homebrew, no separate CLIs, no `sudo`.<br>
-**需要：** macOS 13 及以上的 Mac，以及 [Claude](https://claude.com/download) 桌面版和/或 [Codex](https://openai.com/codex) 桌面版（Codex / ChatGPT 桌面版）。Claude 装好后打开一次并点 **Code**，让它下载 Claude Code。先装一个 app 也可以，另一个之后再装。不需要 Homebrew、不需要另装命令行工具，也不需要 `sudo`。
+**You need** a Mac with macOS 13 or later and the [Claude](https://claude.com/download) and/or [Codex](https://openai.com/codex) desktop app.<br>
+**需要：** macOS 13 及以上的 Mac，以及 [Claude](https://claude.com/download) 桌面版和/或 [Codex](https://openai.com/codex) 桌面版（Codex / ChatGPT 桌面版）。
 
 <details>
 <summary><b>What you may be asked · 安装时可能出现的确认</b></summary>
@@ -153,7 +153,7 @@ The ⇄ menu lists recent projects and both sides' sessions: ○ not linked yet 
 ```
 
 A Claude session A and a Codex thread T form a pair, and each side keeps a cursor of how much the other side has received. When you send a message in A, the prompt hook adds T's new progress to that message and moves the cursor, to avoid repeatedly forwarding the same entries. This is a best-effort context handoff; the model can page through anything omitted with `read_session`. Saying "continue X from …" links the conversation you're in to X; the menu bar and `/to-…` use the apps' native import instead. Session titles are searched across all projects, so a typed name or a screenshot is enough.<br>
-Claude 会话 A 和 Codex 线程 T 组成一对，两边各记一个"对面已经收到多少"的位置。你在 A 里发消息时，hook 会把 T 的新进展加到这条消息里，然后移动位置。这样可以避免重复转发同一批记录；这是尽力交接上下文；省略的内容模型可以用 `read_session` 补读。在对话里说"从 … 接着 X 干"，会把当前对话和 X 关联起来；菜单栏和 `/to-…` 则用两个 app 自带的导入功能。会话标题会在所有项目里搜索，所以说出名称或给一张截图就够了。
+Claude 会话 A 和 Codex 线程 T 组成一对，两边各记一个"对面已经收到多少"的位置。你在 A 里发消息时，hook 会把 T 的新进展加到这条消息里，然后移动位置。这样可以避免重复转发同一批记录。这是尽力而为的上下文交接，省略的内容模型可以用 `read_session` 补读。在对话里说"从 … 接着 X 干"，会把当前对话和 X 关联起来；菜单栏和 `/to-…` 则用两个 app 自带的导入功能。会话标题会在所有项目里搜索，所以说出名称或给一张截图就够了。
 
 ## Updates · 更新
 
