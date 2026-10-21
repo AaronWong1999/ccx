@@ -101,6 +101,9 @@ Nothing else asks for passwords, admin rights or accessibility access.<br>
 The ⇄ menu lists recent projects and both sides' sessions: ○ not linked yet (click to import and link), ✓ linked (click to open the partner), ↻ has progress the other side hasn't received. English or Chinese via Language / 语言.<br>
 ⇄ 菜单按项目列出两边的会话：○ 未关联（点一下导入并关联），✓ 已关联（点一下打开对面），↻ 有对面还没收到的新进展。可在 Language / 语言 里切换中英文。
 
+**Optional: a heads-up before Claude runs out.** If you use [Claude Code Usage Monitor](https://github.com/Maciek-roboblog/Claude-Code-Usage-Monitor) (`claude-monitor`), ccx reads its state file (`claude-monitor --write-state`) or, failing that, a `claude-monitor --once --output json` snapshot every 5 minutes. When the 5-hour window passes 90%, and again when it is used up, you get one notification, and the top of the ⇄ menu offers your latest Claude session to continue in Codex in one click. ccx never estimates usage itself and never interrupts a conversation; without claude-monitor nothing changes. Check it with `ccx usage`.<br>
+**可选：Claude 额度快用完时提前提醒。** 装了 [Claude Code Usage Monitor](https://github.com/Maciek-roboblog/Claude-Code-Usage-Monitor)（`claude-monitor`）后，5 小时额度用到 90% 和用完时各通知一次，⇄ 菜单顶部可一键把最新的 Claude 会话切到 Codex 接着干；没装则一切照旧。
+
 ## FAQ · 常见问题
 
 **Is my code or conversation uploaded anywhere?** No. Sync runs entirely on your Mac; Codex data goes only through Codex's own app-server API. ccx reaches GitHub only to install and check for updates.<br>

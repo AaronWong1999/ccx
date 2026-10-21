@@ -849,5 +849,69 @@ class NativeHistory(unittest.TestCase):
         self.assertEqual(rpc._read(0)["method"], "import/completed")
 
 
+class ClaudeUsage(Base):
+    """The optional Claude Code Usage Monitor integration (its state/export protocol)."""
+
+    def setUp(self):
+        super().setUp()
+        from ccx import usage
+        self.u = usage
+        self.dir = Path(tempfile.mkdtemp(dir=TMP))
+        for k, v in (("STATE_FILE", self.dir / "latest.json"), ("CACHE", self.dir / "cache.json")):
+            p = mock.patch.object(usage, k, v)
+            p.start()
+            self.addCleanup(p.stop)
+
+    def snap(self, pct, label="ok", age=60, resets_in=3600, stale=False):
+        now = time.time()
+        from datetime import datetime, timezone
+        iso = lambda t: datetime.fromtimestamp(t, timezone.utc).isoformat()
+        return {"schema_version": "1.0", "generated_at": iso(now - age), "stale": stale,
+                "limits": {"five_hour": {"used_percentage": pct, "resets_at": iso(now + resets_in),
+                                         "resets_at_epoch": int(now + resets_in), "confidence": "local_estimate"}},
+                "status": {"code": 0, "label": label}}
+
+    def write(self, snap):
+        self.u.STATE_FILE.write_text(json.dumps(snap))
+
+    def usage(self, monitor=None):
+        with mock.patch.object(self.u, "which", lambda name: monitor):
+            return self.u.claude_usage()
+
+    def test_nothing_without_claude_monitor(self):
+        self.assertEqual(self.usage(), {"available": False})
+
+    def test_levels_from_state_file(self):
+        claude_file(PROJ_A, "c-usage", [user("hi")], title="usage task")
+        for pct, label, lvl in ((50, "ok", "ok"), (90, "ok", "near"), (96, "near_limit", "near"),
+                                (100, "limit_hit", "limit"), (80, "limit_hit", "limit")):
+            self.write(self.snap(pct, label))
+            u = self.usage()
+            self.assertEqual((u["source"], u["level"], u["used_percentage"]), ("state_file", lvl, pct))
+            self.assertEqual("session" in u, lvl != "ok")
+        self.assertEqual(u["session"]["id"], claude.sessions()[0].id)
+
+    def test_old_or_finished_windows_never_alert(self):
+        for snap in (self.snap(99, resets_in=-60), self.snap(99, stale=True), self.snap(None, "no_active_session")):
+            self.write(snap)
+            self.assertEqual(self.usage()["level"], "unknown")
+        self.write(self.snap(99, age=3600))  # the monitor stopped long ago: ignore the file
+        self.assertEqual(self.usage(), {"available": False})
+
+    def test_one_shot_snapshot_when_no_state_file(self):
+        exe = self.dir / "claude-monitor"
+        log = self.dir / "runs"
+        exe.write_text("#!/bin/sh\necho run >> '%s'\ncat <<'J'\n%s\nJ\nexit 11\n"
+                       % (log, json.dumps(self.snap(120, "limit_hit"))))
+        exe.chmod(0o755)
+        self.assertEqual(self.usage(str(exe))["level"], "limit")
+        self.assertEqual(self.usage(str(exe))["source"], "claude-monitor")
+        self.assertEqual(log.read_text().count("run"), 1)  # cached between menu refreshes
+
+    def test_hooks_never_read_usage(self):
+        src = (Path(__file__).resolve().parents[1] / "plugins/ccx/lib/ccx/hook.py").read_text()
+        self.assertNotIn("usage", src)
+
+
 if __name__ == "__main__":
     unittest.main()

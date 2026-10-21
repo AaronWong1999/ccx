@@ -6,8 +6,9 @@ import argparse
 import json
 import os
 import sys
+import time
 
-from . import __version__, claude, codex, install, pairs, repairs
+from . import __version__, claude, codex, install, pairs, repairs, usage
 from .common import copy_to_clipboard, DEFAULTS, NAME, OTHER, L, real, set_setting, setting
 from .sync import (STATUS, continue_phrase, estimate, find_sessions, menu_data, new_claude_conversation, new_codex_conversation,
                    transfer)
@@ -73,6 +74,7 @@ def main(argv=None):
     ls.add_argument("-q", "--query", help="search titles in every project")
     ls.add_argument("-n", type=int, default=8)
     sub.add_parser("menu-data", help=argparse.SUPPRESS)
+    sub.add_parser("usage", help="Claude's 5-hour usage, if Claude Code Usage Monitor (claude-monitor) is installed")
     es = sub.add_parser("estimate", help=argparse.SUPPRESS)
     es.add_argument("tool", choices=("claude", "codex"))
     es.add_argument("session")
@@ -124,6 +126,17 @@ def main(argv=None):
             d["codex_hook_trusted"] = codex.hooks_trusted()
             d["needs_setup"] = install.needs_setup()
             print(json.dumps(d, ensure_ascii=False))
+        elif a.cmd == "usage":
+            u = usage.claude_usage()
+            if a.json:
+                print(json.dumps(u, ensure_ascii=False))
+            elif not u["available"]:
+                print("Claude Code Usage Monitor not found: install `claude-monitor` and run it with --write-state.")
+            else:
+                pct = u["used_percentage"]
+                resets = time.strftime("%H:%M", time.localtime(u["resets_at_epoch"])) if u["resets_at_epoch"] else "?"
+                print(f"Claude 5-hour window: {'?' if pct is None else pct}% used, resets {resets} "
+                      f"({u['level']}, from {u['source']})")
         elif a.cmd == "estimate":
             print(json.dumps(estimate(a.tool, a.session)))
         elif a.cmd == "new-claude":

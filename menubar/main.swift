@@ -51,6 +51,16 @@ struct MenuData: Decodable {
     let pending_history_repairs: Int?
 }
 
+/// Claude's 5-hour window, read by `ccx usage` from Claude Code Usage Monitor (optional).
+struct Usage: Decodable {
+    struct Session: Decodable { let id: String; let title: String }
+    let available: Bool
+    let level: String?            // ok | near | limit | unknown
+    let used_percentage: Double?
+    let resets_at_epoch: Int?
+    let session: Session?         // the newest Claude session, to continue in Codex
+}
+
 struct Release: Decodable {
     let current: String
     let latest: String?
@@ -63,6 +73,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
     let defaults = UserDefaults.standard
     var data: MenuData?
     var release: Release?
+    var usage: Usage?
     var loadedAt = Date.distantPast
     var loading = false
     var busy = false
@@ -176,12 +187,68 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
             } else {
                 self.lastError = err.trimmingCharacters(in: .whitespacesAndNewlines)
             }
-            self.run(["autostart", "status"]) { c, _, _ in
-                self.autostartOn = c == 0
-                self.rebuild()
-                if CommandLine.arguments.contains("--selftest") { self.dump(self.menu, 0); exit(self.data == nil ? 1 : 0) }
+            self.run(["usage", "--json"]) { c, out, _ in
+                self.usage = c == 0 ? try? JSONDecoder().decode(Usage.self, from: Data(out.utf8)) : nil
+                self.usageAlert()
+                self.run(["autostart", "status"]) { c, _, _ in
+                    self.autostartOn = c == 0
+                    self.rebuild()
+                    if CommandLine.arguments.contains("--selftest") { self.dump(self.menu, 0); exit(self.data == nil ? 1 : 0) }
+                }
             }
         }
+    }
+
+    // MARK: Claude usage (only with Claude Code Usage Monitor installed)
+
+    var usageNear: Bool { ["near", "limit"].contains(usage?.level ?? "") }
+
+    func resetTime(_ u: Usage) -> String {
+        guard let e = u.resets_at_epoch else { return "?" }
+        let f = DateFormatter()
+        f.dateFormat = "HH:mm"
+        return f.string(from: Date(timeIntervalSince1970: TimeInterval(e)))
+    }
+
+    /// Notify once when Claude's 5-hour window is nearly used up and once when it is
+    /// used up; a new window starts over.
+    func usageAlert() {
+        guard let u = usage, usageNear else { return }
+        let rank = u.level == "limit" ? 2 : 1
+        let window = String(u.resets_at_epoch ?? Int(Date().timeIntervalSince1970) / (5 * 3600))
+        let last = (defaults.string(forKey: "usageAlert") ?? "").split(separator: ":").map(String.init)
+        if last.count == 2, last[0] == window, Int(last[1]) ?? 0 >= rank { return }
+        defaults.set("\(window):\(rank)", forKey: "usageAlert")
+        let at = resetTime(u), pct = Int((u.used_percentage ?? 100).rounded())
+        if rank == 2 {
+            notify(L("Claude's 5-hour limit is used up", "Claude 的 5 小时额度用完了"),
+                   L("It resets at \(at). Open the ⇄ menu to continue in Codex in one click.",
+                     "\(at) 重置。打开 ⇄ 菜单，一键切到 Codex 接着干。"))
+        } else {
+            notify(L("Claude is close to its 5-hour limit", "Claude 快到 5 小时上限了"),
+                   L("\(pct)% used, resets at \(at). Open the ⇄ menu to continue in Codex in one click.",
+                     "已用 \(pct)%，\(at) 重置。打开 ⇄ 菜单，一键切到 Codex 接着干。"))
+        }
+    }
+
+    func usageItem(_ u: Usage) -> NSMenuItem {
+        let head = u.level == "limit"
+            ? L("Claude's 5-hour limit is used up · resets \(resetTime(u))", "Claude 的 5 小时额度用完了 · \(resetTime(u)) 重置")
+            : L("Claude: \(Int((u.used_percentage ?? 0).rounded()))% of 5-hour limit · resets \(resetTime(u))",
+                "Claude 5 小时额度已用 \(Int((u.used_percentage ?? 0).rounded()))% · \(resetTime(u)) 重置")
+        guard let s = u.session else { return caption(head) }
+        let i = action("", #selector(sessionClicked(_:)), symbol: "gauge.with.dots.needle.100percent")
+        let t = NSMutableAttributedString(string: head + "\n", attributes: [.font: NSFont.menuFont(ofSize: 0)])
+        t.append(NSAttributedString(string: L("Continue “\(short(s.title, 30))” in Codex", "在 Codex 里接着干「\(short(s.title, 30))」"),
+                                    attributes: [.font: NSFont.systemFont(ofSize: NSFont.smallSystemFontSize),
+                                                 .foregroundColor: NSColor.controlAccentColor]))
+        i.attributedTitle = t
+        // The same row data a click on that session in its project submenu carries.
+        let r = data?.projects.flatMap { $0.claude }.first { $0.id == s.id }
+        i.representedObject = ["from": "claude", "id": s.id, "tokens": String(r?.partner_tokens ?? 0),
+                               "idle": String(r?.partner_idle_min ?? 0), "own": String(r?.own_tokens ?? 0),
+                               "linked": r?.linked_to == nil ? "0" : "1", "title": s.title]
+        return i
     }
 
     /// Claude or Codex installed after ccx: set ccx up there too, once per launch.
@@ -202,6 +269,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
     // MARK: releases
 
     func notify(_ title: String, _ text: String) {
+        if CommandLine.arguments.contains("--selftest") { print("NOTIFY: \(title) | \(text)") }
         let esc = { (s: String) in s.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"") }
         let p = Process()
         p.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
@@ -289,6 +357,10 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(.separator())
 
         if busy { menu.addItem(caption(L("Working…", "正在处理…"))) }
+        if let u = usage, usageNear {
+            menu.addItem(usageItem(u))
+            menu.addItem(.separator())
+        }
         if let d = data {
             if (d.pending_history_repairs ?? 0) > 0 {
                 menu.addItem(action(L("History repair pending…", "历史修复待完成…"), #selector(historyRepairInfo), symbol: "exclamationmark.triangle"))
