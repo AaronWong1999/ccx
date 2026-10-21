@@ -101,8 +101,20 @@ Nothing else asks for passwords, admin rights or accessibility access.<br>
 The ⇄ menu lists recent projects and both sides' sessions: ○ not linked yet (click to import and link), ✓ linked (click to open the partner), ↻ has progress the other side hasn't received. English or Chinese via Language / 语言.<br>
 ⇄ 菜单按项目列出两边的会话：○ 未关联（点一下导入并关联），✓ 已关联（点一下打开对面），↻ 有对面还没收到的新进展。可在 Language / 语言 里切换中英文。
 
-**A heads-up before either side runs out.** The ⇄ app watches both 5-hour windows and notifies you once when one passes 90% and once when it is used up; the top of the menu then offers that side's newest session to continue in the other app in one click. Nothing to set up. Codex's numbers come from Codex itself (its app-server's `account/rateLimits/read`); for Claude, ccx sees when Claude Code says you've hit the limit. If you also use [CodexBar](https://github.com/steipete/CodexBar), [Claude Code Usage Monitor](https://github.com/Maciek-roboblog/Claude-Code-Usage-Monitor) or [ccusage](https://github.com/ccusage/ccusage), ccx reads their documented output (`codexbar usage --format json`, claude-monitor's `--write-state` file or `--once --output json`, `ccusage blocks --json`) and warns you before Claude runs out too. ccx never estimates usage itself and never interrupts a conversation. Check it with `ccx usage`.<br>
-**额度快用完时提前提醒。** ⇄ 自动盯着两边的 5 小时额度：用到 90% 和用完时各通知一次，菜单顶部可一键把那边最新的会话切到另一边接着干，无需任何设置；装了 [CodexBar](https://github.com/steipete/CodexBar)、[Claude Code Usage Monitor](https://github.com/Maciek-roboblog/Claude-Code-Usage-Monitor) 或 [ccusage](https://github.com/ccusage/ccusage) 时，Claude 快用完也能提前提醒。
+**A heads-up before either side runs out.** The ⇄ app notifies you once when Claude's or Codex's 5-hour window passes 90% and once when it is used up, and the top of the menu offers that side's newest session to continue in the other app in one click. Nothing to set up; it never interrupts a conversation. Check it with `ccx usage`.<br>
+**额度快用完时提前提醒。** Claude 或 Codex 的 5 小时额度用到 90% 和用完时各通知一次，⇄ 菜单顶部可一键把那边最新的会话切到另一边接着干，无需任何设置。
+
+### Works with · 搭配使用
+
+Built in: Codex's own numbers (its app-server's `account/rateLimits/read`), and Claude Code's "You've hit your limit · resets …" reply. Claude keeps no local signal before that, so for a warning before Claude runs out, ccx also reads these tools when they are installed, through their documented output only, never estimating usage itself:
+
+| Tool | What ccx reads | What you get |
+|---|---|---|
+| [CodexBar](https://github.com/steipete/CodexBar) | `codexbar usage --provider both --format json` | Claude's and Codex's 5-hour windows |
+| [Claude Code Usage Monitor](https://github.com/Maciek-roboblog/Claude-Code-Usage-Monitor) | its `--write-state` file, or `claude-monitor --once --output json` | Claude's 5-hour window, near and used up |
+| [ccusage](https://github.com/ccusage/ccusage) | `ccusage blocks --json --token-limit max` | a heads-up when the current block is on pace to pass your largest one |
+
+内置读取 Codex 自己的额度和 Claude Code 的撞限提示；装了上面任一工具时，Claude 快用完也会提前提醒。
 
 ## FAQ · 常见问题
 
