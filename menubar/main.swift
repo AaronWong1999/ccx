@@ -51,14 +51,19 @@ struct MenuData: Decodable {
     let pending_history_repairs: Int?
 }
 
-/// Claude's 5-hour window, read by `ccx usage` from Claude Code Usage Monitor (optional).
+/// Claude's and Codex's 5-hour windows, read by `ccx usage` from usage tools the
+/// user already has (CodexBar, Claude Code Usage Monitor, ccusage). Optional.
 struct Usage: Decodable {
+    struct Window: Decodable {
+        let level: String             // ok | near | limit | unknown
+        let used_percentage: Double?
+        let resets_at_epoch: Int?
+    }
     struct Session: Decodable { let id: String; let title: String }
-    let available: Bool
-    let level: String?            // ok | near | limit | unknown
-    let used_percentage: Double?
-    let resets_at_epoch: Int?
-    let session: Session?         // the newest Claude session, to continue in Codex
+    struct Switch: Decodable { let from: String; let session: Session }
+    let claude: Window?
+    let codex: Window?
+    let `switch`: Switch?           // the newest session of the app running out
 }
 
 struct Release: Decodable {
@@ -199,55 +204,60 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
-    // MARK: Claude usage (only with Claude Code Usage Monitor installed)
+    // MARK: usage (only with a usage tool installed)
 
-    var usageNear: Bool { ["near", "limit"].contains(usage?.level ?? "") }
+    func near(_ w: Usage.Window?) -> Bool { ["near", "limit"].contains(w?.level ?? "") }
 
-    func resetTime(_ u: Usage) -> String {
-        guard let e = u.resets_at_epoch else { return "?" }
+    func resetTime(_ w: Usage.Window) -> String {
+        guard let e = w.resets_at_epoch else { return "?" }
         let f = DateFormatter()
         f.dateFormat = "HH:mm"
         return f.string(from: Date(timeIntervalSince1970: TimeInterval(e)))
     }
 
-    /// Notify once when Claude's 5-hour window is nearly used up and once when it is
+    /// "Claude is close to its 5-hour limit · 92% used · resets 17:00" and the like.
+    func usageText(_ name: String, _ w: Usage.Window) -> (title: String, detail: String) {
+        let at = resetTime(w)
+        if w.level == "limit" {
+            return (L("\(name)'s 5-hour limit is used up", "\(name) 的 5 小时额度用完了"), L("resets \(at)", "\(at) 重置"))
+        }
+        let used = w.used_percentage.map { L("\(Int($0.rounded()))% used, ", "已用 \(Int($0.rounded()))%，") } ?? ""
+        return (L("\(name) is close to its 5-hour limit", "\(name) 快到 5 小时上限了"), used + L("resets \(at)", "\(at) 重置"))
+    }
+
+    /// Notify once when an app's 5-hour window is nearly used up and once when it is
     /// used up; a new window starts over.
     func usageAlert() {
-        guard let u = usage, usageNear else { return }
-        let rank = u.level == "limit" ? 2 : 1
-        let window = String(u.resets_at_epoch ?? Int(Date().timeIntervalSince1970) / (5 * 3600))
-        let last = (defaults.string(forKey: "usageAlert") ?? "").split(separator: ":").map(String.init)
-        if last.count == 2, last[0] == window, Int(last[1]) ?? 0 >= rank { return }
-        defaults.set("\(window):\(rank)", forKey: "usageAlert")
-        let at = resetTime(u), pct = Int((u.used_percentage ?? 100).rounded())
-        if rank == 2 {
-            notify(L("Claude's 5-hour limit is used up", "Claude 的 5 小时额度用完了"),
-                   L("It resets at \(at). Open the ⇄ menu to continue in Codex in one click.",
-                     "\(at) 重置。打开 ⇄ 菜单，一键切到 Codex 接着干。"))
-        } else {
-            notify(L("Claude is close to its 5-hour limit", "Claude 快到 5 小时上限了"),
-                   L("\(pct)% used, resets at \(at). Open the ⇄ menu to continue in Codex in one click.",
-                     "已用 \(pct)%，\(at) 重置。打开 ⇄ 菜单，一键切到 Codex 接着干。"))
+        for (key, name, other, w) in [("claude", "Claude", "Codex", usage?.claude), ("codex", "Codex", "Claude", usage?.codex)] {
+            guard let w = w, near(w) else { continue }
+            let rank = w.level == "limit" ? 2 : 1
+            let window = String(w.resets_at_epoch ?? Int(Date().timeIntervalSince1970) / (5 * 3600))
+            let last = (defaults.string(forKey: "usageAlert.\(key)") ?? "").split(separator: ":").map(String.init)
+            if last.count == 2, last[0] == window, Int(last[1]) ?? 0 >= rank { continue }
+            defaults.set("\(window):\(rank)", forKey: "usageAlert.\(key)")
+            let t = usageText(name, w)
+            notify(t.title, t.detail.prefix(1).uppercased() + t.detail.dropFirst() + L(". Open the ⇄ menu to continue in \(other) in one click.",
+                                         "。打开 ⇄ 菜单，一键切到 \(other) 接着干。"))
         }
     }
 
-    func usageItem(_ u: Usage) -> NSMenuItem {
-        let head = u.level == "limit"
-            ? L("Claude's 5-hour limit is used up · resets \(resetTime(u))", "Claude 的 5 小时额度用完了 · \(resetTime(u)) 重置")
-            : L("Claude: \(Int((u.used_percentage ?? 0).rounded()))% of 5-hour limit · resets \(resetTime(u))",
-                "Claude 5 小时额度已用 \(Int((u.used_percentage ?? 0).rounded()))% · \(resetTime(u)) 重置")
-        guard let s = u.session else { return caption(head) }
+    /// The one menu item for all of it: the app running out, and its newest session
+    /// to continue in the other app.
+    func usageItem(_ u: Usage) -> NSMenuItem? {
+        guard let sw = u.switch, let w = sw.from == "claude" ? u.claude : u.codex, near(w) else { return nil }
+        let name = sw.from == "claude" ? "Claude" : "Codex", other = sw.from == "claude" ? "Codex" : "Claude"
+        let t = usageText(name, w)
         let i = action("", #selector(sessionClicked(_:)), symbol: "gauge.with.dots.needle.100percent")
-        let t = NSMutableAttributedString(string: head + "\n", attributes: [.font: NSFont.menuFont(ofSize: 0)])
-        t.append(NSAttributedString(string: L("Continue “\(short(s.title, 30))” in Codex", "在 Codex 里接着干「\(short(s.title, 30))」"),
+        let s = NSMutableAttributedString(string: "\(t.title) · \(t.detail)\n", attributes: [.font: NSFont.menuFont(ofSize: 0)])
+        s.append(NSAttributedString(string: L("Continue “\(short(sw.session.title, 30))” in \(other)", "在 \(other) 里接着干「\(short(sw.session.title, 30))」"),
                                     attributes: [.font: NSFont.systemFont(ofSize: NSFont.smallSystemFontSize),
                                                  .foregroundColor: NSColor.controlAccentColor]))
-        i.attributedTitle = t
+        i.attributedTitle = s
         // The same row data a click on that session in its project submenu carries.
-        let r = data?.projects.flatMap { $0.claude }.first { $0.id == s.id }
-        i.representedObject = ["from": "claude", "id": s.id, "tokens": String(r?.partner_tokens ?? 0),
+        let r = data?.projects.flatMap { sw.from == "claude" ? $0.claude : $0.codex }.first { $0.id == sw.session.id }
+        i.representedObject = ["from": sw.from, "id": sw.session.id, "tokens": String(r?.partner_tokens ?? 0),
                                "idle": String(r?.partner_idle_min ?? 0), "own": String(r?.own_tokens ?? 0),
-                               "linked": r?.linked_to == nil ? "0" : "1", "title": s.title]
+                               "linked": r?.linked_to == nil ? "0" : "1", "title": sw.session.title]
         return i
     }
 
@@ -357,8 +367,8 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(.separator())
 
         if busy { menu.addItem(caption(L("Working…", "正在处理…"))) }
-        if let u = usage, usageNear {
-            menu.addItem(usageItem(u))
+        if let u = usage, let ui = usageItem(u) {
+            menu.addItem(ui)
             menu.addItem(.separator())
         }
         if let d = data {

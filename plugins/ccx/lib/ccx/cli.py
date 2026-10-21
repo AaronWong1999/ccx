@@ -74,7 +74,7 @@ def main(argv=None):
     ls.add_argument("-q", "--query", help="search titles in every project")
     ls.add_argument("-n", type=int, default=8)
     sub.add_parser("menu-data", help=argparse.SUPPRESS)
-    sub.add_parser("usage", help="Claude's 5-hour usage, if Claude Code Usage Monitor (claude-monitor) is installed")
+    sub.add_parser("usage", help="Claude's and Codex's 5-hour usage, from CodexBar, Claude Code Usage Monitor or ccusage if installed")
     es = sub.add_parser("estimate", help=argparse.SUPPRESS)
     es.add_argument("tool", choices=("claude", "codex"))
     es.add_argument("session")
@@ -127,16 +127,17 @@ def main(argv=None):
             d["needs_setup"] = install.needs_setup()
             print(json.dumps(d, ensure_ascii=False))
         elif a.cmd == "usage":
-            u = usage.claude_usage()
+            u = usage.usage()
             if a.json:
                 print(json.dumps(u, ensure_ascii=False))
             elif not u["available"]:
-                print("Claude Code Usage Monitor not found: install `claude-monitor` and run it with --write-state.")
-            else:
-                pct = u["used_percentage"]
-                resets = time.strftime("%H:%M", time.localtime(u["resets_at_epoch"])) if u["resets_at_epoch"] else "?"
-                print(f"Claude 5-hour window: {'?' if pct is None else pct}% used, resets {resets} "
-                      f"({u['level']}, from {u['source']})")
+                print("No usage tool found. ccx reads CodexBar, Claude Code Usage Monitor or ccusage when one is installed.")
+            for tool in ("claude", "codex"):
+                w = None if a.json else u.get(tool)
+                if w:
+                    pct = "?" if w["used_percentage"] is None else f"{w['used_percentage']:g}%"
+                    resets = time.strftime("%H:%M", time.localtime(w["resets_at_epoch"])) if w["resets_at_epoch"] else "?"
+                    print(f"{NAME[tool]} 5-hour window: {pct} used, resets {resets} ({w['level']}, from {w['source']})")
         elif a.cmd == "estimate":
             print(json.dumps(estimate(a.tool, a.session)))
         elif a.cmd == "new-claude":

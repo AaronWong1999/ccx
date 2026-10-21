@@ -849,64 +849,110 @@ class NativeHistory(unittest.TestCase):
         self.assertEqual(rpc._read(0)["method"], "import/completed")
 
 
-class ClaudeUsage(Base):
-    """The optional Claude Code Usage Monitor integration (its state/export protocol)."""
+class Usage(Base):
+    """Optional usage tools (CodexBar, Claude Code Usage Monitor, ccusage), read only
+    through their documented output."""
 
     def setUp(self):
         super().setUp()
         from ccx import usage
         self.u = usage
         self.dir = Path(tempfile.mkdtemp(dir=TMP))
-        for k, v in (("STATE_FILE", self.dir / "latest.json"), ("CACHE", self.dir / "cache.json")):
+        self.bins = {}
+        for k, v in (("STATE_FILE", self.dir / "latest.json"), ("CACHE", self.dir / "cache.json"),
+                     ("which", lambda name: self.bins.get(name))):
             p = mock.patch.object(usage, k, v)
             p.start()
             self.addCleanup(p.stop)
 
-    def snap(self, pct, label="ok", age=60, resets_in=3600, stale=False):
-        now = time.time()
+    @staticmethod
+    def iso(t):
         from datetime import datetime, timezone
-        iso = lambda t: datetime.fromtimestamp(t, timezone.utc).isoformat()
-        return {"schema_version": "1.0", "generated_at": iso(now - age), "stale": stale,
-                "limits": {"five_hour": {"used_percentage": pct, "resets_at": iso(now + resets_in),
+        return datetime.fromtimestamp(t, timezone.utc).isoformat()
+
+    def monitor_snap(self, pct, label="ok", age=60, resets_in=3600, stale=False):
+        now = time.time()
+        return {"schema_version": "1.0", "generated_at": self.iso(now - age), "stale": stale,
+                "limits": {"five_hour": {"used_percentage": pct, "resets_at": self.iso(now + resets_in),
                                          "resets_at_epoch": int(now + resets_in), "confidence": "local_estimate"}},
                 "status": {"code": 0, "label": label}}
 
-    def write(self, snap):
-        self.u.STATE_FILE.write_text(json.dumps(snap))
+    def tool(self, name, output, code=0):
+        """A fake usage CLI that prints `output` and logs each run."""
+        exe = self.dir / name
+        exe.write_text("#!/bin/sh\necho run >> '%s.runs'\ncat <<'J'\n%s\nJ\nexit %d\n" % (exe, json.dumps(output), code))
+        exe.chmod(0o755)
+        self.bins[name] = str(exe)
+        return exe
 
-    def usage(self, monitor=None):
-        with mock.patch.object(self.u, "which", lambda name: monitor):
-            return self.u.claude_usage()
+    def codexbar_out(self, claude_pct, codex_pct):
+        reset = self.iso(time.time() + 3600).replace("+00:00", "Z")
+        return [{"provider": p, "usage": {"primary": {"usedPercent": pct, "windowMinutes": 300, "resetsAt": reset}}}
+                for p, pct in (("claude", claude_pct), ("codex", codex_pct)) if pct is not None]
 
-    def test_nothing_without_claude_monitor(self):
-        self.assertEqual(self.usage(), {"available": False})
+    def test_nothing_without_a_usage_tool(self):
+        self.assertEqual(self.u.usage(), {"available": False})
 
-    def test_levels_from_state_file(self):
+    def test_claude_monitor_state_file_levels(self):
         claude_file(PROJ_A, "c-usage", [user("hi")], title="usage task")
         for pct, label, lvl in ((50, "ok", "ok"), (90, "ok", "near"), (96, "near_limit", "near"),
                                 (100, "limit_hit", "limit"), (80, "limit_hit", "limit")):
-            self.write(self.snap(pct, label))
-            u = self.usage()
-            self.assertEqual((u["source"], u["level"], u["used_percentage"]), ("state_file", lvl, pct))
-            self.assertEqual("session" in u, lvl != "ok")
-        self.assertEqual(u["session"]["id"], claude.sessions()[0].id)
+            self.u.STATE_FILE.write_text(json.dumps(self.monitor_snap(pct, label)))
+            u = self.u.usage()
+            self.assertEqual((u["claude"]["source"], u["claude"]["level"], u["claude"]["used_percentage"]),
+                             ("claude-monitor", lvl, pct))
+            self.assertNotIn("codex", u)
+            self.assertEqual("switch" in u, lvl != "ok")
+        self.assertEqual(u["switch"], {"from": "claude", "session": {
+            "id": claude.sessions()[0].id, "title": claude.sessions()[0].title, "cwd": claude.sessions()[0].cwd}})
 
     def test_old_or_finished_windows_never_alert(self):
-        for snap in (self.snap(99, resets_in=-60), self.snap(99, stale=True), self.snap(None, "no_active_session")):
-            self.write(snap)
-            self.assertEqual(self.usage()["level"], "unknown")
-        self.write(self.snap(99, age=3600))  # the monitor stopped long ago: ignore the file
-        self.assertEqual(self.usage(), {"available": False})
+        for snap in (self.monitor_snap(99, resets_in=-60), self.monitor_snap(None, "no_active_session")):
+            self.u.STATE_FILE.write_text(json.dumps(snap))
+            self.assertNotIn(self.u.usage().get("claude", {}).get("level"), ("near", "limit"))
+        for snap in (self.monitor_snap(99, stale=True), self.monitor_snap(99, age=3600)):
+            self.u.STATE_FILE.write_text(json.dumps(snap))  # stale, or the monitor stopped long ago
+            self.assertEqual(self.u.usage(), {"available": False})
 
-    def test_one_shot_snapshot_when_no_state_file(self):
-        exe = self.dir / "claude-monitor"
-        log = self.dir / "runs"
-        exe.write_text("#!/bin/sh\necho run >> '%s'\ncat <<'J'\n%s\nJ\nexit 11\n"
-                       % (log, json.dumps(self.snap(120, "limit_hit"))))
-        exe.chmod(0o755)
-        self.assertEqual(self.usage(str(exe))["level"], "limit")
-        self.assertEqual(self.usage(str(exe))["source"], "claude-monitor")
-        self.assertEqual(log.read_text().count("run"), 1)  # cached between menu refreshes
+    def test_claude_monitor_one_shot_when_no_state_file(self):
+        exe = self.tool("claude-monitor", self.monitor_snap(120, "limit_hit"), code=11)
+        self.assertEqual(self.u.usage()["claude"]["level"], "limit")
+        self.assertEqual(self.u.usage()["claude"]["source"], "claude-monitor")
+        self.assertEqual(Path(f"{exe}.runs").read_text().count("run"), 1)  # cached between menu refreshes
+
+    def test_codexbar_covers_both_apps_and_comes_first(self):
+        self.u.STATE_FILE.write_text(json.dumps(self.monitor_snap(10)))
+        self.tool("codexbar", self.codexbar_out(40, 96))
+        u = self.u.usage()
+        self.assertEqual((u["claude"]["level"], u["claude"]["source"]), ("ok", "codexbar"))
+        self.assertEqual((u["codex"]["level"], u["codex"]["used_percentage"]), ("near", 96))
+        self.cx.add("x-usage", PROJ_A, "codex task", [umsg("hi")])
+        with mock.patch.object(self.u.codex, "threads", lambda limit=None: [Session("codex", "x-usage", PROJ_A, 1.0, "codex task")]):
+            self.u.CACHE.unlink()
+            self.assertEqual(self.u.usage()["switch"]["from"], "codex")
+
+    def test_codexbar_claude_only_falls_back_for_nothing_else(self):
+        self.tool("codexbar", self.codexbar_out(100, None))
+        claude_file(PROJ_A, "c-usage2", [user("hi")], title="usage task 2")
+        u = self.u.usage()
+        self.assertEqual(u["claude"]["level"], "limit")
+        self.assertNotIn("codex", u)
+        self.assertEqual(u["switch"]["from"], "claude")
+
+    def test_ccusage_is_a_hint_never_used_up(self):
+        def out(status):
+            return {"blocks": [{"isActive": False}, {"isActive": True, "endTime": self.iso(time.time() + 600),
+                                                     "tokenLimitStatus": {"limit": 1, "percentUsed": 300, "status": status}}]}
+        for status, lvl in (("ok", "ok"), ("warning", "near"), ("exceeds", "near")):
+            self.u.CACHE.unlink(missing_ok=True)
+            self.tool("ccusage", out(status))
+            w = self.u.usage()["claude"]
+            self.assertEqual((w["level"], w["used_percentage"], w["source"]), (lvl, None, "ccusage"))
+
+    def test_broken_tool_output_is_ignored(self):
+        self.tool("codexbar", "not json")
+        self.tool("ccusage", {"blocks": []})
+        self.assertEqual(self.u.usage(), {"available": False})
 
     def test_hooks_never_read_usage(self):
         src = (Path(__file__).resolve().parents[1] / "plugins/ccx/lib/ccx/hook.py").read_text()
