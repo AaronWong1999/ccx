@@ -270,6 +270,40 @@ def context_state(path: Path) -> Tuple[int, float]:
     return tokens, last or path.stat().st_mtime
 
 
+# ------------------------------------------------------------- usage limit
+
+def last_limit_hit(within: float = 7 * 86400) -> Optional[Tuple[float, str]]:
+    """(unix time, message) of Claude Code's latest "You've hit your … limit" reply,
+    unless any session got a normal reply after it. Reads only the ends of the
+    sessions active within `within` seconds."""
+    from datetime import datetime
+    import time
+    hit, replied = None, 0.0
+    files = [p for p in PROJECTS.glob("*/*.jsonl") if time.time() - p.stat().st_mtime < within] if PROJECTS.is_dir() else []
+    for p in files:
+        size = p.stat().st_size
+        with open(p, "rb") as f:
+            f.seek(max(0, size - 200_000))
+            tail = f.read().decode("utf-8", "replace").splitlines()
+        for line in tail:
+            if '"assistant"' not in line:
+                continue
+            try:
+                d = json.loads(line)
+                t = datetime.fromisoformat(d["timestamp"].replace("Z", "+00:00")).timestamp()
+            except (ValueError, KeyError, TypeError, AttributeError):
+                continue
+            if d.get("type") != "assistant" or d.get(MARKER):
+                continue
+            if d.get("isApiErrorMessage") and d.get("error") == "rate_limit":
+                text = "".join(b.get("text", "") for b in (d.get("message") or {}).get("content") or [] if isinstance(b, dict))
+                if not hit or t > hit[0]:
+                    hit = (t, text)
+            elif not d.get("isApiErrorMessage"):
+                replied = max(replied, t)
+    return hit if hit and hit[0] > replied else None
+
+
 # ------------------------------------------------------------------ writing
 
 def desktop_cli() -> Optional[str]:

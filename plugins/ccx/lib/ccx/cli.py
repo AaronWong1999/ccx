@@ -74,7 +74,7 @@ def main(argv=None):
     ls.add_argument("-q", "--query", help="search titles in every project")
     ls.add_argument("-n", type=int, default=8)
     sub.add_parser("menu-data", help=argparse.SUPPRESS)
-    sub.add_parser("usage", help="Claude's and Codex's 5-hour usage, from CodexBar, Claude Code Usage Monitor or ccusage if installed")
+    sub.add_parser("usage", help="Claude's and Codex's 5-hour usage (built in, plus CodexBar, Claude Code Usage Monitor or ccusage if installed)")
     es = sub.add_parser("estimate", help=argparse.SUPPRESS)
     es.add_argument("tool", choices=("claude", "codex"))
     es.add_argument("session")
@@ -131,13 +131,14 @@ def main(argv=None):
             if a.json:
                 print(json.dumps(u, ensure_ascii=False))
             elif not u["available"]:
-                print("No usage tool found. ccx reads CodexBar, Claude Code Usage Monitor or ccusage when one is installed.")
+                print("No usage reading yet: Codex isn't installed and Claude hasn't hit a limit. CodexBar, "
+                      "Claude Code Usage Monitor or ccusage, when installed, add more.")
             for tool in ("claude", "codex"):
                 w = None if a.json else u.get(tool)
                 if w:
                     pct = "?" if w["used_percentage"] is None else f"{w['used_percentage']:g}%"
                     resets = time.strftime("%H:%M", time.localtime(w["resets_at_epoch"])) if w["resets_at_epoch"] else "?"
-                    print(f"{NAME[tool]} 5-hour window: {pct} used, resets {resets} ({w['level']}, from {w['source']})")
+                    print(f"{NAME[tool]} {'weekly' if w.get('window') == 'weekly' else '5-hour'} window: {pct} used, resets {resets} ({w['level']}, from {w['source']})")
         elif a.cmd == "estimate":
             print(json.dumps(estimate(a.tool, a.session)))
         elif a.cmd == "new-claude":

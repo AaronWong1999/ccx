@@ -1,15 +1,20 @@
-"""Optional: how much of the 5-hour window Claude and Codex have left, read from
-usage tools the user already runs. Nothing to configure: each one is used only
-when it is found on this Mac, and only through its documented output.
+"""How much of the 5-hour window Claude and Codex have left. Nothing to configure.
 
+Built in, from what the apps themselves report on this Mac:
+- Codex: its app-server's `account/rateLimits/read` (exact percentages).
+- Claude: the "You've hit your … limit · resets …" reply Claude Code writes into
+  the session file. Claude keeps no other local usage signal, so built in, ccx
+  can only tell that the limit was hit, not that it is close.
+
+Usage tools the user already runs fill in the rest, each only when it is found,
+and only through its documented output:
 - CodexBar: `codexbar usage --provider both --format json` (Claude and Codex).
 - Claude Code Usage Monitor: the state file `claude-monitor --write-state` keeps
   current, or else a `claude-monitor --once --output json` snapshot (Claude).
 - ccusage: `ccusage blocks --json --token-limit max` (Claude; it only knows your
   largest 5-hour block so far, not the real limit, so it never reports "limit").
 
-ccx never estimates usage itself. Without any of them this reports nothing and
-nothing else in ccx changes. The menu bar app uses it to suggest moving a task
+ccx never estimates usage itself. The menu bar app uses it to suggest moving a task
 to the other app before one runs out; hooks never look at it.
 """
 
@@ -17,11 +22,12 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Callable, Dict, Optional
 
 from . import claude, codex
 from .common import HOME, STATE_DIR, which
@@ -31,6 +37,7 @@ CACHE = STATE_DIR / "usage-cache.json"
 NEAR = 90.0               # percent of the 5-hour window: suggest switching
 FRESH = 15 * 60           # an older state file means the monitor isn't running
 CLI_EVERY = 5 * 60        # how often to ask a usage tool's CLI (each takes seconds)
+CODEX_EVERY = 2 * 60      # how often to ask Codex's app-server
 
 
 def _epoch(value) -> Optional[float]:
@@ -42,7 +49,8 @@ def _epoch(value) -> Optional[float]:
         return None
 
 
-def _window(pct, resets, source: str, now: float, limit_hit=False, near: Optional[bool] = None) -> dict:
+def _window(pct, resets, source: str, now: float, limit_hit=False, near: Optional[bool] = None,
+            weekly=False) -> dict:
     """One app's 5-hour window: ok, near (>= NEAR %), limit, or unknown."""
     resets = _epoch(resets)
     if resets is not None and resets <= now:
@@ -53,26 +61,22 @@ def _window(pct, resets, source: str, now: float, limit_hit=False, near: Optiona
         lvl = "near"
     else:
         lvl = "ok" if pct is not None or near is not None else "unknown"
-    return {"level": lvl, "used_percentage": pct, "resets_at_epoch": int(resets) if resets else None, "source": source}
+    w = {"level": lvl, "used_percentage": pct, "resets_at_epoch": int(resets) if resets else None, "source": source}
+    if weekly:
+        w["window"] = "weekly"  # the weekly limit, not the 5-hour one, is what ran out
+    return w
 
 
-def _cli(name: str, args, now: float):
-    """A usage tool's JSON output, at most once per CLI_EVERY. Non-zero exits are
-    fine (claude-monitor uses them for near/at the limit) as long as JSON came out."""
+def _cached(name: str, every: float, now: float, fetch: Callable[[], object]):
+    """fetch()'s result, asked at most once per `every` seconds."""
     try:
         cache = json.loads(CACHE.read_text())
     except (OSError, ValueError):
         cache = {}
     hit = cache.get(name)
-    if isinstance(hit, dict) and now - hit.get("taken", 0) < CLI_EVERY:
+    if isinstance(hit, dict) and 0 <= now - hit.get("taken", 0) < every:
         return hit.get("output")
-    exe = which(name)
-    if not exe:
-        return None
-    try:
-        out = json.loads(subprocess.run([exe, *args], capture_output=True, text=True, timeout=90).stdout)
-    except (OSError, subprocess.SubprocessError, ValueError):
-        out = None
+    out = fetch()
     cache[name] = {"taken": now, "output": out}
     try:
         STATE_DIR.mkdir(parents=True, exist_ok=True)
@@ -82,7 +86,83 @@ def _cli(name: str, args, now: float):
     return out
 
 
-# ---------------------------------------------------------------- sources
+def _cli(name: str, args, now: float):
+    """A usage tool's JSON output, at most once per CLI_EVERY. Non-zero exits are
+    fine (claude-monitor uses them for near/at the limit) as long as JSON came out."""
+    exe = which(name)
+    if not exe:
+        return None
+
+    def run():
+        try:
+            return json.loads(subprocess.run([exe, *args], capture_output=True, text=True, timeout=90).stdout)
+        except (OSError, subprocess.SubprocessError, ValueError):
+            return None
+    return _cached(name, CLI_EVERY, now, run)
+
+
+# ---------------------------------------------------------------- built in
+
+def codex_app(now: float) -> Dict[str, dict]:
+    def read():
+        try:
+            return codex.rate_limits()
+        except Exception:  # Codex not installed, signed out, or an older app-server
+            return None
+    rl = _cached("codex-app-server", CODEX_EVERY, now, read)
+    if not isinstance(rl, dict):
+        return {}
+    five, week = rl.get("primary") or {}, rl.get("secondary") or {}
+    if (week.get("usedPercent") or 0) >= 100:  # out for the week: that reset is the one that matters
+        return {"codex": _window(100, week.get("resetsAt"), "codex", now, weekly=True)}
+    if five.get("usedPercent") is None:
+        return {}
+    return {"codex": _window(five["usedPercent"], five.get("resetsAt"), "codex", now)}
+
+
+RESETS = re.compile(r"resets (.+?)(?: \(([^)]+)\))?\s*$")
+
+
+def _reset_time(text: str, hit_at: float) -> Optional[float]:
+    """When Claude says the limit resets: "resets 10:10am (Asia/Shanghai)" or
+    "resets Oct 24 at 9am (…)". Times without a date are the next such time."""
+    m = RESETS.search(text.strip())
+    if not m:
+        return None
+    try:
+        from zoneinfo import ZoneInfo
+        tz = ZoneInfo(m.group(2)) if m.group(2) else None
+    except Exception:
+        tz = None
+    when = m.group(1).replace(" at ", " ").replace(",", "").strip().lower()
+    base = datetime.fromtimestamp(hit_at, tz)
+    for fmt in ("%I:%M%p", "%I%p", "%b %d %I:%M%p", "%b %d %I%p"):
+        try:
+            t = datetime.strptime(f"{base.year} {when}", "%Y " + fmt)  # a year, so Feb 29 parses
+        except ValueError:
+            continue
+        dated = "%b" in fmt
+        cand = base.replace(month=t.month, day=t.day) if dated else base
+        cand = cand.replace(hour=t.hour, minute=t.minute, second=0, microsecond=0)
+        while cand.timestamp() <= hit_at:
+            cand = cand.replace(year=cand.year + 1) if dated else datetime.fromtimestamp(cand.timestamp() + 86400, tz)
+        return cand.timestamp()
+    return None
+
+
+def claude_sessions(now: float) -> Dict[str, dict]:
+    hit = claude.last_limit_hit()
+    if not hit:
+        return {}
+    at, text = hit
+    weekly = "weekly" in text.lower()
+    resets = _reset_time(text, at) or (None if weekly else at + 5 * 3600)
+    if resets is None and now - at > 5 * 3600:
+        return {}  # no reset time we can read: assume a 5-hour window at most
+    return {"claude": _window(100, resets, "claude", now, limit_hit=True, weekly=weekly)}
+
+
+# ---------------------------------------------------------------- usage tools
 
 def codexbar(now: float) -> Dict[str, dict]:
     out = _cli("codexbar", ["usage", "--provider", "both", "--format", "json", "--json-only"], now)
@@ -127,7 +207,9 @@ def ccusage(now: float) -> Dict[str, dict]:
                               near=status["status"] in ("warning", "exceeds"))}
 
 
-SOURCES = (codexbar, claude_monitor, ccusage)   # most exact first
+# Most exact first. Built in for Claude only reports a hit limit, so the tools,
+# which can also see it coming, are asked when it hasn't been hit.
+SOURCES = (codex_app, claude_sessions, codexbar, claude_monitor, ccusage)
 
 
 def _newest(app: str) -> Optional[dict]:
@@ -139,21 +221,24 @@ def _newest(app: str) -> Optional[dict]:
 
 
 def usage(now: Optional[float] = None) -> dict:
-    """{"available": False} without any usage tool; otherwise each app's window that
-    one of them reports and, when one is close to running out, its newest session
-    to continue in the other app."""
+    """{"available": False} when nothing reports usage; otherwise each app's window
+    from the most exact source that knows it and, when one is close to running out,
+    its newest session to continue in the other app."""
     now = time.time() if now is None else now
     found: Dict[str, dict] = {}
     for source in SOURCES:
-        if "claude" in found and "codex" in found:
+        if all(found.get(a, {}).get("level", "unknown") != "unknown" for a in ("claude", "codex")):
             break
         for app, w in source(now).items():
-            found.setdefault(app, w)
+            if found.get(app, {}).get("level", "unknown") == "unknown":
+                found[app] = w
     if not found:
         return {"available": False}
     out = {"available": True, **found}
     # The one to act on: a used-up window first, then Claude.
-    for app in sorted((a for a in found if found[a]["level"] in ("near", "limit")),
+    other = {"claude": "codex", "codex": "claude"}
+    for app in sorted((a for a in found if found[a]["level"] in ("near", "limit")
+                       and found.get(other[a], {}).get("level") != "limit"),  # no use moving to a side that's out too
                       key=lambda a: (found[a]["level"] != "limit", a != "claude")):
         s = _newest(app)
         if s:

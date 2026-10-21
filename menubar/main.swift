@@ -51,13 +51,15 @@ struct MenuData: Decodable {
     let pending_history_repairs: Int?
 }
 
-/// Claude's and Codex's 5-hour windows, read by `ccx usage` from usage tools the
-/// user already has (CodexBar, Claude Code Usage Monitor, ccusage). Optional.
+/// Claude's and Codex's 5-hour windows, read by `ccx usage` from what
+/// both apps report themselves, plus usage tools the user already has (CodexBar,
+/// Claude Code Usage Monitor, ccusage).
 struct Usage: Decodable {
     struct Window: Decodable {
         let level: String             // ok | near | limit | unknown
         let used_percentage: Double?
         let resets_at_epoch: Int?
+        let window: String?           // "weekly" when the weekly limit is what ran out
     }
     struct Session: Decodable { let id: String; let title: String }
     struct Switch: Decodable { let from: String; let session: Session }
@@ -219,7 +221,9 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
     func usageText(_ name: String, _ w: Usage.Window) -> (title: String, detail: String) {
         let at = resetTime(w)
         if w.level == "limit" {
-            return (L("\(name)'s 5-hour limit is used up", "\(name) 的 5 小时额度用完了"), L("resets \(at)", "\(at) 重置"))
+            let title = w.window == "weekly" ? L("\(name)'s weekly limit is used up", "\(name) 的每周额度用完了")
+                                             : L("\(name)'s 5-hour limit is used up", "\(name) 的 5 小时额度用完了")
+            return (title, w.resets_at_epoch == nil ? "" : L("resets \(at)", "\(at) 重置"))
         }
         let used = w.used_percentage.map { L("\(Int($0.rounded()))% used, ", "已用 \(Int($0.rounded()))%，") } ?? ""
         return (L("\(name) is close to its 5-hour limit", "\(name) 快到 5 小时上限了"), used + L("resets \(at)", "\(at) 重置"))
@@ -236,19 +240,26 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
             if last.count == 2, last[0] == window, Int(last[1]) ?? 0 >= rank { continue }
             defaults.set("\(window):\(rank)", forKey: "usageAlert.\(key)")
             let t = usageText(name, w)
-            notify(t.title, t.detail.prefix(1).uppercased() + t.detail.dropFirst() + L(". Open the ⇄ menu to continue in \(other) in one click.",
-                                         "。打开 ⇄ 菜单，一键切到 \(other) 接着干。"))
+            let otherOut = (key == "claude" ? usage?.codex : usage?.claude)?.level == "limit"
+            let lead = t.detail.isEmpty ? "" : t.detail.prefix(1).uppercased() + t.detail.dropFirst() + L(". ", "。")
+            notify(t.title, lead + (otherOut ? L("\(other) is used up too.", "\(other) 也用完了。")
+                                             : L("Open the ⇄ menu to continue in \(other) in one click.", "打开 ⇄ 菜单，一键切到 \(other) 接着干。")))
         }
     }
 
     /// The one menu item for all of it: the app running out, and its newest session
     /// to continue in the other app.
     func usageItem(_ u: Usage) -> NSMenuItem? {
-        guard let sw = u.switch, let w = sw.from == "claude" ? u.claude : u.codex, near(w) else { return nil }
+        guard let sw = u.switch else {
+            // Both used up: nowhere to move to, so just say when each comes back.
+            let out = [("Claude", u.claude), ("Codex", u.codex)].compactMap { n, w in w.flatMap { near($0) ? usageText(n, $0) : nil } }
+            return out.isEmpty ? nil : caption(out.map { $0.detail.isEmpty ? $0.title : "\($0.title) · \($0.detail)" }.joined(separator: "\n"))
+        }
+        guard let w = sw.from == "claude" ? u.claude : u.codex, near(w) else { return nil }
         let name = sw.from == "claude" ? "Claude" : "Codex", other = sw.from == "claude" ? "Codex" : "Claude"
         let t = usageText(name, w)
         let i = action("", #selector(sessionClicked(_:)), symbol: "gauge.with.dots.needle.100percent")
-        let s = NSMutableAttributedString(string: "\(t.title) · \(t.detail)\n", attributes: [.font: NSFont.menuFont(ofSize: 0)])
+        let s = NSMutableAttributedString(string: (t.detail.isEmpty ? t.title : "\(t.title) · \(t.detail)") + "\n", attributes: [.font: NSFont.menuFont(ofSize: 0)])
         s.append(NSAttributedString(string: L("Continue “\(short(sw.session.title, 30))” in \(other)", "在 \(other) 里接着干「\(short(sw.session.title, 30))」"),
                                     attributes: [.font: NSFont.systemFont(ofSize: NSFont.smallSystemFontSize),
                                                  .foregroundColor: NSColor.controlAccentColor]))

@@ -313,6 +313,11 @@ def unarchive(tid: str):
         pass
 
 
+
+def rate_limits() -> dict:
+    """Codex's own usage windows (`account/rateLimits/read`), as its app shows them."""
+    return server().request("account/rateLimits/read", {}, timeout=20).get("rateLimits") or {}
+
 COMPACTED_TOKENS = 20_000  # rough size of a compacted Codex thread
 
 

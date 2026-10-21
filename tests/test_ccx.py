@@ -850,8 +850,8 @@ class NativeHistory(unittest.TestCase):
 
 
 class Usage(Base):
-    """Optional usage tools (CodexBar, Claude Code Usage Monitor, ccusage), read only
-    through their documented output."""
+    """Usage: built in from what Claude and Codex report, plus optional usage tools
+    (CodexBar, Claude Code Usage Monitor, ccusage) read only through their documented output."""
 
     def setUp(self):
         super().setUp()
@@ -859,11 +859,27 @@ class Usage(Base):
         self.u = usage
         self.dir = Path(tempfile.mkdtemp(dir=TMP))
         self.bins = {}
-        for k, v in (("STATE_FILE", self.dir / "latest.json"), ("CACHE", self.dir / "cache.json"),
-                     ("which", lambda name: self.bins.get(name))):
-            p = mock.patch.object(usage, k, v)
+        self.codex_limits = None  # Codex's account/rateLimits/read; None: Codex unavailable
+        self.limit_hit = None     # claude.last_limit_hit()
+        self.real_last_limit_hit = usage.claude.last_limit_hit
+        for obj, k, v in ((usage, "STATE_FILE", self.dir / "latest.json"), (usage, "CACHE", self.dir / "cache.json"),
+                          (usage, "which", lambda name: self.bins.get(name)),
+                          (usage.codex, "rate_limits", self.fake_rate_limits),
+                          (usage.claude, "last_limit_hit", lambda: self.limit_hit)):
+            p = mock.patch.object(obj, k, v)
             p.start()
             self.addCleanup(p.stop)
+
+    def fake_rate_limits(self):
+        if self.codex_limits is None:
+            raise RuntimeError("Codex not found")
+        return self.codex_limits
+
+    def codex_window(self, five, week=10):
+        reset = int(time.time()) + 3600
+        self.codex_limits = {"primary": {"usedPercent": five, "windowDurationMins": 300, "resetsAt": reset},
+                             "secondary": {"usedPercent": week, "windowDurationMins": 10080, "resetsAt": reset + 86400}}
+        self.u.CACHE.unlink(missing_ok=True)
 
     @staticmethod
     def iso(t):
@@ -953,6 +969,65 @@ class Usage(Base):
         self.tool("codexbar", "not json")
         self.tool("ccusage", {"blocks": []})
         self.assertEqual(self.u.usage(), {"available": False})
+
+    def test_codex_built_in_from_its_app_server(self):
+        for five, week, lvl, weekly in ((20, 10, "ok", False), (91, 10, "near", False), (100, 50, "limit", False),
+                                        (30, 100, "limit", True)):
+            self.codex_window(five, week)
+            w = self.u.usage()["codex"]
+            self.assertEqual((w["level"], w["source"], w.get("window") == "weekly"), (lvl, "codex", weekly))
+        self.codex_limits["primary"]["usedPercent"] = 0  # cached: the app-server is asked every few minutes
+        self.assertEqual(self.u.usage()["codex"]["level"], "limit")
+
+    def test_claude_built_in_limit_hit(self):
+        claude_file(PROJ_A, "c-limit", [user("hi")], title="limit task")
+        now = time.time()
+        self.limit_hit = (now - 60, "You've hit your session limit · resets 7:40pm (Asia/Shanghai)")
+        w = self.u.usage()["claude"]
+        self.assertEqual((w["level"], w["source"]), ("limit", "claude"))
+        from datetime import datetime
+        from zoneinfo import ZoneInfo
+        at = datetime.fromtimestamp(w["resets_at_epoch"], ZoneInfo("Asia/Shanghai"))
+        self.assertEqual((at.hour, at.minute), (19, 40))
+        self.assertTrue(now < w["resets_at_epoch"] <= now + 86400)
+        self.assertEqual(self.u.usage()["switch"]["from"], "claude")
+
+    def test_claude_limit_reset_times(self):
+        from datetime import datetime
+        from zoneinfo import ZoneInfo
+        tz = ZoneInfo("Asia/Shanghai")
+        hit = datetime(2026, 10, 21, 16, 0, tzinfo=tz).timestamp()
+        for text, expect in (("You've hit your session limit · resets 7:40pm (Asia/Shanghai)", (10, 21, 19, 40)),
+                             ("You've hit your session limit · resets 9am (Asia/Shanghai)", (10, 22, 9, 0)),
+                             ("You've hit your weekly limit · resets Oct 24 at 9am (Asia/Shanghai)", (10, 24, 9, 0)),
+                             ("You've hit your weekly limit · resets Jan 2, 3:30pm (Asia/Shanghai)", (1, 2, 15, 30))):
+            t = datetime.fromtimestamp(self.u._reset_time(text, hit), tz)
+            self.assertEqual((t.month, t.day, t.hour, t.minute), expect, text)
+        self.assertIsNone(self.u._reset_time("Claude AI usage limit reached", hit))
+        self.limit_hit = (time.time() - 60, "You've hit your weekly limit · resets Oct 24 at 9am (Asia/Shanghai)")
+        self.assertEqual(self.u.usage()["claude"].get("window"), "weekly")
+
+    def test_claude_limit_record_in_session_files(self):
+        from datetime import datetime, timezone
+        iso = lambda ago: datetime.fromtimestamp(time.time() - ago, timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+        err = {"type": "assistant", "isApiErrorMessage": True, "error": "rate_limit", "timestamp": iso(60),
+               "message": {"role": "assistant", "content": [text("You've hit your session limit · resets 9am (UTC)")]}}
+        for sid, records in (("c-hit", [user("go", timestamp=iso(120)), err]),
+                             ("c-later", [assistant(text("done"), timestamp=iso(10))])):
+            self.addCleanup(claude_file(PROJ_B, sid, records, title=sid).unlink)
+            if sid == "c-hit":
+                self.assertEqual(self.real_last_limit_hit()[1], "You've hit your session limit · resets 9am (UTC)")
+        self.assertIsNone(self.real_last_limit_hit())  # a later normal reply: the limit is over
+
+    def test_no_switch_to_a_side_that_is_out_too(self):
+        claude_file(PROJ_A, "c-both", [user("hi")], title="both")
+        self.limit_hit = (time.time() - 60, "You've hit your session limit · resets 9am (UTC)")
+        self.codex_window(100)
+        u = self.u.usage()
+        self.assertEqual((u["claude"]["level"], u["codex"]["level"]), ("limit", "limit"))
+        self.assertNotIn("switch", u)
+        self.codex_window(95)
+        self.assertEqual(self.u.usage()["switch"]["from"], "claude")
 
     def test_hooks_never_read_usage(self):
         src = (Path(__file__).resolve().parents[1] / "plugins/ccx/lib/ccx/hook.py").read_text()
