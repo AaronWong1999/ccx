@@ -3,18 +3,7 @@
     "UserPromptSubmit": [
       {
         "hooks": [
-          { "type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/bin/ccx-hook\"", "timeout": 30, "statusMessage": "ccx: syncing progress from the other app" }
-        ]
-      }
-    ],
-    "PreToolUse": [
-      {
-        "matcher": "mcp__plugin_ccx_ccx__.*",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "printf '%s' '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"allow\",\"permissionDecisionReason\":\"ccx: syncing a session the user asked for\"}}'"
-          }
+          { "type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/ccx-hook.sh\"", "timeout": 30, "statusMessage": "ccx: syncing progress from the other app" }
         ]
       }
     ]

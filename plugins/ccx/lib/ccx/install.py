@@ -241,8 +241,10 @@ def autostart(on: Optional[bool]) -> bool:
 # ------------------------------------------------------------------ releases
 
 def latest_release() -> Optional[str]:
-    """Newest vX.Y.Z tag on GitHub (works for the private repo with git credentials)."""
-    code, out = run(["git", "ls-remote", "--tags", "--refs", f"{REPO_URL}.git", "refs/tags/v*"], 30)
+    """Newest vX.Y.Z tag on GitHub. The repository is public, so git is told not to
+    use any stored credentials."""
+    code, out = run(["git", "-c", "credential.helper=", "-c", "core.askPass=", "ls-remote", "--tags", "--refs",
+                     f"{REPO_URL}.git", "refs/tags/v*"], 30)
     if code:
         return None
     tags = re.findall(r"refs/tags/v(\d+\.\d+\.\d+)$", out, re.M)

@@ -18,7 +18,7 @@ from .common import HOME, L, STATE_DIR
 
 OURS = "ccx@ccx"                       # installed by the install script
 REPO_URL = "https://github.com/aaronwong1999/ccx"
-INSTALL_CMD = "curl -fsSL https://raw.githubusercontent.com/aaronwong1999/ccx/main/install.sh | sh"
+INSTALL_GUIDE = REPO_URL + "#install--安装"
 MENU_APP = HOME / "Applications/ccx.app"
 NUDGE = STATE_DIR / "nudge.json"
 NUDGE_TIMES, NUDGE_GAP = 3, 20 * 3600
@@ -49,9 +49,9 @@ def full_install() -> bool:
 
 def setup_hint() -> str:
     return L(f"For the ⇄ menu bar (one-click switching) and the Codex side, install the rest of ccx: {REPO_URL}\n"
-             f"One command in Terminal: {INSTALL_CMD}",
+             f"Install steps: {INSTALL_GUIDE}",
              f"想要菜单栏 ⇄（一键切换）并接入 Codex，请安装 ccx 的其余部分：{REPO_URL}\n"
-             f"在终端运行一条命令：{INSTALL_CMD}")
+             f"安装步骤：{INSTALL_GUIDE}")
 
 
 def nudge_due() -> bool:
