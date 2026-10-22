@@ -123,12 +123,16 @@ Built in: Codex's own numbers (its app-server's `account/rateLimits/read`), and 
 | [CodexBar](https://github.com/steipete/CodexBar) | `codexbar usage --provider both --format json` | Claude's and Codex's 5-hour windows |
 | [abtop](https://github.com/graykode/abtop) | `rate_limits` in `abtop --json` (Claude's after `abtop --setup`) | Claude's and Codex's 5-hour windows |
 | [claude-hud](https://github.com/jarrodwatts/claude-hud) | the snapshot it writes for other tools (`display.externalUsageWritePath`) | Claude's 5-hour and weekly windows, from Claude Code itself |
-| [ccstatusline](https://github.com/sirmalloc/ccstatusline) | its usage cache, `~/.cache/ccstatusline/usage.json` | Claude's 5-hour and weekly windows |
+| [Claude Status Bar](https://github.com/leeguooooo/claude-code-usage-bar) | the status line input it saves, `~/.cache/claude-statusbar/last_stdin.json` | Claude's 5-hour and weekly windows, from Claude Code itself |
+| [ccstatusline](https://github.com/sirmalloc/ccstatusline) | its usage cache, `~/.cache/ccstatusline/usage.json` (written only when it calls the usage API itself, not while Claude Code's own rate limits cover its widgets) | Claude's 5-hour and weekly windows |
 | [CCometixLine](https://github.com/Haleclipse/CCometixLine) | its usage cache, `~/.claude/ccline/.api_usage_cache.json` | Claude's 5-hour window |
 | [Claude Code Usage Monitor](https://github.com/Maciek-roboblog/Claude-Code-Usage-Monitor) | its `--write-state` file, or `claude-monitor --once --output json` | Claude's 5-hour window, near and used up |
 | [ccusage](https://github.com/ccusage/ccusage) | `ccusage blocks --json --token-limit max` | a heads-up when the current block is on pace to pass your largest one |
 
 内置读取 Codex 自己的额度和 Claude Code 的撞限提示；装了上面任一工具时，Claude 快用完也会提前提醒。
+
+Using [CloudCLI](https://github.com/siteboon/claudecodeui)? The [ccx plugin](https://github.com/AaronWong1999/cloudcli-plugin-ccx) adds a tab that shows both sides' usage and hands the open session to the other app.<br>
+用 CloudCLI？[ccx 插件](https://github.com/AaronWong1999/cloudcli-plugin-ccx) 加一个标签页：显示两边额度，并把当前会话交给另一边。
 
 ## FAQ · 常见问题
 

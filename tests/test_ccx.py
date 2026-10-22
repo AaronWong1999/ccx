@@ -402,6 +402,24 @@ class Interfaces(Base):
         self.assertIn("“call me”", out.getvalue())
         self.assertIn("id=c-call", out.getvalue())
 
+    def test_cli_info_names_the_app_and_link(self):
+        from ccx import cli
+        claude_file(PROJ_A, "c-info", [user("hi")], title="info task")
+        self.cx.add("x-info", PROJ_A, "info task", [umsg("hi")])
+        for sid, tool, status in (("c-info", "claude", "new"), ("x-info", "codex", "new")):
+            out = io.StringIO()
+            with redirect_stdout(out):
+                cli.main(["info", sid, "--json"])
+            d = json.loads(out.getvalue())
+            self.assertEqual((d["tool"], d["status"], d["continue_in"]), (tool, status, {"claude": "codex", "codex": "claude"}[tool]))
+        pairs.link(pairs.side("claude", "c-info"), pairs.side("codex", "x-info"))
+        out = io.StringIO()
+        with redirect_stdout(out):
+            cli.main(["info", "c-info", "--json"])
+        self.assertEqual(json.loads(out.getvalue())["linked_to"], "x-info")
+        with self.assertRaises(SystemExit):
+            cli.main(["info", "nope", "--json"])
+
     def test_codex_directory_package_matches_the_release(self):
         root = Path(__file__).resolve().parents[1]
         pkg = json.loads((root / "packaging/codex-directory/.codex-plugin/plugin.json").read_text())
@@ -887,6 +905,7 @@ class Usage(Base):
         for obj, k, v in ((usage, "STATE_FILE", self.dir / "latest.json"), (usage, "CACHE", self.dir / "cache.json"),
                           (usage, "CLAUDE_HUD_CONFIG", self.dir / "hud/config.json"),
                           (usage, "CCSTATUSLINE_CACHE", self.dir / "ccstatusline/usage.json"),
+                          (usage, "CLAUDE_STATUSBAR_STDIN", self.dir / "claude-statusbar/last_stdin.json"),
                           (usage, "CCOMETIXLINE_CACHE", self.dir / "ccline/.api_usage_cache.json"),
                           (usage, "which", lambda name: self.bins.get(name)),
                           (usage.codex, "rate_limits", self.fake_rate_limits),
@@ -1047,6 +1066,24 @@ class Usage(Base):
         self.assertEqual(self.u.usage(), {"available": False})
         self.write(cache, {"sessionUsage": 95, "sessionResetAt": self.iso(time.time() + 900)})
         os.utime(cache, (time.time() - 3600, time.time() - 3600))  # the status line stopped refreshing it
+        self.assertEqual(self.u.usage(), {"available": False})
+
+    def test_claude_statusbar_saved_input(self):
+        claude_file(PROJ_A, "c-bar", [user("hi")], title="bar task")
+        reset = int(time.time()) + 1200
+        stdin = {"session_id": "x", "model": {"display_name": "Opus"}, "workspace": {"current_dir": PROJ_A},
+                 "rate_limits": {"five_hour": {"used_percentage": 94.5, "resets_at": reset},
+                                 "seven_day": {"used_percentage": 50, "resets_at": reset + 86400}}}
+        path = self.write(self.u.CLAUDE_STATUSBAR_STDIN, stdin)
+        w = self.u.usage()["claude"]
+        self.assertEqual((w["level"], w["source"], w["used_percentage"], w["resets_at_epoch"]),
+                         ("near", "claude-statusbar", 94.5, reset))
+        stdin["rate_limits"] = None  # API-key sessions have no subscriber limits
+        self.write(path, stdin)
+        self.assertEqual(self.u.usage(), {"available": False})
+        stdin["rate_limits"] = {"five_hour": {"used_percentage": 99, "resets_at": reset}}
+        self.write(path, stdin)
+        os.utime(path, (time.time() - 3600, time.time() - 3600))
         self.assertEqual(self.u.usage(), {"available": False})
 
     def test_ccometixline_cache(self):

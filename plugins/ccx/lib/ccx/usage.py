@@ -11,9 +11,12 @@ and only through its documented output:
 - CodexBar: `codexbar usage --provider both --format json` (Claude and Codex).
 - abtop: `abtop --json`, its `rate_limits` (Claude, once `abtop --setup` ran, and Codex).
 - Claude Code status lines that keep Claude's official limits on disk (Claude):
-  claude-hud's `display.externalUsageWritePath` snapshot, ccstatusline's usage
-  cache (`~/.cache/ccstatusline/usage.json`) and CCometixLine's
-  (`~/.claude/ccline/.api_usage_cache.json`). Each only when that file is fresh.
+  claude-hud's `display.externalUsageWritePath` snapshot, the status line input
+  Claude Status Bar (claude-code-usage-bar) keeps in
+  `~/.cache/claude-statusbar/last_stdin.json`, ccstatusline's usage cache
+  (`~/.cache/ccstatusline/usage.json`; written only when it calls the usage API
+  itself, i.e. not while Claude Code's own `rate_limits` cover its widgets) and
+  CCometixLine's (`~/.claude/ccline/.api_usage_cache.json`). Each only when fresh.
 - Claude Code Usage Monitor: the state file `claude-monitor --write-state` keeps
   current, or else a `claude-monitor --once --output json` snapshot (Claude).
 - ccusage: `ccusage blocks --json --token-limit max` (Claude; it only knows your
@@ -41,6 +44,7 @@ STATE_FILE = Path(os.environ.get("CCX_CLAUDE_MONITOR_STATE", HOME / ".claude-mon
 CACHE = STATE_DIR / "usage-cache.json"
 CLAUDE_HUD_CONFIG = claude.CLAUDE_HOME / "plugins/claude-hud/config.json"
 CCSTATUSLINE_CACHE = HOME / ".cache/ccstatusline/usage.json"
+CLAUDE_STATUSBAR_STDIN = HOME / ".cache/claude-statusbar/last_stdin.json"
 CCOMETIXLINE_CACHE = HOME / ".claude/ccline/.api_usage_cache.json"
 NEAR = 90.0               # percent of the 5-hour window: suggest switching
 FRESH = 15 * 60           # an older state file means the monitor isn't running
@@ -233,6 +237,23 @@ def claude_hud(now: float) -> Dict[str, dict]:
                           week.get("resets_at"), "claude-hud", now)
 
 
+def claude_statusbar(now: float) -> Dict[str, dict]:
+    """Claude Status Bar saves each status line input Claude Code sends it; its
+    `rate_limits` are Claude Code's own numbers."""
+    try:
+        if now - CLAUDE_STATUSBAR_STDIN.stat().st_mtime >= FRESH:
+            return {}
+    except OSError:
+        return {}
+    d = _read_json(CLAUDE_STATUSBAR_STDIN)
+    rl = d.get("rate_limits") if isinstance(d, dict) else None
+    if not isinstance(rl, dict):
+        return {}
+    five, week = rl.get("five_hour") or {}, rl.get("seven_day") or {}
+    return _claude_window(five.get("used_percentage"), five.get("resets_at"), week.get("used_percentage"),
+                          week.get("resets_at"), "claude-statusbar", now)
+
+
 def ccstatusline(now: float) -> Dict[str, dict]:
     """ccstatusline's cache of Claude's usage, kept while its usage widgets are on."""
     path = CCSTATUSLINE_CACHE
@@ -293,7 +314,8 @@ def ccusage(now: float) -> Dict[str, dict]:
 
 # Most exact first. Built in for Claude only reports a hit limit, so the tools,
 # which can also see it coming, are asked when it hasn't been hit.
-SOURCES = (codex_app, claude_sessions, codexbar, abtop, claude_hud, ccstatusline, ccometixline, claude_monitor, ccusage)
+SOURCES = (codex_app, claude_sessions, codexbar, abtop, claude_hud, claude_statusbar, ccstatusline, ccometixline,
+           claude_monitor, ccusage)
 
 
 def _newest(app: str) -> Optional[dict]:

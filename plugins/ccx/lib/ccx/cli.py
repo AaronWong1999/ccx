@@ -74,6 +74,8 @@ def main(argv=None):
     ls.add_argument("-q", "--query", help="search titles in every project")
     ls.add_argument("-n", type=int, default=8)
     sub.add_parser("menu-data", help=argparse.SUPPRESS)
+    inf = sub.add_parser("info", help="which app a session belongs to and whether it is linked (for integrations)")
+    inf.add_argument("session", help="Claude session id or Codex thread id")
     tc = sub.add_parser("call", help="run one of ccx's MCP tools from a shell (for skills used without the MCP server)")
     tc.add_argument("host", choices=("claude", "codex"), help="the app the conversation is in")
     tc.add_argument("tool", choices=("continue_here", "list_sessions", "send_current_session", "read_session"))
@@ -132,6 +134,15 @@ def main(argv=None):
             d["codex_hook_trusted"] = codex.hooks_trusted()
             d["needs_setup"] = install.needs_setup()
             print(json.dumps(d, ensure_ascii=False))
+        elif a.cmd == "info":
+            s = claude.find(a.session) or codex.find(a.session)
+            if not s:
+                sys.exit(f"no Claude session or Codex thread {a.session}")
+            st, partner = pairs.status(s)
+            d = {"tool": s.tool, "id": s.id, "title": s.title, "cwd": s.cwd, "status": st,
+                 "linked_to": partner, "continue_in": OTHER[s.tool]}
+            print(json.dumps(d, ensure_ascii=False) if a.json else
+                  f"{NAME[s.tool]} · {s.title} · {STATUS[st]}" + (f" · linked to {partner}" if partner else ""))
         elif a.cmd == "call":
             from . import mcp_server
             args = {"cwd": cwd, "session_id": a.session_id, "query": a.query, "offset": a.offset}
