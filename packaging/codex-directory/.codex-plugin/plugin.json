@@ -1,0 +1,30 @@
+{
+  "name": "ccx",
+  "version": "0.0.34",
+  "description": "ccx - claudecodex: continue the same task in Claude Code and Codex. Hand this thread to Claude, or bring a Claude Code session into this thread with its full context. Needs the ccx app on this Mac: github.com/aaronwong1999/ccx",
+  "author": {
+    "name": "Aaron Wong",
+    "url": "https://github.com/aaronwong1999"
+  },
+  "homepage": "https://github.com/aaronwong1999/ccx",
+  "repository": "https://github.com/aaronwong1999/ccx",
+  "license": "MIT",
+  "keywords": ["claude code", "session", "context", "handoff", "sync"],
+  "skills": "./skills/",
+  "requires_local_executor": true,
+  "interface": {
+    "displayName": "ccx - claudecodex",
+    "shortDescription": "Claude Code ⇄ Codex handoff",
+    "longDescription": "Pairs a Claude Code session with a Codex thread so you can keep working on the same task in either app. $to-claude hands this thread to Claude Code; $from-claude brings a Claude Code session, or its new progress, into this thread. Everything runs locally through the ccx app (github.com/aaronwong1999/ccx). Not affiliated with OpenAI or Anthropic.",
+    "developerName": "Aaron Wong",
+    "category": "Developer Tools",
+    "capabilities": [],
+    "websiteURL": "https://github.com/aaronwong1999/ccx",
+    "composerIcon": "./assets/icon.png",
+    "logo": "./assets/icon.png",
+    "defaultPrompt": [
+      "Continue the … session from Claude",
+      "Continue in Claude"
+    ]
+  }
+}

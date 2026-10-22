@@ -48,6 +48,16 @@ Install ccx for me: run `curl -fsSL https://raw.githubusercontent.com/aaronwong1
 curl -fsSL https://raw.githubusercontent.com/aaronwong1999/ccx/main/install.sh | sh
 ```
 
+**Only the Claude Code plugin** (the skills and sync inside Claude Code; run the install command above later to add ⇄ and the Codex side):<br>
+**只装 Claude Code 插件**（Claude Code 里的 skill 和同步；之后运行上面的安装命令即可补上 ⇄ 和 Codex 那一半）：
+
+```
+/plugin install ccx --marketplace AaronWong1999/ccx
+```
+
+Before Claude Code 2.1.275: `/plugin marketplace add AaronWong1999/ccx`, then `/plugin install ccx@ccx`.<br>
+Claude Code 2.1.275 之前的版本：先 `/plugin marketplace add AaronWong1999/ccx`，再 `/plugin install ccx@ccx`。
+
 **You need** a Mac with macOS 13 or later and the [Claude](https://claude.com/download) and/or [Codex](https://openai.com/codex) desktop app.<br>
 **需要：** macOS 13 及以上的 Mac，以及 [Claude](https://claude.com/download) 桌面版和/或 [Codex](https://openai.com/codex) 桌面版（Codex / ChatGPT 桌面版）。
 
@@ -106,12 +116,15 @@ The ⇄ menu lists recent projects and both sides' sessions: ○ not linked yet 
 
 ### Works with · 搭配使用
 
-Built in: Codex's own numbers (its app-server's `account/rateLimits/read`), and Claude Code's "You've hit your limit · resets …" reply. Claude keeps no local signal before that, so for a warning before Claude runs out, ccx also reads these tools when they are installed, through their documented output only, never estimating usage itself:
+Built in: Codex's own numbers (its app-server's `account/rateLimits/read`), and Claude Code's "You've hit your limit · resets …" reply. Claude keeps no local signal before that, so for a warning before Claude runs out, ccx also reads what these tools print or keep on disk when they are installed. It only reads, and never estimates usage itself:
 
 | Tool | What ccx reads | What you get |
 |---|---|---|
 | [CodexBar](https://github.com/steipete/CodexBar) | `codexbar usage --provider both --format json` | Claude's and Codex's 5-hour windows |
 | [abtop](https://github.com/graykode/abtop) | `rate_limits` in `abtop --json` (Claude's after `abtop --setup`) | Claude's and Codex's 5-hour windows |
+| [claude-hud](https://github.com/jarrodwatts/claude-hud) | the snapshot it writes for other tools (`display.externalUsageWritePath`) | Claude's 5-hour and weekly windows, from Claude Code itself |
+| [ccstatusline](https://github.com/sirmalloc/ccstatusline) | its usage cache, `~/.cache/ccstatusline/usage.json` | Claude's 5-hour and weekly windows |
+| [CCometixLine](https://github.com/Haleclipse/CCometixLine) | its usage cache, `~/.claude/ccline/.api_usage_cache.json` | Claude's 5-hour window |
 | [Claude Code Usage Monitor](https://github.com/Maciek-roboblog/Claude-Code-Usage-Monitor) | its `--write-state` file, or `claude-monitor --once --output json` | Claude's 5-hour window, near and used up |
 | [ccusage](https://github.com/ccusage/ccusage) | `ccusage blocks --json --token-limit max` | a heads-up when the current block is on pace to pass your largest one |
 

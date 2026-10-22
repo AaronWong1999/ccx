@@ -74,6 +74,12 @@ def main(argv=None):
     ls.add_argument("-q", "--query", help="search titles in every project")
     ls.add_argument("-n", type=int, default=8)
     sub.add_parser("menu-data", help=argparse.SUPPRESS)
+    tc = sub.add_parser("call", help="run one of ccx's MCP tools from a shell (for skills used without the MCP server)")
+    tc.add_argument("host", choices=("claude", "codex"), help="the app the conversation is in")
+    tc.add_argument("tool", choices=("continue_here", "list_sessions", "send_current_session", "read_session"))
+    tc.add_argument("--session-id")
+    tc.add_argument("--query")
+    tc.add_argument("--offset", type=int, default=0)
     sub.add_parser("usage", help="Claude's and Codex's 5-hour usage (built in, plus CodexBar, Claude Code Usage Monitor or ccusage if installed)")
     es = sub.add_parser("estimate", help=argparse.SUPPRESS)
     es.add_argument("tool", choices=("claude", "codex"))
@@ -126,6 +132,10 @@ def main(argv=None):
             d["codex_hook_trusted"] = codex.hooks_trusted()
             d["needs_setup"] = install.needs_setup()
             print(json.dumps(d, ensure_ascii=False))
+        elif a.cmd == "call":
+            from . import mcp_server
+            args = {"cwd": cwd, "session_id": a.session_id, "query": a.query, "offset": a.offset}
+            print(mcp_server.call(a.host, a.tool, {k: v for k, v in args.items() if v is not None}))
         elif a.cmd == "usage":
             u = usage.usage()
             if a.json:

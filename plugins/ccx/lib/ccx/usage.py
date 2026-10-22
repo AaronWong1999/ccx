@@ -10,6 +10,10 @@ Usage tools the user already runs fill in the rest, each only when it is found,
 and only through its documented output:
 - CodexBar: `codexbar usage --provider both --format json` (Claude and Codex).
 - abtop: `abtop --json`, its `rate_limits` (Claude, once `abtop --setup` ran, and Codex).
+- Claude Code status lines that keep Claude's official limits on disk (Claude):
+  claude-hud's `display.externalUsageWritePath` snapshot, ccstatusline's usage
+  cache (`~/.cache/ccstatusline/usage.json`) and CCometixLine's
+  (`~/.claude/ccline/.api_usage_cache.json`). Each only when that file is fresh.
 - Claude Code Usage Monitor: the state file `claude-monitor --write-state` keeps
   current, or else a `claude-monitor --once --output json` snapshot (Claude).
 - ccusage: `ccusage blocks --json --token-limit max` (Claude; it only knows your
@@ -35,6 +39,9 @@ from .common import HOME, STATE_DIR, which
 
 STATE_FILE = Path(os.environ.get("CCX_CLAUDE_MONITOR_STATE", HOME / ".claude-monitor/state/latest.json"))
 CACHE = STATE_DIR / "usage-cache.json"
+CLAUDE_HUD_CONFIG = claude.CLAUDE_HOME / "plugins/claude-hud/config.json"
+CCSTATUSLINE_CACHE = HOME / ".cache/ccstatusline/usage.json"
+CCOMETIXLINE_CACHE = HOME / ".claude/ccline/.api_usage_cache.json"
 NEAR = 90.0               # percent of the 5-hour window: suggest switching
 FRESH = 15 * 60           # an older state file means the monitor isn't running
 CLI_EVERY = 5 * 60        # how often to ask a usage tool's CLI (each takes seconds)
@@ -192,6 +199,66 @@ def abtop(now: float) -> Dict[str, dict]:
     return found
 
 
+def _read_json(path: Path):
+    try:
+        return json.loads(path.read_text())
+    except (OSError, ValueError):
+        return None
+
+
+def _claude_window(five, five_reset, week, week_reset, source: str, now: float) -> Dict[str, dict]:
+    """Claude's window from a status line's copy of the official limits: the weekly
+    one when it is used up, else the 5-hour one."""
+    if isinstance(week, (int, float)) and week >= 100:
+        return {"claude": _window(100, week_reset, source, now, weekly=True)}
+    if not isinstance(five, (int, float)):
+        return {}
+    return {"claude": _window(five, five_reset, source, now)}
+
+
+def claude_hud(now: float) -> Dict[str, dict]:
+    """The snapshot claude-hud writes "for other local tools" when
+    `display.externalUsageWritePath` is set in its config."""
+    cfg = _read_json(CLAUDE_HUD_CONFIG)
+    target = ((cfg or {}).get("display") or {}).get("externalUsageWritePath") if isinstance(cfg, dict) else None
+    if not isinstance(target, str) or not target.strip():
+        return {}
+    path = Path(os.path.expandvars(os.path.expanduser(target.strip())))
+    snap = _read_json(path) if path.is_absolute() else None
+    t = _epoch(snap.get("updated_at")) if isinstance(snap, dict) else None
+    if t is None or now - t >= FRESH:
+        return {}
+    five, week = snap.get("five_hour") or {}, snap.get("seven_day") or {}
+    return _claude_window(five.get("used_percentage"), five.get("resets_at"), week.get("used_percentage"),
+                          week.get("resets_at"), "claude-hud", now)
+
+
+def ccstatusline(now: float) -> Dict[str, dict]:
+    """ccstatusline's cache of Claude's usage, kept while its usage widgets are on."""
+    path = CCSTATUSLINE_CACHE
+    try:
+        if now - path.stat().st_mtime >= FRESH:
+            return {}
+    except OSError:
+        return {}
+    d = _read_json(path)
+    if not isinstance(d, dict) or d.get("error"):
+        return {}
+    return _claude_window(d.get("sessionUsage"), d.get("sessionResetAt"), d.get("weeklyUsage"),
+                          d.get("weeklyResetAt"), "ccstatusline", now)
+
+
+def ccometixline(now: float) -> Dict[str, dict]:
+    """CCometixLine's usage cache. Its one reset time is the weekly window's, so
+    the 5-hour reset stays unknown."""
+    d = _read_json(CCOMETIXLINE_CACHE)
+    t = _epoch(d.get("cached_at")) if isinstance(d, dict) else None
+    if t is None or now - t >= FRESH:
+        return {}
+    return _claude_window(d.get("five_hour_utilization"), None, d.get("seven_day_utilization"),
+                          d.get("resets_at"), "ccometixline", now)
+
+
 def claude_monitor(now: float) -> Dict[str, dict]:
     try:
         snap = json.loads(STATE_FILE.read_text())
@@ -226,7 +293,7 @@ def ccusage(now: float) -> Dict[str, dict]:
 
 # Most exact first. Built in for Claude only reports a hit limit, so the tools,
 # which can also see it coming, are asked when it hasn't been hit.
-SOURCES = (codex_app, claude_sessions, codexbar, abtop, claude_monitor, ccusage)
+SOURCES = (codex_app, claude_sessions, codexbar, abtop, claude_hud, ccstatusline, ccometixline, claude_monitor, ccusage)
 
 
 def _newest(app: str) -> Optional[dict]:

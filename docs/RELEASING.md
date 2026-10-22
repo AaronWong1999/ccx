@@ -4,10 +4,11 @@
 
 **Only tags release.** Installed copies run the newest `vX.Y.Z` tag, never `main` itself, so committing and pushing to `main` reaches nobody and triggers no update notice. Both apps install the plugin from the user's local copy, so they follow the same tag. Tags must be exactly `vX.Y.Z`; anything else (for example `v0.1.0-beta`) is ignored by update checks.
 
-1. Set the same version in three places:
+1. Set the same version in four places (a test checks the last one):
    - `plugins/ccx/lib/ccx/__init__.py`
    - `plugins/ccx/.claude-plugin/plugin.json`
    - `plugins/ccx/.codex-plugin/plugin.json`
+   - `packaging/codex-directory/.codex-plugin/plugin.json`
 
    Claude only updates a plugin when the version changes, and `ccx` forces a reinstall whenever the installed version differs.
 2. Commit and push to `main` (nothing is released yet).
@@ -50,5 +51,9 @@ The one-line install fetches `install.sh` from `main` (`raw.githubusercontent.co
 ## Plugin directories
 
 The plugin can also be listed in an app's plugin directory (the Claude plugin directory: claude.ai/directory/manage → Submit new → Plugin bundle; the repository must be public before the listing goes live). Track release **tags**, not `main`, so the directory ships the same versions as the install script.
+
+**Claude plugin directory** (claude.ai/directory/manage, self-serve): `claude plugin validate plugins/ccx` and `claude plugin validate .` pass with no warnings. The listing icon is `plugins/ccx/.claude-plugin/icon.png` (1024 px, from `menubar/AppIcon.icns`); the portal takes it only on the first save. Plugins may carry hooks and local MCP servers; ccx's are inside the plugin (`bin/`) and need only the system `python3`. The MCP tools have titles and read-only/destructive hints, and `docs/PRIVACY.md` is the privacy policy. The directory also runs a safety scan and a policy review that `validate` doesn't.
+
+**Codex plugin directory**: hooks and local MCP servers can't be submitted, so `packaging/codex-directory/` is a skills-only package (`$to-claude`, `$from-claude`) whose skills run `~/.local/bin/ccx call …` instead of the MCP tools, with `requires_local_executor: true`. Zip that folder's contents to submit ("Skills only" → Upload ZIP). Local-executor submissions are limited to allowlisted organizations: send the OpenAI organization ID to an OpenAI representative first. Before it goes live, `setup_codex` must stop treating it as a full directory copy: today a `ccx@<other marketplace>` in Codex makes ccx remove its own copy, which would drop the sync hook and MCP tools for people who have both.
 
 A directory install is only the plugin. It points people to this repository (plugin description; a short notice in Claude at most 3 times, a day apart; MCP tool results) to install the menu bar and the other app's side. The install script and `ccx setup`/`update` detect a directory copy (`ccx@<marketplace>` other than `ccx@ccx`), keep it, remove the script's own copy if both exist, and never install a second one. Syncing is serialized with a lock, so even two copies never deliver the same updates twice.

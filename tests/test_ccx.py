@@ -393,6 +393,28 @@ class Interfaces(Base):
             self.assertEqual(e.exception.code, 0)
             self.assertEqual(json.loads(out.getvalue())["latest"], "0.0.2")
 
+    def test_cli_call_runs_an_mcp_tool(self):
+        from ccx import cli
+        claude_file(PROJ_A, "c-call", [user("做个页面")], title="call me")
+        out = io.StringIO()
+        with redirect_stdout(out):
+            cli.main(["call", "codex", "list_sessions", "-C", PROJ_A])
+        self.assertIn("“call me”", out.getvalue())
+        self.assertIn("id=c-call", out.getvalue())
+
+    def test_codex_directory_package_matches_the_release(self):
+        root = Path(__file__).resolve().parents[1]
+        pkg = json.loads((root / "packaging/codex-directory/.codex-plugin/plugin.json").read_text())
+        from ccx import __version__
+        self.assertEqual(pkg["version"], __version__)
+        self.assertTrue(pkg["requires_local_executor"])
+        self.assertNotIn("mcpServers", pkg)  # skills only: the directory takes no hooks or local MCP
+        self.assertLessEqual(len(pkg["interface"]["shortDescription"]), 30)
+        for k in ("logo", "composerIcon"):
+            self.assertTrue((root / "packaging/codex-directory" / pkg["interface"][k]).is_file())
+        self.assertEqual(sorted(p.name for p in (root / "packaging/codex-directory/skills").iterdir()),
+                         ["from-claude", "to-claude"])
+
     def test_hook_injects_only_for_paired_sessions(self):
         claude_file(PROJ_A, "c-hook", [user("hi")], title="hook")
         self.cx.add("x-hook", PROJ_A, "hook", [umsg("hi")])
@@ -863,6 +885,9 @@ class Usage(Base):
         self.limit_hit = None     # claude.last_limit_hit()
         self.real_last_limit_hit = usage.claude.last_limit_hit
         for obj, k, v in ((usage, "STATE_FILE", self.dir / "latest.json"), (usage, "CACHE", self.dir / "cache.json"),
+                          (usage, "CLAUDE_HUD_CONFIG", self.dir / "hud/config.json"),
+                          (usage, "CCSTATUSLINE_CACHE", self.dir / "ccstatusline/usage.json"),
+                          (usage, "CCOMETIXLINE_CACHE", self.dir / "ccline/.api_usage_cache.json"),
                           (usage, "which", lambda name: self.bins.get(name)),
                           (usage.codex, "rate_limits", self.fake_rate_limits),
                           (usage.claude, "last_limit_hit", lambda: self.limit_hit)):
@@ -988,6 +1013,50 @@ class Usage(Base):
         self.tool("codexbar", self.codexbar_out(20, None))
         self.tool("abtop", self.abtop_out(("claude", 95.0, int(time.time()) + 600, 10.0)))
         self.assertEqual(self.u.usage()["claude"]["source"], "codexbar")
+
+    def write(self, path, data):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(data))
+        return path
+
+    def test_claude_hud_snapshot(self):
+        claude_file(PROJ_A, "c-hud", [user("hi")], title="hud task")
+        snap = self.dir / "hud-usage.json"
+        reset = self.iso(time.time() + 1800)
+        self.write(snap, {"updated_at": self.iso(time.time() - 30), "five_hour": {"used_percentage": 93, "resets_at": reset},
+                          "seven_day": {"used_percentage": 40, "resets_at": self.iso(time.time() + 86400)}})
+        self.assertEqual(self.u.usage(), {"available": False})  # not configured to write one
+        self.write(self.u.CLAUDE_HUD_CONFIG, {"display": {"externalUsageWritePath": str(snap)}})
+        u = self.u.usage()
+        self.assertEqual((u["claude"]["level"], u["claude"]["source"], u["claude"]["used_percentage"]),
+                         ("near", "claude-hud", 93))
+        self.assertEqual(u["claude"]["resets_at_epoch"], int(self.u._epoch(reset)))
+        self.assertEqual(u["switch"]["from"], "claude")
+        self.write(snap, {"updated_at": self.iso(time.time() - 3600), "five_hour": {"used_percentage": 93}})
+        self.assertEqual(self.u.usage(), {"available": False})  # stale
+
+    def test_ccstatusline_cache(self):
+        cache = self.write(self.u.CCSTATUSLINE_CACHE, {
+            "sessionUsage": 100, "sessionResetAt": self.iso(time.time() + 900), "weeklyUsage": 61,
+            "weeklyResetAt": self.iso(time.time() + 86400), "tokenHash": "abc"})
+        w = self.u.usage()["claude"]
+        self.assertEqual((w["level"], w["source"]), ("limit", "ccstatusline"))
+        self.write(cache, {"sessionUsage": 20, "weeklyUsage": 100, "weeklyResetAt": self.iso(time.time() + 7200)})
+        self.assertEqual(self.u.usage()["claude"].get("window"), "weekly")
+        self.write(cache, {"error": "no-credentials"})
+        self.assertEqual(self.u.usage(), {"available": False})
+        self.write(cache, {"sessionUsage": 95, "sessionResetAt": self.iso(time.time() + 900)})
+        os.utime(cache, (time.time() - 3600, time.time() - 3600))  # the status line stopped refreshing it
+        self.assertEqual(self.u.usage(), {"available": False})
+
+    def test_ccometixline_cache(self):
+        self.write(self.u.CCOMETIXLINE_CACHE, {"five_hour_utilization": 91.0, "seven_day_utilization": 30.0,
+                                               "resets_at": self.iso(time.time() + 86400), "cached_at": self.iso(time.time() - 60)})
+        w = self.u.usage()["claude"]
+        self.assertEqual((w["level"], w["source"], w["resets_at_epoch"]), ("near", "ccometixline", None))
+        self.write(self.u.CCOMETIXLINE_CACHE, {"five_hour_utilization": 99.0, "seven_day_utilization": 30.0,
+                                               "cached_at": self.iso(time.time() - 3600)})
+        self.assertEqual(self.u.usage(), {"available": False})
 
     def test_ccusage_is_a_hint_never_used_up(self):
         def out(status):
