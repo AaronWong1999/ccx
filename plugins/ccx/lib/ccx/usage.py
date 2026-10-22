@@ -9,6 +9,7 @@ Built in, from what the apps themselves report on this Mac:
 Usage tools the user already runs fill in the rest, each only when it is found,
 and only through its documented output:
 - CodexBar: `codexbar usage --provider both --format json` (Claude and Codex).
+- abtop: `abtop --json`, its `rate_limits` (Claude, once `abtop --setup` ran, and Codex).
 - Claude Code Usage Monitor: the state file `claude-monitor --write-state` keeps
   current, or else a `claude-monitor --once --output json` snapshot (Claude).
 - ccusage: `ccusage blocks --json --token-limit max` (Claude; it only knows your
@@ -175,6 +176,22 @@ def codexbar(now: float) -> Dict[str, dict]:
     return found
 
 
+def abtop(now: float) -> Dict[str, dict]:
+    out = _cli("abtop", ["--json"], now)
+    found = {}
+    for r in (out.get("rate_limits") if isinstance(out, dict) else None) or []:
+        app = r.get("source") if isinstance(r, dict) else None
+        if app not in ("claude", "codex"):
+            continue
+        week = r.get("seven_day_pct")
+        if week is not None and week >= 100 and r.get("seven_day_window_minutes") in (None, 10080):
+            found[app] = _window(100, r.get("seven_day_resets_at") or None, "abtop", now, weekly=True)
+        elif r.get("five_hour_pct") is not None and r.get("five_hour_window_minutes") in (None, 300):
+            # resets_at 0 means abtop doesn't know it
+            found[app] = _window(r["five_hour_pct"], r.get("five_hour_resets_at") or None, "abtop", now)
+    return found
+
+
 def claude_monitor(now: float) -> Dict[str, dict]:
     try:
         snap = json.loads(STATE_FILE.read_text())
@@ -209,7 +226,7 @@ def ccusage(now: float) -> Dict[str, dict]:
 
 # Most exact first. Built in for Claude only reports a hit limit, so the tools,
 # which can also see it coming, are asked when it hasn't been hit.
-SOURCES = (codex_app, claude_sessions, codexbar, claude_monitor, ccusage)
+SOURCES = (codex_app, claude_sessions, codexbar, abtop, claude_monitor, ccusage)
 
 
 def _newest(app: str) -> Optional[dict]:

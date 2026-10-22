@@ -1,6 +1,6 @@
 {
   "name": "ccx",
-  "version": "0.0.32",
+  "version": "0.0.33",
   "description": "ccx - claudecodex: sync task context between Claude and Codex. Import a Codex thread into this conversation, keep both in sync, or hand this conversation to Codex. Menu bar ⇄ and the Codex side: github.com/aaronwong1999/ccx",
   "author": {
     "name": "Aaron Wong",

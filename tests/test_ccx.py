@@ -955,6 +955,40 @@ class Usage(Base):
         self.assertNotIn("codex", u)
         self.assertEqual(u["switch"]["from"], "claude")
 
+    def abtop_out(self, *limits):
+        """`abtop --json`: a snapshot whose rate_limits match abtop's RateLimitInfo."""
+        rows = [{"source": src, "five_hour_pct": pct, "five_hour_resets_at": reset, "five_hour_window_minutes": 300,
+                 "seven_day_pct": week, "seven_day_resets_at": int(time.time()) + 86400,
+                 "seven_day_window_minutes": 10080, "updated_at": int(time.time())}
+                for src, pct, reset, week in limits]
+        return {"interval_ms": 2000, "token_rate": 0.0, "sessions": [], "rate_limits": rows, "orphan_ports": []}
+
+    def test_abtop_rate_limits(self):
+        soon = int(time.time()) + 3600
+        claude_file(PROJ_A, "c-abtop", [user("hi")], title="abtop task")
+        self.tool("abtop", self.abtop_out(("claude", 92.0, soon, 40.0), ("codex", 30.0, soon, 100.0),
+                                          ("opencode", 99.0, soon, 0.0)))
+        u = self.u.usage()
+        self.assertEqual((u["claude"]["level"], u["claude"]["source"], u["claude"]["resets_at_epoch"]),
+                         ("near", "abtop", soon))
+        self.assertEqual((u["codex"]["level"], u["codex"].get("window")), ("limit", "weekly"))
+        self.assertNotIn("switch", u)  # Claude is close, but Codex is out for the week: nowhere to go
+
+    def test_abtop_without_setup_or_reset_time(self):
+        # No `abtop --setup`: no Claude row. An unknown reset arrives as 0.
+        self.tool("abtop", self.abtop_out(("codex", 95.0, 0, 10.0)))
+        u = self.u.usage()
+        self.assertNotIn("claude", u)
+        self.assertEqual((u["codex"]["level"], u["codex"]["resets_at_epoch"]), ("near", None))
+        self.u.CACHE.unlink()
+        self.tool("abtop", self.abtop_out(("codex", None, None, None)))
+        self.assertEqual(self.u.usage(), {"available": False})
+
+    def test_codexbar_comes_before_abtop(self):
+        self.tool("codexbar", self.codexbar_out(20, None))
+        self.tool("abtop", self.abtop_out(("claude", 95.0, int(time.time()) + 600, 10.0)))
+        self.assertEqual(self.u.usage()["claude"]["source"], "codexbar")
+
     def test_ccusage_is_a_hint_never_used_up(self):
         def out(status):
             return {"blocks": [{"isActive": False}, {"isActive": True, "endTime": self.iso(time.time() + 600),

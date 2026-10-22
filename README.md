@@ -111,6 +111,7 @@ Built in: Codex's own numbers (its app-server's `account/rateLimits/read`), and 
 | Tool | What ccx reads | What you get |
 |---|---|---|
 | [CodexBar](https://github.com/steipete/CodexBar) | `codexbar usage --provider both --format json` | Claude's and Codex's 5-hour windows |
+| [abtop](https://github.com/graykode/abtop) | `rate_limits` in `abtop --json` (Claude's after `abtop --setup`) | Claude's and Codex's 5-hour windows |
 | [Claude Code Usage Monitor](https://github.com/Maciek-roboblog/Claude-Code-Usage-Monitor) | its `--write-state` file, or `claude-monitor --once --output json` | Claude's 5-hour window, near and used up |
 | [ccusage](https://github.com/ccusage/ccusage) | `ccusage blocks --json --token-limit max` | a heads-up when the current block is on pace to pass your largest one |
 
