@@ -907,6 +907,7 @@ class Usage(Base):
                           (usage, "CCSTATUSLINE_CACHE", self.dir / "ccstatusline/usage.json"),
                           (usage, "CLAUDE_STATUSBAR_STDIN", self.dir / "claude-statusbar/last_stdin.json"),
                           (usage, "CCOMETIXLINE_CACHE", self.dir / "ccline/.api_usage_cache.json"),
+                          (usage, "CLAUDE_CONFIG", self.dir / "claude.json"),
                           (usage, "AGENT_SESSIONS_SNAPSHOT", self.dir / "agent-sessions/claude_usage_latest.json"),
                           (usage, "which", lambda name: self.bins.get(name)),
                           (usage.codex, "rate_limits", self.fake_rate_limits),
@@ -1113,6 +1114,34 @@ class Usage(Base):
         for stale in ({"health": "failed"}, {"source": "unavailable"}, {"fetchedAt": time.time() - 3600}):
             self.write(path, dict(snap, **stale))
             self.assertEqual(self.u.usage(), {"available": False})
+
+    def test_magpie_quota(self):
+        reset = self.iso(time.time() + 3600)
+        def account(app, user, five, week=10, **kw):
+            return dict({"provider": app, "name": app, "kind": "subscription", "user": user,
+                         "windows": [{"name": "5 hours", "used": five, "remaining": 100 - five, "resetsAt": reset},
+                                     {"name": "7 days", "used": week, "remaining": 100 - week, "resetsAt": reset}]}, **kw)
+        out = [account("claude", "a@x.com", 95), account("claude", "b@x.com", 20), account("codex", "c@x.com", 50),
+               {"provider": "deepseek", "kind": "balance", "windows": [], "balance": "¥3"}]
+        self.tool("magpie", out)
+        # two Claude accounts and Claude Code's sign-in unknown: no guess
+        self.assertEqual(set(self.u.usage()) - {"available"}, {"codex"})
+        self.write(self.u.CLAUDE_CONFIG, {"oauthAccount": {"emailAddress": "B@x.com"}})
+        self.u.CACHE.unlink()
+        u = self.u.usage()
+        self.assertEqual((u["claude"]["level"], u["claude"]["used_percentage"], u["claude"]["source"]), ("ok", 20, "magpie"))
+        self.assertEqual((u["codex"]["level"], u["codex"]["source"]), ("ok", "magpie"))
+        out[1] = account("claude", "b@x.com", 40, week=100)
+        out[2] = account("codex", "c@x.com", 50, error="signed out")
+        self.tool("magpie", out)
+        self.u.CACHE.unlink()
+        u = self.u.usage()
+        self.assertEqual((u["claude"]["level"], u["claude"]["window"]), ("limit", "weekly"))
+        self.assertNotIn("codex", u)
+        out[1] = account("claude", "b@x.com", 99, readAt=self.iso(time.time() - 3600))
+        self.tool("magpie", out)
+        self.u.CACHE.unlink()
+        self.assertNotIn("claude", self.u.usage())
 
     def test_ccusage_is_a_hint_never_used_up(self):
         def out(status):

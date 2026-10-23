@@ -124,6 +124,7 @@ Built in: Codex's own numbers (its app-server's `account/rateLimits/read`), and 
 | [abtop](https://github.com/graykode/abtop) | `rate_limits` in `abtop --json` (Claude's after `abtop --setup`) | Claude's and Codex's 5-hour windows |
 | [claude-hud](https://github.com/jarrodwatts/claude-hud) | the snapshot it writes for other tools (`display.externalUsageWritePath`) | Claude's 5-hour and weekly windows, from Claude Code itself |
 | [Claude Status Bar](https://github.com/leeguooooo/claude-code-usage-bar) | the status line input it saves, `~/.cache/claude-statusbar/last_stdin.json` | Claude's 5-hour and weekly windows, from Claude Code itself |
+| [magpie](https://github.com/yetone/magpie) | `magpie quota claude codex --json`, for the Claude account Claude Code is signed in to | Claude's (and, without the Codex app, Codex's) 5-hour and weekly windows |
 | [Agent Sessions](https://github.com/jazzyalex/agent-sessions) | the Claude snapshot its usage meter saves, `~/Library/Application Support/com.triada.AgentSessions/claude_usage_latest.json` | Claude's 5-hour and weekly windows |
 | [ccstatusline](https://github.com/sirmalloc/ccstatusline) | its usage cache, `~/.cache/ccstatusline/usage.json` (written only when it calls the usage API itself, not while Claude Code's own rate limits cover its widgets) | Claude's 5-hour and weekly windows |
 | [CCometixLine](https://github.com/Haleclipse/CCometixLine) | its usage cache, `~/.claude/ccline/.api_usage_cache.json` | Claude's 5-hour window |

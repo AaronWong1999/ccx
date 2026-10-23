@@ -17,6 +17,8 @@ and only through its documented output:
   (`~/.cache/ccstatusline/usage.json`; written only when it calls the usage API
   itself, i.e. not while Claude Code's own `rate_limits` cover its widgets) and
   CCometixLine's (`~/.claude/ccline/.api_usage_cache.json`). Each only when fresh.
+- magpie: `magpie quota claude codex --json` (the account Claude Code is
+  signed in to; Codex only when magpie has one Codex account).
 - Agent Sessions: the Claude snapshot its menu bar meter saves, in
   `~/Library/Application Support/com.triada.AgentSessions/claude_usage_latest.json`.
 - Claude Code Usage Monitor: the state file `claude-monitor --write-state` keeps
@@ -48,6 +50,7 @@ CLAUDE_HUD_CONFIG = claude.CLAUDE_HOME / "plugins/claude-hud/config.json"
 CCSTATUSLINE_CACHE = HOME / ".cache/ccstatusline/usage.json"
 CLAUDE_STATUSBAR_STDIN = HOME / ".cache/claude-statusbar/last_stdin.json"
 CCOMETIXLINE_CACHE = HOME / ".claude/ccline/.api_usage_cache.json"
+CLAUDE_CONFIG = (Path(os.environ["CLAUDE_CONFIG_DIR"]) if os.environ.get("CLAUDE_CONFIG_DIR") else HOME) / ".claude.json"
 AGENT_SESSIONS_SNAPSHOT = HOME / "Library/Application Support/com.triada.AgentSessions/claude_usage_latest.json"
 NEAR = 90.0               # percent of the 5-hour window: suggest switching
 FRESH = 15 * 60           # an older state file means the monitor isn't running
@@ -296,6 +299,37 @@ def agent_sessions(now: float) -> Dict[str, dict]:
                           d.get("weeklyResetText"), "agent-sessions", now)
 
 
+def _claude_email() -> Optional[str]:
+    """The account Claude Code is signed in to (its config names it; no credential)."""
+    d = _read_json(CLAUDE_CONFIG)
+    email = ((d.get("oauthAccount") or {}).get("emailAddress")) if isinstance(d, dict) else None
+    return email.lower() if isinstance(email, str) and email else None
+
+
+def magpie(now: float) -> Dict[str, dict]:
+    """`magpie quota claude codex --json`: what magpie read of each subscription
+    account. magpie can hold several accounts per app; ccx takes the one Claude
+    Code is signed in to, and for Codex only a lone account (its own app-server
+    comes first anyway)."""
+    out = _cli("magpie", ["quota", "claude", "codex", "--json"], now)
+    found = {}
+    for app in ("claude", "codex"):
+        accounts = [q for q in out if isinstance(q, dict) and q.get("provider") == app and q.get("kind") == "subscription"
+                    and not q.get("error") and not q.get("from")] if isinstance(out, list) else []
+        email = _claude_email() if app == "claude" else None
+        mine = [q for q in accounts if email and str(q.get("user") or "").lower() == email]
+        q = (mine or (accounts if len(accounts) == 1 else []) or [None])[0]
+        read = _epoch((q or {}).get("readAt") or (q or {}).get("asOf"))
+        if not q or (read is not None and now - read >= FRESH):
+            continue
+        spans = {w.get("name"): w for w in q.get("windows") or [] if isinstance(w, dict) and not w.get("unlimited")}
+        five, week = spans.get("5 hours") or {}, spans.get("7 days") or {}
+        w = _claude_window(five.get("used"), five.get("resetsAt"), week.get("used"), week.get("resetsAt"), "magpie", now)
+        if w:
+            found[app] = w["claude"]
+    return found
+
+
 def claude_monitor(now: float) -> Dict[str, dict]:
     try:
         snap = json.loads(STATE_FILE.read_text())
@@ -330,7 +364,7 @@ def ccusage(now: float) -> Dict[str, dict]:
 
 # Most exact first. Built in for Claude only reports a hit limit, so the tools,
 # which can also see it coming, are asked when it hasn't been hit.
-SOURCES = (codex_app, claude_sessions, codexbar, abtop, claude_hud, claude_statusbar, agent_sessions, ccstatusline, ccometixline,
+SOURCES = (codex_app, claude_sessions, codexbar, abtop, claude_hud, claude_statusbar, agent_sessions, magpie, ccstatusline, ccometixline,
            claude_monitor, ccusage)
 
 

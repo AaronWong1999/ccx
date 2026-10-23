@@ -1,6 +1,6 @@
 {
   "name": "ccx",
-  "version": "0.0.36",
+  "version": "0.0.37",
   "description": "ccx - claudecodex: continue the same task in Claude Code and Codex. Hand this thread to Claude, or bring a Claude Code session into this thread with its full context. Needs the ccx app on this Mac: github.com/aaronwong1999/ccx",
   "author": {
     "name": "Aaron Wong",
