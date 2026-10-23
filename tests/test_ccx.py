@@ -907,6 +907,7 @@ class Usage(Base):
                           (usage, "CCSTATUSLINE_CACHE", self.dir / "ccstatusline/usage.json"),
                           (usage, "CLAUDE_STATUSBAR_STDIN", self.dir / "claude-statusbar/last_stdin.json"),
                           (usage, "CCOMETIXLINE_CACHE", self.dir / "ccline/.api_usage_cache.json"),
+                          (usage, "AGENT_SESSIONS_SNAPSHOT", self.dir / "agent-sessions/claude_usage_latest.json"),
                           (usage, "which", lambda name: self.bins.get(name)),
                           (usage.codex, "rate_limits", self.fake_rate_limits),
                           (usage.claude, "last_limit_hit", lambda: self.limit_hit)):
@@ -1094,6 +1095,24 @@ class Usage(Base):
         self.write(self.u.CCOMETIXLINE_CACHE, {"five_hour_utilization": 99.0, "seven_day_utilization": 30.0,
                                                "cached_at": self.iso(time.time() - 3600)})
         self.assertEqual(self.u.usage(), {"available": False})
+
+    def test_agent_sessions_snapshot(self):
+        path, reset = self.u.AGENT_SESSIONS_SNAPSHOT, time.time() + 3600
+        snap = {"fetchedAt": time.time() - 60, "source": "oauthEndpoint", "health": "live",
+                "fiveHourUsedRatio": 0.93, "fiveHourResetText": self.iso(reset),
+                "weeklyUsedRatio": 0.4, "weeklyResetText": self.iso(time.time() + 86400)}
+        self.write(path, snap)
+        w = self.u.usage()["claude"]
+        self.assertEqual((w["level"], w["source"], round(w["used_percentage"])), ("near", "agent-sessions", 93))
+        self.assertAlmostEqual(w["resets_at_epoch"], reset, delta=1)
+        self.write(path, dict(snap, weeklyUsedRatio=1.0))
+        self.assertEqual((self.u.usage()["claude"]["level"], self.u.usage()["claude"]["window"]), ("limit", "weekly"))
+        self.write(path, dict(snap, source="tmuxUsage", fiveHourResetText="Oct 23, 5pm"))
+        w = self.u.usage()["claude"]
+        self.assertEqual((w["level"], w["resets_at_epoch"]), ("near", None))
+        for stale in ({"health": "failed"}, {"source": "unavailable"}, {"fetchedAt": time.time() - 3600}):
+            self.write(path, dict(snap, **stale))
+            self.assertEqual(self.u.usage(), {"available": False})
 
     def test_ccusage_is_a_hint_never_used_up(self):
         def out(status):

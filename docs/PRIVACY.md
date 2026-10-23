@@ -5,7 +5,7 @@ ccx runs entirely on your Mac. It has no server, no account and no telemetry.
 **What it reads**
 - Claude Code's session files under `~/.claude/projects` (or `CLAUDE_CONFIG_DIR`), to carry a task between the apps.
 - Codex threads and Codex's own usage numbers, only through Codex's app-server API on your Mac.
-- When they are installed, the local output of CodexBar, abtop, Claude Code Usage Monitor, ccusage, claude-hud, Claude Status Bar, ccstatusline and CCometixLine, for the usage heads-up.
+- When they are installed, the local output of CodexBar, abtop, Claude Code Usage Monitor, ccusage, claude-hud, Claude Status Bar, Agent Sessions, ccstatusline and CCometixLine, for the usage heads-up.
 
 **What it writes**
 - Link records and settings in `~/.ccx`.

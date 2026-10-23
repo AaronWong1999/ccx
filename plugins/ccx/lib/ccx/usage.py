@@ -17,6 +17,8 @@ and only through its documented output:
   (`~/.cache/ccstatusline/usage.json`; written only when it calls the usage API
   itself, i.e. not while Claude Code's own `rate_limits` cover its widgets) and
   CCometixLine's (`~/.claude/ccline/.api_usage_cache.json`). Each only when fresh.
+- Agent Sessions: the Claude snapshot its menu bar meter saves, in
+  `~/Library/Application Support/com.triada.AgentSessions/claude_usage_latest.json`.
 - Claude Code Usage Monitor: the state file `claude-monitor --write-state` keeps
   current, or else a `claude-monitor --once --output json` snapshot (Claude).
 - ccusage: `ccusage blocks --json --token-limit max` (Claude; it only knows your
@@ -46,6 +48,7 @@ CLAUDE_HUD_CONFIG = claude.CLAUDE_HOME / "plugins/claude-hud/config.json"
 CCSTATUSLINE_CACHE = HOME / ".cache/ccstatusline/usage.json"
 CLAUDE_STATUSBAR_STDIN = HOME / ".cache/claude-statusbar/last_stdin.json"
 CCOMETIXLINE_CACHE = HOME / ".claude/ccline/.api_usage_cache.json"
+AGENT_SESSIONS_SNAPSHOT = HOME / "Library/Application Support/com.triada.AgentSessions/claude_usage_latest.json"
 NEAR = 90.0               # percent of the 5-hour window: suggest switching
 FRESH = 15 * 60           # an older state file means the monitor isn't running
 CLI_EVERY = 5 * 60        # how often to ask a usage tool's CLI (each takes seconds)
@@ -280,6 +283,19 @@ def ccometixline(now: float) -> Dict[str, dict]:
                           d.get("resets_at"), "ccometixline", now)
 
 
+def agent_sessions(now: float) -> Dict[str, dict]:
+    """The Claude snapshot the Agent Sessions app keeps for its next start. Its
+    ratios run 0...1; reset times are ISO instants, except from its tmux fallback
+    (a localized string, so the reset stays unknown)."""
+    d = _read_json(AGENT_SESSIONS_SNAPSHOT)
+    t = _epoch(d.get("fetchedAt")) if isinstance(d, dict) else None
+    if t is None or now - t >= FRESH or d.get("health") == "failed" or d.get("source") == "unavailable":
+        return {}
+    pct = lambda r: r * 100 if isinstance(r, (int, float)) else None
+    return _claude_window(pct(d.get("fiveHourUsedRatio")), d.get("fiveHourResetText"), pct(d.get("weeklyUsedRatio")),
+                          d.get("weeklyResetText"), "agent-sessions", now)
+
+
 def claude_monitor(now: float) -> Dict[str, dict]:
     try:
         snap = json.loads(STATE_FILE.read_text())
@@ -314,7 +330,7 @@ def ccusage(now: float) -> Dict[str, dict]:
 
 # Most exact first. Built in for Claude only reports a hit limit, so the tools,
 # which can also see it coming, are asked when it hasn't been hit.
-SOURCES = (codex_app, claude_sessions, codexbar, abtop, claude_hud, claude_statusbar, ccstatusline, ccometixline,
+SOURCES = (codex_app, claude_sessions, codexbar, abtop, claude_hud, claude_statusbar, agent_sessions, ccstatusline, ccometixline,
            claude_monitor, ccusage)
 
 
