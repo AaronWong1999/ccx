@@ -466,6 +466,37 @@ class Interfaces(Base):
         self.cx.add("x-" + sid, PROJ_A, "长任务", [umsg("长任务")])
         pairs.link(pairs.side("claude", sid), pairs.side("codex", "x-" + sid))
 
+    def test_unlink_stops_sync_keeps_both_and_relinks_fresh(self):
+        from ccx import cli
+        claude_file(PROJ_A, "c-unpair", [user("hi")], title="unlink me")
+        self.cx.add("x-unpair", PROJ_A, "unlink me", [umsg("hi")])
+        pairs.link(pairs.side("claude", "c-unpair"), pairs.side("codex", "x-unpair"))
+        claude_file(PROJ_A, "c-keeppair", [user("hi")], title="keep")
+        self.cx.add("x-keeppair", PROJ_A, "keep", [umsg("hi")])
+        pairs.link(pairs.side("claude", "c-keeppair"), pairs.side("codex", "x-keeppair"))
+        self.cx.append("x-unpair", amsg("Codex 的新进展"))
+        out = io.StringIO()
+        with redirect_stdout(out):
+            cli.main(["unlink", "x-unpair", "--json"])  # either side of the pair works
+        self.assertEqual(json.loads(out.getvalue()), {"unlinked": True, "tool": "codex", "id": "x-unpair", "partner": "c-unpair"})
+        self.assertIsNone(pairs.find("claude", "c-unpair"))
+        self.assertIsNotNone(pairs.find("claude", "c-keeppair"))  # other pairs untouched
+        self.assertIsNone(self._hook("c-unpair"))  # nothing injected any more, either way
+        self.assertIsNotNone(claude.find("c-unpair"))
+        self.assertIsNotNone(codex.find("x-unpair"))
+        self.assertEqual(pairs.status(claude.find("c-unpair")), ("new", None))
+        out = io.StringIO()
+        with redirect_stdout(out):
+            cli.main(["unlink", "c-unpair"])
+        self.assertIn("nothing to unlink", out.getvalue())
+        with mock.patch.dict(os.environ, {"CLAUDE_CODE_SESSION_ID": "c-keeppair"}):
+            self.assertIn("Unlinked from Codex", mcp_server.call("claude", "unlink", {"cwd": PROJ_A}))
+            self.assertIn("isn't linked", mcp_server.call("claude", "unlink", {"cwd": PROJ_A}))
+        with mock.patch.object(sync, "_import_to_codex", lambda s: "x-unpair"):
+            again = sync.transfer("claude", "c-unpair", open_app=False)
+        self.assertEqual(again["action"], "created")  # a fresh link
+        self.assertEqual(pairs.find("codex", "x-unpair")["claude"]["id"], "c-unpair")
+
     def test_hook_never_blocks_a_long_idle_conversation(self):
         self._big_idle_pair("c-big", 800_000, 3)
         self.assertNotEqual((self._hook("c-big", "接着干") or {}).get("decision"), "block")
@@ -495,7 +526,7 @@ class Interfaces(Base):
 
     def test_mcp_protocol(self):
         tools = {t["name"] for t in mcp_server.tools("codex")}
-        self.assertEqual(tools, {"continue_here", "list_sessions", "send_current_session", "read_session"})
+        self.assertEqual(tools, {"continue_here", "list_sessions", "send_current_session", "read_session", "unlink"})
 
     def test_transfer_creates_pair_then_reopens(self):
         claude_file(PROJ_A, "c-xfer", [user("做个页面"), assistant(text("好"))], title="做个页面")

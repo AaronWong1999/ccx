@@ -21,3 +21,5 @@ Use ccx's `continue_here` tool. Always pass the current working directory as `cw
 5. Once linked, the two stay in sync: later messages here get Codex's new progress injected automatically (`<ccx-sync>`). If it ever doesn't show up, call `continue_here` again.
 
 If the user only pasted some Codex output and doesn't need a link, you can also just continue from what they pasted.
+
+If the user says "unlink", "stop syncing", 取消关联 or 不要同步了, call ccx's `unlink` with the current working directory as `cwd`. It forgets the link to the Codex conversation, so neither side gets the other's progress any more; both conversations are kept, and handing over again links them afresh.

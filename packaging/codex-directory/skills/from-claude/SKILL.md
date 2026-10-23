@@ -18,3 +18,5 @@ This skill uses the `ccx` command from the ccx app (github.com/aaronwong1999/ccx
    - If it says the other side **stopped in the middle of a step**, first check whether that step finished, then continue.
 4. **Different folder**: if the block has a "NOTE: … folder" line, tell the user and ask whether to continue in that folder or use the progress only as reference. Never edit the other folder on your own.
 5. To get Claude's newer progress later, run step 2 again. (With the full ccx install, new progress also arrives on its own with each message.)
+
+If the user says "unlink", "stop syncing", 取消关联 or 不要同步了, run `~/.local/bin/ccx call codex unlink -C "<current working directory>"`. It forgets the link to the Claude conversation, so neither side gets the other's progress any more; both conversations are kept, and handing over again links them afresh.

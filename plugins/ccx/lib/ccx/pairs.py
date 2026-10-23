@@ -52,6 +52,16 @@ def link(claude_side: dict, codex_side: dict) -> dict:
     return p
 
 
+def unlink(tool: str, sid: str) -> Optional[dict]:
+    """Forget the pair `tool`'s session is in, with its cursors; both
+    conversations stay as they are. Returns the pair it removed, if any."""
+    pairs = load()
+    gone = next((p for p in pairs if p[tool]["id"] == sid), None)
+    if gone:
+        save([p for p in pairs if p is not gone])
+    return gone
+
+
 def _set_cursor(claude_id: str, side: str, cursor: int, size: Optional[int] = None,
                 updated_at: Optional[float] = None, goal_sent: Optional[str] = None):
     pairs = load()

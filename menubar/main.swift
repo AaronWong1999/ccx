@@ -479,6 +479,29 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
         sub.addItem(caption(L("Transfer to Codex · from Claude", "传输到 Codex · 来自 Claude")))
         if p.claude.isEmpty { sub.addItem(caption(L("No Claude sessions", "没有 Claude 会话"))) }
         for r in p.claude { sub.addItem(sessionItem(r, from: "claude")) }
+        // One way out of a link: ccx forgets the pair, both conversations stay.
+        let fromClaude = p.claude.filter { $0.linked_to != nil }
+        let claudeIDs = Set(fromClaude.map { $0.id })
+        let fromCodex = p.codex.filter { $0.linked_to.map { !claudeIDs.contains($0) } ?? false }
+        if !fromClaude.isEmpty || !fromCodex.isEmpty {
+            sub.addItem(.separator())
+            let un = NSMenuItem(title: L("Unlink", "取消关联"), action: nil, keyEquivalent: "")
+            un.image = NSImage(systemSymbolName: "scissors", accessibilityDescription: nil)
+            let pick = NSMenu()
+            pick.autoenablesItems = false
+            let pairsShown = fromClaude.map { r in (r, p.codex.first { $0.id == r.linked_to }?.title ?? L("Codex conversation", "Codex 对话"), true) }
+                + fromCodex.map { r in (r, L("Claude conversation", "Claude 对话"), false) }
+            for (r, partner, claudeFirst) in pairsShown {
+                let label = claudeFirst ? "\(short(r.title, 28))  ⇄  \(short(partner, 28))" : "\(short(partner, 28))  ⇄  \(short(r.title, 28))"
+                let i = action(label, #selector(unlinkClicked(_:)))
+                i.representedObject = r.id
+                i.toolTip = L("Stop syncing these two. Both conversations are kept; transferring again links them afresh.",
+                              "不再同步这两个对话。两边都保留；再次传输会重新关联。")
+                pick.addItem(i)
+            }
+            un.submenu = pick
+            sub.addItem(un)
+        }
         it.submenu = sub
         return it
     }
@@ -565,7 +588,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
             self.busy = false
             self.setIcon(busy: false)
             var text = (out + err).trimmingCharacters(in: .whitespacesAndNewlines)
-            var heading = "ccx"
+            var heading = args.first == "unlink" ? L("Unlinked", "已取消关联") : "ccx"
             if code == 0, let d = (try? JSONSerialization.jsonObject(with: Data(out.utf8))) as? [String: Any],
                let msg = d["message"] as? String {
                 text = msg
@@ -639,6 +662,11 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
             if choice == "cancel" { if clickTest { exit(0) }; return }
         }
         work([from == "codex" ? "to-claude" : "to-codex", id, "--json"], title: "", showOutput: false, notifyResult: true)
+    }
+
+    @objc func unlinkClicked(_ sender: NSMenuItem) {
+        guard let id = sender.representedObject as? String else { return }
+        work(["unlink", id], title: "", showOutput: false, notifyResult: true)
     }
 
     @objc func updateNow() { if let l = release?.latest { install(l, announce: true) } }

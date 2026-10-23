@@ -1,6 +1,6 @@
 {
   "name": "ccx",
-  "version": "0.0.37",
+  "version": "0.0.38",
   "description": "ccx - claudecodex: sync task context between Claude and Codex. Import a Claude Code session into this thread, keep both in sync, or hand this thread to Claude. Menu bar ⇄ and the Claude side: github.com/aaronwong1999/ccx",
   "author": {
     "name": "Aaron Wong",

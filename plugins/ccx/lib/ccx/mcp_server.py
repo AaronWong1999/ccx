@@ -68,7 +68,25 @@ def tools(host: str) -> list:
             "inputSchema": {"type": "object", "properties": {"cwd": cwd}, "required": ["cwd"]},
             "annotations": {"title": f"Continue in {NAME[other]}", **rw},
         },
+        {
+            "name": "unlink",
+            "description": (f"Stop syncing this conversation with its linked {NAME[other]} conversation: ccx forgets "
+                            f"the link, so neither side gets the other's progress any more. Both conversations are "
+                            f"kept. Use when the user says “unlink”, “stop syncing”, 取消关联 or 不要同步了."),
+            "inputSchema": {"type": "object", "properties": {"cwd": cwd}, "required": ["cwd"]},
+            "annotations": {"title": f"Unlink from {NAME[other]}", "readOnlyHint": False, "destructiveHint": False,
+                            "idempotentHint": True, "openWorldHint": False},
+        },
     ]
+
+
+def unlink_message(tool: str, sid: str) -> str:
+    gone = pairs.unlink(tool, sid)
+    other = OTHER[tool]
+    if not gone:
+        return f"This {NAME[tool]} conversation isn't linked to {NAME[other]}; nothing to unlink."
+    return (f"Unlinked from {NAME[other]} conversation {gone[other]['id']}. Both conversations are kept; they no "
+            f"longer sync. Sending this conversation to {NAME[other]} again links it afresh.")
 
 
 def current_session(host: str, cwd: str) -> str:
@@ -128,6 +146,8 @@ def call(host: str, name: str, args: dict) -> str:
     if name == "send_current_session":
         res = transfer(host, here, open_app=True)
         return res["message"] + ("" if res.get("opened") else f" Open: {res['target']['deep_link']}") + _hint()
+    if name == "unlink":
+        return unlink_message(host, here)
     raise RuntimeError(f"unknown tool {name}")
 
 

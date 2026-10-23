@@ -76,9 +76,12 @@ def main(argv=None):
     sub.add_parser("menu-data", help=argparse.SUPPRESS)
     inf = sub.add_parser("info", help="which app a session belongs to and whether it is linked (for integrations)")
     inf.add_argument("session", help="Claude session id or Codex thread id")
+    ul = sub.add_parser("unlink", help="stop syncing a linked pair; both conversations are kept")
+    ul.add_argument("session", help="Claude session id or Codex thread id (either side of the pair)")
     tc = sub.add_parser("call", help="run one of ccx's MCP tools from a shell (for skills used without the MCP server)")
     tc.add_argument("host", choices=("claude", "codex"), help="the app the conversation is in")
-    tc.add_argument("tool", choices=("continue_here", "list_sessions", "send_current_session", "read_session"))
+    tc.add_argument("tool", choices=("continue_here", "list_sessions", "send_current_session", "read_session",
+                                         "unlink"))
     tc.add_argument("--session-id")
     tc.add_argument("--query")
     tc.add_argument("--offset", type=int, default=0)
@@ -143,6 +146,19 @@ def main(argv=None):
                  "linked_to": partner, "continue_in": OTHER[s.tool]}
             print(json.dumps(d, ensure_ascii=False) if a.json else
                   f"{NAME[s.tool]} · {s.title} · {STATUS[st]}" + (f" · linked to {partner}" if partner else ""))
+        elif a.cmd == "unlink":
+            s = claude.find(a.session) or codex.find(a.session)
+            if not s:
+                sys.exit(f"no Claude session or Codex thread {a.session}")
+            gone = pairs.unlink(s.tool, s.id)
+            if a.json:
+                print(json.dumps({"unlinked": bool(gone), "tool": s.tool, "id": s.id,
+                                  "partner": gone[OTHER[s.tool]]["id"] if gone else None}))
+            else:
+                other = NAME[OTHER[s.tool]]
+                print(L(f"✓ Unlinked “{s.title}” from {other}. Both conversations are kept; they no longer sync.",
+                        f"✓ 已取消“{s.title}”与 {other} 的关联。两边的对话都保留，之后不再同步。") if gone
+                      else L(f"“{s.title}” isn't linked; nothing to unlink.", f"“{s.title}”没有关联，无需取消。"))
         elif a.cmd == "call":
             from . import mcp_server
             args = {"cwd": cwd, "session_id": a.session_id, "query": a.query, "offset": a.offset}
