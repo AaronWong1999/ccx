@@ -401,7 +401,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 for p in d.projects { menu.addItem(projectItem(p)) }
                 if let c = d.cloud_other, !(c.claude.isEmpty && c.codex.isEmpty) { menu.addItem(cloudOtherItem(c)) }
                 if d.claude_cloud_signin == true {
-                    let si = action(L("Show Claude Cloud Sessions…", "显示 Claude 云端会话…"), #selector(cloudSignin), symbol: "cloud")
+                    let si = action(L("Show Claude Cloud Sessions (Sign In Once)…", "显示 Claude 云端会话（需登录一次）…"), #selector(cloudSignin), symbol: "cloud")
                     si.toolTip = L("Opens your browser once to sign Claude Code in; usually one click. The desktop app's sign-in is only lent to the programs it starts itself.",
                                    "打开浏览器让 Claude Code 登录一次，通常点一下就好。桌面版的登录只借给它自己启动的程序用。")
                     menu.addItem(si)
@@ -715,7 +715,16 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc func showDoctor() { work(["doctor"], title: L("ccx diagnostics", "ccx 诊断"), showOutput: true) }
     @objc func fixHook() { work(["setup"], title: L("ccx setup", "ccx 设置"), showOutput: true) }
     @objc func refreshClicked() { refresh() }
+    /// Explain before anything opens: the browser shouldn't pop up out of nowhere.
     @objc func cloudSignin() {
+        NSApp.activate(ignoringOtherApps: true)
+        let a = NSAlert()
+        a.messageText = L("Sign in to Claude Code once", "登录一次 Claude Code")
+        a.informativeText = L("To list your Claude cloud sessions, ccx asks Claude Code itself, which needs its own sign-in: the desktop app's sign-in is only lent to the programs it starts.\n\nYour browser opens Claude's sign-in page; if you're signed in to claude.ai there, it's one click. You do this only once, and ccx never sees your credentials.",
+                              "要列出你的 Claude 云端会话，ccx 会请 Claude Code 自己去读，这需要它单独登录：桌面版的登录只借给它自己启动的程序用。\n\n接下来浏览器会打开 Claude 的登录页；如果你在浏览器里已经登录了 claude.ai，点一下授权就好。只需要登录这一次，ccx 也不会接触你的登录凭据。")
+        a.addButton(withTitle: L("Open Browser to Sign In", "打开浏览器登录"))
+        a.addButton(withTitle: L("Not Now", "以后再说"))
+        guard a.runModal() == .alertFirstButtonReturn else { return }
         run(["cloud-signin", "--json"]) { _, out, _ in
             if out.contains("\"signed_in\": true") {
                 self.notify(L("Claude cloud sessions", "Claude 云端会话"),
