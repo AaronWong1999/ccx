@@ -1,0 +1,14 @@
+{
+  "name": "ccx-claudecodex",
+  "version": "0.0.39",
+  "private": true,
+  "description": "ccx for magpie: every agent magpie connects can list Claude Code and Codex conversations and read one to carry on the task. ccx itself is a macOS app and plugins; this file only makes the repository a magpie plugin.",
+  "type": "module",
+  "main": "./magpie/index.mjs",
+  "keywords": ["magpie-plugin", "magpie", "magpie-tools", "claude-code", "codex", "handoff"],
+  "license": "MIT",
+  "repository": { "type": "git", "url": "git+https://github.com/aaronwong1999/ccx.git" },
+  "magpie": {
+    "icon": "https://raw.githubusercontent.com/aaronwong1999/ccx/main/plugins/ccx/.claude-plugin/icon.png"
+  }
+}

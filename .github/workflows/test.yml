@@ -15,5 +15,10 @@ jobs:
         run: python -m unittest discover -s tests -v
       - name: Build the menu bar app
         run: sh menubar/build.sh "$RUNNER_TEMP/ccx.app" "$PWD/plugins/ccx/bin/ccx" ci
+      - uses: oven-sh/setup-bun@v2
+        if: matrix.python == '3.13'
+      - name: magpie plugin tests
+        if: matrix.python == '3.13'
+        run: bun test magpie
       - name: Shell syntax
         run: for f in install.sh menubar/build.sh plugins/ccx/bin/*; do sh -n "$f"; done

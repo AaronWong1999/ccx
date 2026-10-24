@@ -138,6 +138,9 @@ Built in: Codex's own numbers (its app-server's `account/rateLimits/read`), and 
 Using [CloudCLI](https://github.com/siteboon/claudecodeui)? The [ccx plugin](https://github.com/AaronWong1999/cloudcli-plugin-ccx) adds a tab that shows both sides' usage and hands the open session to the other app.<br>
 用 CloudCLI？[ccx 插件](https://github.com/AaronWong1999/cloudcli-plugin-ccx) 加一个标签页：显示两边额度，并把当前会话交给另一边。
 
+Using [magpie](https://github.com/yetone/magpie)? This repository is also a magpie plugin: in magpie, open Plugins › Discover › Unofficial and add **ccx**, or run `magpie plugin add aaronwong1999/ccx`. Every agent magpie connects then gets `ccx_sessions` and `ccx_read`, so another agent or model can read a Claude Code or Codex conversation and carry on the task.<br>
+用 [magpie](https://github.com/yetone/magpie)？这个仓库本身也是 magpie 插件：在 magpie 的「插件 › 发现 › 非官方」里添加 **ccx**，或运行 `magpie plugin add aaronwong1999/ccx`。之后 magpie 接的每个 agent 都能读 Claude Code 或 Codex 的对话，换个 agent 或模型也能接着干。
+
 ## FAQ · 常见问题
 
 **Is my code or conversation uploaded anywhere?** No. Sync runs entirely on your Mac; Codex data goes only through Codex's own app-server API. ccx reaches GitHub only to install and check for updates.<br>
