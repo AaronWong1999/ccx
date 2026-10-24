@@ -123,7 +123,11 @@ def sessions(cwd: Optional[str] = None, query: Optional[str] = None) -> List[Ses
 
 
 def find(sid: str) -> Optional[Session]:
-    """A Claude session by id (or unique id prefix), in any project folder."""
+    """A Claude session by id (or unique id prefix), in any project folder; a cloud
+    session by its local mirror (see cloud.py)."""
+    from . import cloud
+    if cloud.is_claude(sid):
+        return cloud.mirror(sid)
     hits = glob.glob(str(PROJECTS / "*" / f"{sid}*.jsonl"))
     if len(hits) != 1:
         return None
@@ -371,7 +375,7 @@ def copy_with_new_id(src: Path, cwd: Optional[str] = None) -> Path:
                 continue
             if "sessionId" in r:
                 r["sessionId"] = nid
-            if cwd and "cwd" in r:
+            if cwd and ("cwd" in r or r.get("type") in ("user", "assistant")):
                 r["cwd"] = cwd
             g.write(json.dumps(r, ensure_ascii=False) + "\n")
     return dst

@@ -15,7 +15,7 @@ import subprocess
 import time
 from typing import List, Optional, Tuple
 
-from . import claude, codex
+from . import claude, cloud, codex
 from .common import NAME, OTHER, PLAN, STATE_DIR, TAG, Session, clip, est_tokens, folder_note, git_snapshot
 
 PAIRS = STATE_DIR / "pairs.json"
@@ -104,7 +104,7 @@ def _goal_key(g: Optional[dict]) -> str:
 
 def session_units(tool: str, sid: str, include_imported: bool = False) -> Tuple[Optional[Session], List]:
     if tool == "claude":
-        s = claude.find(sid)
+        s = cloud.refresh_claude(sid) if cloud.is_claude(sid) else claude.find(sid)
         return s, (claude.units(s.path, include_imported) if s else [])
     s = codex.find(sid)
     return s, (codex.units(codex.items(sid)) if s else [])
@@ -187,6 +187,8 @@ def _pull(here_tool: str, here_id: str, budget: int) -> Optional[dict]:
     # Rollout size is not a valid change detector for paginated history (new items
     # may live in the history DB). The thread's updatedAt is: skip the full read
     # when it hasn't moved since the last sync (and isn't from the last few seconds).
+    if other == "codex" and cloud.is_codex(o["id"]):
+        return _pull_codex_task(pair, here_tool)
     if other == "codex":
         s = codex.find(o["id"])
         if not s:
@@ -210,10 +212,26 @@ def _pull(here_tool: str, here_id: str, budget: int) -> Optional[dict]:
     return result
 
 
+def _pull_codex_task(pair: dict, here_tool: str) -> Optional[dict]:
+    """A Codex Cloud task's new result (a newer attempt or change) since the last sync."""
+    o = pair["codex"]
+    t = cloud.codex_task(o["id"])
+    if not t or t["updated_at"] <= o.get("updated_at", 0):
+        return None
+    s = cloud.codex_session(t, o["cwd"])
+    result = {"from": "codex", "session": t["id"], "count": 1,
+              "context": wrap(render([("assistant", cloud.codex_task_text(t))], "codex", HOOK_BUDGET),
+                              s, pair[here_tool]["cwd"], first=False)}
+    _set_cursor(pair["claude"]["id"], "codex", 0, updated_at=t["updated_at"])
+    return result
+
+
 def continue_from(here_tool: str, here_id: str, here_cwd: str, other_id: str) -> dict:
     """Pair this conversation with `other_id` on the other side and return that
     session's whole (compressed) conversation to carry on from."""
     other = OTHER[here_tool]
+    if other == "claude" and cloud.is_claude(other_id) and not cloud.mirror(other_id):
+        cloud.refresh_claude(other_id, here_cwd)  # first read: file it under this folder
     s, us = session_units(other, other_id)
     # A Claude session ccx wrote from a Codex thread, not yet continued in Claude:
     # its imported records are the whole conversation, so show those.

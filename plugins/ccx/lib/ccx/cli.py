@@ -8,14 +8,16 @@ import os
 import sys
 import time
 
-from . import __version__, claude, codex, install, pairs, repairs, usage
-from .common import copy_to_clipboard, DEFAULTS, NAME, OTHER, L, real, set_setting, setting
+from . import __version__, claude, cloud, codex, install, pairs, repairs, usage
+from .common import copy_to_clipboard, DEFAULTS, NAME, OTHER, L, Session, real, set_setting, setting
 from .sync import (STATUS, continue_phrase, estimate, find_sessions, menu_data, new_claude_conversation, new_codex_conversation,
                    transfer)
 
 
 def pick(tool: str, cwd: str, ref):
     if ref:
+        if cloud.is_claude(ref) if tool == "claude" else cloud.is_codex(ref):
+            return Session(tool, ref, cwd, 0, ref)  # a cloud session: transfer reads it
         s = claude.find(ref) if tool == "claude" else codex.find(ref)
         if not s:
             sys.exit(f"{NAME[tool]} session {ref} not found (see `ccx ls`)")
@@ -74,6 +76,7 @@ def main(argv=None):
     ls.add_argument("-q", "--query", help="search titles in every project")
     ls.add_argument("-n", type=int, default=8)
     sub.add_parser("menu-data", help=argparse.SUPPRESS)
+    sub.add_parser("cloud-signin", help="sign in to Claude Code once so its cloud sessions show up (opens Terminal)")
     inf = sub.add_parser("info", help="which app a session belongs to and whether it is linked (for integrations)")
     inf.add_argument("session", help="Claude session id or Codex thread id")
     ul = sub.add_parser("unlink", help="stop syncing a linked pair; both conversations are kept")
@@ -131,6 +134,11 @@ def main(argv=None):
                     print(f"  {r['updated']}  {r['id'][:8]}  {STATUS[r['status']]:<16} {r['title']}{where}")
                 if not rows:
                     print("  (none)")
+        elif a.cmd == "cloud-signin":
+            ok = cloud.claude_signin()
+            print(json.dumps({"signed_in": ok}) if a.json else
+                  L("✓ Signed in: Claude's cloud sessions now show in the ⇄ menu.", "✓ 已登录：Claude 云端会话会显示在 ⇄ 菜单里。")
+                  if ok else L("Not signed in.", "未登录。"))
         elif a.cmd == "menu-data":
             d = menu_data()
             d["version"] = __version__
@@ -148,6 +156,10 @@ def main(argv=None):
                   f"{NAME[s.tool]} · {s.title} · {STATUS[st]}" + (f" · linked to {partner}" if partner else ""))
         elif a.cmd == "unlink":
             s = claude.find(a.session) or codex.find(a.session)
+            if not s and cloud.is_codex(a.session) and pairs.find("codex", a.session):
+                t = cloud.codex_task(a.session)  # a Codex Cloud task has no local thread
+                s = Session("codex", a.session, pairs.find("codex", a.session)["codex"]["cwd"], 0,
+                            t["title"] if t else a.session)
             if not s:
                 sys.exit(f"no Claude session or Codex thread {a.session}")
             gone = pairs.unlink(s.tool, s.id)

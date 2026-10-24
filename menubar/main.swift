@@ -33,6 +33,7 @@ struct Row: Decodable {
     let partner_tokens: Int?      // Codex rows: size of the linked Claude conversation
     let partner_idle_min: Int?    // … and how long it has been idle
     let own_tokens: Int?          // Claude rows: size of the session itself
+    let cloud: Bool?              // a Claude Code on the web session or a Codex Cloud task
 }
 
 struct Project: Decodable {
@@ -43,8 +44,15 @@ struct Project: Decodable {
     let claude: [Row]
 }
 
+struct CloudOther: Decodable {
+    let claude: [Row]
+    let codex: [Row]
+}
+
 struct MenuData: Decodable {
     let projects: [Project]
+    let cloud_other: CloudOther?  // cloud sessions with no local checkout of their repository
+    let claude_cloud_signin: Bool? // Claude Code's CLI isn't signed in, so its cloud sessions can't be listed
     let version: String?
     let codex_hook_trusted: Bool?
     let needs_setup: [String]?
@@ -391,6 +399,13 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
             } else {
                 menu.addItem(caption(L("RECENT PROJECTS", "最近的项目")))
                 for p in d.projects { menu.addItem(projectItem(p)) }
+                if let c = d.cloud_other, !(c.claude.isEmpty && c.codex.isEmpty) { menu.addItem(cloudOtherItem(c)) }
+                if d.claude_cloud_signin == true {
+                    let si = action(L("Show Claude Cloud Sessions…", "显示 Claude 云端会话…"), #selector(cloudSignin), symbol: "cloud")
+                    si.toolTip = L("Opens your browser once to sign Claude Code in; usually one click. The desktop app's sign-in is only lent to the programs it starts itself.",
+                                   "打开浏览器让 Claude Code 登录一次，通常点一下就好。桌面版的登录只借给它自己启动的程序用。")
+                    menu.addItem(si)
+                }
                 menu.addItem(caption(L("○ new  ✓ linked  ↻ updated", "○ 未关联  ✓ 已关联  ↻ 有更新")))
             }
             if d.codex_hook_trusted == false {
@@ -506,9 +521,29 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
         return it
     }
 
+    /// Cloud sessions whose repository isn't checked out here; they import into the home folder.
+    func cloudOtherItem(_ c: CloudOther) -> NSMenuItem {
+        let it = NSMenuItem(title: L("Other Cloud Sessions", "其他云端会话"), action: nil, keyEquivalent: "")
+        it.image = NSImage(systemSymbolName: "cloud", accessibilityDescription: nil)
+        let sub = NSMenu()
+        sub.autoenablesItems = false
+        if !c.codex.isEmpty {
+            sub.addItem(caption(L("Transfer to Claude · from Codex Cloud", "传输到 Claude · 来自 Codex 云端")))
+            for r in c.codex { sub.addItem(sessionItem(r, from: "codex")) }
+        }
+        if !c.claude.isEmpty {
+            if !c.codex.isEmpty { sub.addItem(.separator()) }
+            sub.addItem(caption(L("Transfer to Codex · from Claude on the web", "传输到 Codex · 来自 Claude 云端")))
+            for r in c.claude { sub.addItem(sessionItem(r, from: "claude")) }
+        }
+        it.submenu = sub
+        return it
+    }
+
     func sessionItem(_ r: Row, from: String) -> NSMenuItem {
         let glyph = ["new": "○", "updated": "↻", "linked": "✓", "mirror": "·"][r.status] ?? "○"
-        var title = short(r.title, 36)
+        let cloud = r.cloud ?? false
+        var title = (cloud ? "☁ " : "") + short(r.title, 36)
         if r.status == "mirror" { title += L("  (imported copy)", "  （导入的副本）") }
         let i = NSMenuItem(title: "", action: #selector(sessionClicked(_:)), keyEquivalent: "")
         i.target = self
@@ -522,7 +557,13 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
         s.append(NSAttributedString(string: "   \(r.updated)", attributes: [
             .font: NSFont.menuFont(ofSize: NSFont.smallSystemFontSize), .foregroundColor: NSColor.tertiaryLabelColor]))
         i.attributedTitle = s
-        let hint = (r.status == "new" || r.status == "mirror")
+        let hint = cloud && r.status == "new"
+            ? (from == "claude"
+               ? L("Runs in Claude's cloud. Reads only this conversation, imports it into Codex and links them; new progress comes along afterwards",
+                   "在 Claude 云端运行。只读取这一个对话，导入 Codex 并关联；之后的新进展会自动带过去")
+               : L("Runs in Codex Cloud. Brings its status and code change (not applied) into a new Claude conversation and links them",
+                   "在 Codex 云端运行。把它的状态和代码改动（不会自动应用）带进一个新的 Claude 对话并关联"))
+            : (r.status == "new" || r.status == "mirror")
             ? L("Import into the other app and link the two; they stay in sync from then on", "导入到另一边并关联，之后两边自动同步")
             : L("Open the linked conversation in the other app; your next message there brings the new progress", "打开另一边关联的会话；在那边发一句话就会带上新进展")
         i.toolTip = r.title + "\n\n" + hint
@@ -674,6 +715,15 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc func showDoctor() { work(["doctor"], title: L("ccx diagnostics", "ccx 诊断"), showOutput: true) }
     @objc func fixHook() { work(["setup"], title: L("ccx setup", "ccx 设置"), showOutput: true) }
     @objc func refreshClicked() { refresh() }
+    @objc func cloudSignin() {
+        run(["cloud-signin", "--json"]) { _, out, _ in
+            if out.contains("\"signed_in\": true") {
+                self.notify(L("Claude cloud sessions", "Claude 云端会话"),
+                            L("Signed in. They now show in the ⇄ menu.", "已登录，现在会显示在 ⇄ 菜单里。"))
+            }
+            self.refresh()
+        }
+    }
     @objc func openRepo() { NSWorkspace.shared.open(URL(string: repoURL)!) }
     @objc func openAuthor() { NSWorkspace.shared.open(URL(string: authorURL)!) }
 

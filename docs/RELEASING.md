@@ -46,7 +46,7 @@ The one-line install fetches `install.sh` from `main` (`raw.githubusercontent.co
 
 - The repository, plugin and app are named **ccx**; "ccx - claudecodex" is the display name.
 - Describe what it works with ("for Claude Code and Codex"), and keep the "not affiliated with Anthropic or OpenAI" line.
-- ccx only uses the apps' public plugin systems, Codex's app-server API and deep links. It reads and writes local files only and never touches accounts or credentials.
+- ccx only uses the apps' public plugin systems, Codex's app-server API and deep links. It reads and writes local files only and never touches accounts or credentials. Cloud sessions are read by the apps' own CLIs with their own sign-in (Claude Code's cloud-session requests over stdin, `codex cloud list/diff`).
 
 ## Plugin directories
 

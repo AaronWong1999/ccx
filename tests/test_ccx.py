@@ -22,7 +22,7 @@ os.environ["CLAUDE_CONFIG_DIR"] = os.path.join(TMP, "claude")
 os.environ["CCX_HOME"] = os.path.join(TMP, "state")
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "plugins/ccx/lib"))
 
-from ccx import claude, codex, hook, mcp_server, pairs, repairs, sync  # noqa: E402
+from ccx import claude, cloud, codex, hook, mcp_server, pairs, repairs, sync  # noqa: E402
 from ccx.common import TAG, Session  # noqa: E402
 
 PROJ_A = os.path.join(TMP, "proj-a")
@@ -1251,6 +1251,226 @@ class Usage(Base):
     def test_hooks_never_read_usage(self):
         src = (Path(__file__).resolve().parents[1] / "plugins/ccx/lib/ccx/hook.py").read_text()
         self.assertNotIn("usage", src)
+
+
+PROJ_C = os.path.join(TMP, "proj-cloud")
+os.makedirs(PROJ_C)
+subprocess.run(["git", "init", "-q", PROJ_C], check=True)
+subprocess.run(["git", "-C", PROJ_C, "remote", "add", "origin", "git@github.com:Me/App.git"], check=True)
+
+
+class FakeClaudeCloud:
+    """Stands in for the Claude CLI's cloud reads: a listing, and transcripts in pages of two."""
+
+    def __init__(self):
+        self.sessions, self.transcripts, self.reads, self.refuse = [], {}, [], None
+        fake = self
+
+        class CLI:
+            def __init__(self):
+                if fake.refuse:
+                    raise cloud.Unavailable(fake.refuse)
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_):
+                pass
+
+            def ask(self, req, timeout):
+                if req["subtype"] == "list_cloud_sessions":
+                    return {"status": "ok", "sessions": fake.sessions, "truncated": False}
+                fake.reads.append((req["session_id"], req.get("cursor")))
+                es, start = fake.transcripts[req["session_id"]], int(req.get("cursor") or 0)
+                page = {"status": "ok", "entries": es[start:start + 2]}
+                if start + 2 < len(es):
+                    page["next_cursor"] = str(start + 2)
+                return page
+
+        self.cli = CLI
+
+    def add(self, sid, title, repo, entries, **kw):
+        owner, name = repo.split("/")
+        self.sessions.append({"id": sid, "title": title, "updated_at": "2026-10-25T10:00:00Z", "status": "idle",
+                              "environment_kind": "anthropic_cloud", "repository": {"owner": owner, "name": name}, **kw})
+        self.transcripts[sid] = [{"uuid": f"{sid}-{i}", "cwd": "/home/user/app", "sessionId": sid, **e}
+                                 for i, e in enumerate(entries)]
+
+    def append(self, sid, *entries):
+        es = self.transcripts[sid]
+        es += [{"uuid": f"{sid}-{len(es) + i}", "cwd": "/home/user/app", "sessionId": sid, **e} for i, e in enumerate(entries)]
+
+
+class CloudSessions(Base):
+    def setUp(self):
+        super().setUp()
+        import shutil
+        shutil.rmtree(cloud.CLOUD_DIR, ignore_errors=True)
+        cloud._fresh.clear()
+        self.cc = FakeClaudeCloud()
+        self.tasks = []
+        self.diffs = {}
+        for name, val in (("_ClaudeCLI", self.cc.cli), ("_codex", self.fake_codex)):
+            p = mock.patch.object(cloud, name, val)
+            p.start()
+            self.addCleanup(p.stop)
+        p = mock.patch.object(repairs, "retry_pending", lambda: [])
+        p.start()
+        self.addCleanup(p.stop)
+
+    def fake_codex(self, *args, timeout=0):
+        if args[0] == "list":
+            return json.dumps({"tasks": self.tasks, "cursor": None})
+        return self.diffs[args[1]]
+
+    def test_listing_reads_titles_only_and_places_by_repository(self):
+        claude_file(PROJ_C, "c-local", [user("本地会话")], title="本地会话")
+        self.cc.add("session_A", "云端调研", "me/app", [user("调研一下"), assistant(text("好"))])
+        self.cc.add("session_RC", "远程控制", "me/app", [], environment_kind="bridge")
+        self.cc.add("session_OLD", "已归档", "me/app", [], status="archived")
+        self.cc.add("session_X", "别的仓库", "someone/else", [user("hi")])
+        d = sync.menu_data(projects=20)
+        proj = next(p for p in d["projects"] if p["cwd"] == os.path.realpath(PROJ_C))
+        cloud_rows = [r for r in proj["claude"] if r.get("cloud")]
+        self.assertEqual([(r["id"], r["status"]) for r in cloud_rows], [("session_A", "new")])
+        self.assertEqual([r["id"] for r in d["cloud_other"]["claude"]], ["session_X"])
+        self.assertEqual(self.cc.reads, [])  # listing never downloads a conversation
+
+    def test_picked_cloud_session_syncs_to_codex_and_only_new_pages_are_read_later(self):
+        self.cc.add("session_A", "云端调研", "me/app",
+                    [user("调研 B2B2C"), assistant(text("先看市场")), user("出方案"), assistant(text("方案 v1"))])
+        self.cc.add("session_B", "另一个", "me/app", [user("别碰我")])
+        claude_file(PROJ_C, "c-local2", [user("x")], title="x")
+        self.cx.add("x-cloud", PROJ_C, "云端调研", [umsg("调研 B2B2C")])
+        with mock.patch.object(sync, "_import_to_codex", lambda s: "x-cloud"):
+            first = sync.transfer("claude", "session_A", open_app=False)
+        self.assertEqual(first["action"], "created")
+        self.assertEqual({sid for sid, _ in self.cc.reads}, {"session_A"})  # only the picked one
+        m = claude.find("session_A")
+        self.assertEqual((m.title, m.cwd), ("云端调研", os.path.realpath(PROJ_C)))
+        self.assertTrue(all(json.loads(l).get("cwd", m.cwd) == m.cwd for l in m.path.read_text().splitlines()))
+        self.assertIsNone(pairs.pull("codex", "x-cloud"))
+
+        self.cc.append("session_A", user("加上定价"), assistant(text("定价表做好了")))
+        cloud._fresh.clear()
+        self.cc.reads.clear()
+        got = pairs.pull("codex", "x-cloud")
+        self.assertEqual(got["count"], 2)
+        self.assertIn("定价表做好了", got["context"])
+        self.assertNotIn("方案 v1", got["context"])
+        self.assertEqual(self.cc.reads[0], ("session_A", "2"))  # resumed at the last page, not from the start
+        cloud._fresh.clear()
+        self.assertIsNone(pairs.pull("codex", "x-cloud"))
+        self.assertEqual(len(m.path.read_text().splitlines()), 1 + 6)  # title + six records, none twice
+
+    def test_codex_imports_a_cloud_session_from_a_copy_under_claude_projects(self):
+        self.cc.add("session_A", "云端调研", "me/app", [user("调研"), assistant(text("好"))])
+        for e in self.cc.transcripts["session_A"]:
+            e.pop("cwd")  # the service stores no folder
+        claude_file(PROJ_C, "c-local7", [user("x")], title="x")
+        seen = {}
+
+        def fake_import(path, cwd, title):
+            p = Path(path)
+            seen.update(under_projects=p.resolve().is_relative_to(claude.PROJECTS.resolve()), cwd=cwd, title=title,
+                        cwds={json.loads(l).get("cwd") for l in p.read_text().splitlines()
+                              if json.loads(l).get("type") in ("user", "assistant")}, path=p)
+            return "x-imported"
+        self.cx.add("x-imported", PROJ_C, "云端调研", [umsg("调研")])
+        with mock.patch.object(codex, "import_claude_session", fake_import):
+            sync.transfer("claude", "session_A", open_app=False)
+        self.assertTrue(seen["under_projects"])
+        self.assertEqual((seen["cwd"], seen["title"], seen["cwds"]), (os.path.realpath(PROJ_C), "云端调研", {os.path.realpath(PROJ_C)}))
+        self.assertFalse(seen["path"].exists())  # the copy is gone after the import
+
+    def test_going_back_from_a_cloud_import_makes_a_local_conversation(self):
+        self.cc.add("session_A", "云端调研", "me/app", [user("调研"), assistant(text("好"))])
+        claude_file(PROJ_C, "c-local3", [user("x")], title="x")
+        self.cx.add("x-cloud", PROJ_C, "云端调研", [umsg("调研"), amsg("好")])
+        with mock.patch.object(sync, "_import_to_codex", lambda s: "x-cloud"):
+            sync.transfer("claude", "session_A", open_app=False)
+        row = sync.rows("codex", [self.cx.find("x-cloud")])[0]
+        self.assertEqual((row["status"], row["linked_to"]), ("new", None))  # nothing is sent up to the cloud
+        self.cx.append("x-cloud", umsg("改成三档"), amsg("三档定价已更新"))
+        before = claude.find("session_A").path.read_text()
+        res = sync.transfer("codex", "x-cloud", open_app=False)
+        self.assertEqual(res["action"], "created")
+        local = claude.find(res["target"]["id"])
+        self.assertFalse(cloud.is_claude(local.id))
+        self.assertEqual(local.cwd, PROJ_C)
+        self.assertEqual(pairs.find("codex", "x-cloud")["claude"]["id"], local.id)  # the local pair replaces the cloud link
+        self.assertEqual(claude.find("session_A").path.read_text(), before)
+
+    def test_sign_in_runs_in_the_browser_and_falls_back_to_terminal(self):
+        fake = Path(TMP) / "fake-claude"
+        opened = []
+        with mock.patch.object(cloud.subprocess, "run", lambda args, **kw: opened.append(args)):
+            # Success: it may keep waiting on stdin afterwards; that still counts and it is ended.
+            fake.write_text("#!/bin/sh\necho 'Opening browser to sign in…'\necho 'Login successful.'\nsleep 30\n")
+            fake.chmod(0o755)
+            t = time.time()
+            self.assertTrue(cloud.claude_signin(str(fake)))
+            self.assertLess(time.time() - t, 10)
+            self.assertEqual(opened, [])
+            # The browser can't hand the sign-in back: Terminal opens for the pasted code.
+            fake.write_text("#!/bin/sh\necho \"The browser can't return the sign-in\"\nprintf 'Paste code here > '\nsleep 30\n")
+            self.assertFalse(cloud.claude_signin(str(fake)))
+            self.assertEqual(opened[0][0], "open")
+            self.assertTrue(opened[0][1].endswith("claude-sign-in.command"))
+
+    def test_signed_out_claude_cli_offers_a_sign_in_and_retries_soon(self):
+        self.cc.refuse = "not_signed_in"
+        claude_file(PROJ_C, "c-local6", [user("x")], title="x")
+        self.assertTrue(sync.menu_data(projects=20)["claude_cloud_signin"])
+        self.cc.refuse = None
+        self.cc.add("session_A", "云端调研", "me/app", [user("调研")])
+        self.assertEqual(cloud.claude_sessions()[0], [])  # the failure is reused briefly...
+        with mock.patch.object(cloud.time, "time", return_value=time.time() + 31):
+            self.assertEqual([c["id"] for c in cloud.claude_sessions()[0]], ["session_A"])  # ...then read again
+        self.assertFalse(sync.menu_data(projects=20)["claude_cloud_signin"])
+
+    def test_codex_cloud_task_brings_its_change_and_a_newer_result_once(self):
+        claude_file(PROJ_C, "c-local4", [user("x")], title="x")
+        self.tasks = [{"id": "task_e_1", "title": "加登录页", "status": "READY", "updated_at": "2026-10-25T09:00:00Z",
+                       "environment_label": "me/app", "url": "https://chatgpt.com/codex/tasks/task_e_1",
+                       "summary": {"files_changed": 1, "lines_added": 3, "lines_removed": 0}}]
+        self.diffs["task_e_1"] = "+++ b/login.html\n+<form>"
+        d = sync.menu_data(projects=20)
+        proj = next(p for p in d["projects"] if p["cwd"] == os.path.realpath(PROJ_C))
+        self.assertIn(("task_e_1", "new"), [(r["id"], r["status"]) for r in proj["codex"]])
+        res = sync.transfer("codex", "task_e_1", open_app=False)
+        self.assertEqual(res["action"], "created")
+        s = claude.find(res["target"]["id"])
+        self.assertEqual(s.cwd, os.path.realpath(PROJ_C))
+        self.assertIn("<form>", s.path.read_text())
+        self.assertIsNone(pairs.pull("claude", s.id))
+
+        self.tasks[0]["updated_at"] = "2026-10-25T11:00:00Z"
+        self.diffs["task_e_1"] = "+++ b/login.html\n+<form id=v2>"
+        (cloud.CLOUD_DIR / "codex-list.json").unlink()
+        self.assertEqual(sync.transfer("codex", "task_e_1", open_app=False)["action"], "linked")
+        got = pairs.pull("claude", s.id)
+        self.assertIn("v2", got["context"])
+        self.assertIsNone(pairs.pull("claude", s.id))
+        self.cx.add("x-from-task", PROJ_C, "加登录页", [umsg("x")])
+        with mock.patch.object(sync, "_import_to_codex", lambda src: "x-from-task"):
+            back = sync.transfer("claude", s.id, open_app=False)
+        self.assertEqual((back["action"], back["target"]["id"]), ("created", "x-from-task"))
+        pairs.link(pairs.side("claude", s.id), {"id": "task_e_1", "cwd": PROJ_C, "cursor": 0, "updated_at": 1})
+        from ccx import cli
+        out = io.StringIO()
+        with redirect_stdout(out):
+            cli.main(["unlink", "task_e_1", "--json"])  # a cloud task has no local thread, unlinking still works
+        self.assertEqual(json.loads(out.getvalue())["partner"], s.id)
+
+    def test_an_unreadable_cloud_hides_cloud_rows_and_says_why(self):
+        self.cc.refuse = "started_by_session"
+        claude_file(PROJ_C, "c-local5", [user("x")], title="x")
+        d = sync.menu_data(projects=20)
+        self.assertEqual(d["cloud_other"]["claude"], [])
+        self.assertIn("started_by_session", cloud.status()["claude"])
+        with self.assertRaises(RuntimeError):
+            sync.transfer("claude", "session_A", open_app=False)
 
 
 if __name__ == "__main__":

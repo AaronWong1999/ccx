@@ -7,12 +7,13 @@ from __future__ import annotations
 import os
 import subprocess
 import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from typing import Dict, List, Optional
 from urllib.parse import quote, urlencode
 
-from . import claude, codex, pairs, repairs
-from .common import copy_to_clipboard, est_tokens, L, NAME, OTHER, Session, git_snapshot, real, same_dir
+from . import claude, cloud, codex, pairs, repairs
+from .common import HOME, copy_to_clipboard, est_tokens, L, NAME, OTHER, Session, git_snapshot, real, same_dir
 
 STATUS = {"new": "not linked", "linked": "linked", "updated": "has new progress", "mirror": "imported copy"}
 
@@ -76,6 +77,8 @@ def rows(tool: str, ss: List[Session], here_cwd: Optional[str] = None, mirrors=f
     out = []
     for s in ss:
         st, partner = pairs.status(s)
+        if partner and _is_cloud(partner):
+            st, partner = "new", None  # going back means a new local conversation over there
         if st == "new" and s.id in mirrors:
             st = "mirror"
         row = {"id": s.id, "title": s.title, "updated": s.when, "status": st, "linked_to": partner,
@@ -110,19 +113,67 @@ def find_sessions(tool: str, cwd: Optional[str], query: Optional[str], limit: in
         rest = [s for s in sessions(tool, None, query, limit * 2) if s.id not in {h.id for h in here}]
         return rows(tool, (here + rest)[:limit], cwd, mirrors)
     ss = sessions(tool, cwd, None, limit)
-    return rows(tool, ss or sessions(tool, None, None, limit), cwd, mirrors)
+    out = rows(tool, ss or sessions(tool, None, None, limit), cwd, mirrors)
+    if tool == "claude" and cwd:
+        placed, _ = cloud.place(cloud.claude_sessions()[0], [real(cwd)])
+        out += cloud_rows("claude", placed.get(real(cwd), [])[:4], cwd)
+    return out
+
+
+def cloud_rows(tool: str, items: List[dict], cwd: Optional[str] = None) -> List[dict]:
+    """Menu rows for cloud sessions, from their listing alone (nothing is downloaded).
+    'updated' when the cloud changed after the last read, or the mirror holds
+    progress the partner hasn't received."""
+    out = []
+    for c in items:
+        pair = pairs.find(tool, c["id"])
+        st, partner = "new", None
+        if pair:
+            partner, mine = pair[OTHER[tool]]["id"], pair[tool]
+            if tool == "codex":
+                newer = c["updated_at"] > mine.get("updated_at", 0)
+            else:
+                m = cloud.mirror(c["id"])
+                newer = c["updated_at"] > cloud._mirror_meta(c["id"]).get("fetched_at", 0) + 1 or \
+                    bool(m and any(claude.units(m.path)[mine["cursor"]:]))
+            st = "updated" if newer else "linked"
+        out.append({"id": c["id"], "title": c["title"] or c["id"], "status": st, "linked_to": partner,
+                    "updated": datetime.fromtimestamp(c["updated_at"]).strftime("%m-%d %H:%M"),
+                    "cwd": cwd or "", "cloud": True})
+    return out
+
+
+def _known_cwds() -> List[str]:
+    return list(dict.fromkeys(real(s.cwd) for s in claude.sessions() + codex.threads(limit=300) if s.cwd))
+
+
+def cloud_cwd(item: Optional[dict]) -> str:
+    """The local checkout of a cloud session's repository, else the home folder."""
+    if not item:
+        return str(HOME)
+    placed, _ = cloud.place([item], _known_cwds())
+    return next(iter(placed), str(HOME))
 
 
 def menu_data(projects: int = 8, per_side: int = 6) -> dict:
     """Recent projects with both sides' sessions, for the menu bar app."""
-    mirrors = frozenset(codex.import_history().values())
-    by_cwd: Dict[str, dict] = {}
-    for s in claude.sessions() + codex.threads(limit=300):
-        if not s.cwd:
-            continue
-        p = by_cwd.setdefault(real(s.cwd), {"claude": [], "codex": [], "mtime": 0.0})
-        p[s.tool].append(s)
-        p["mtime"] = max(p["mtime"], s.mtime)
+    # The cloud listings (each cached for a few minutes) load while the local sessions are read.
+    with ThreadPoolExecutor(2) as ex:
+        claude_cloud, codex_cloud = ex.submit(cloud.claude_sessions), ex.submit(cloud.codex_tasks)
+        mirrors = frozenset(codex.import_history().values())
+        by_cwd: Dict[str, dict] = {}
+        for s in claude.sessions() + codex.threads(limit=300):
+            if not s.cwd:
+                continue
+            p = by_cwd.setdefault(real(s.cwd), {"claude": [], "codex": [], "mtime": 0.0})
+            p[s.tool].append(s)
+            p["mtime"] = max(p["mtime"], s.mtime)
+        (claude_cloud, claude_reason), codex_cloud = claude_cloud.result(), codex_cloud.result()[0]
+    live = [cwd for cwd in by_cwd if "/scratch-workspaces/" not in cwd and os.path.isdir(cwd)]
+    placed = {"claude": cloud.place(claude_cloud, live), "codex": cloud.place(codex_cloud, live)}
+    for tool in placed:
+        for cwd, items in placed[tool][0].items():
+            by_cwd[cwd]["mtime"] = max(by_cwd[cwd]["mtime"], *(c["updated_at"] for c in items))
     out = []
     for cwd, p in sorted(by_cwd.items(), key=lambda kv: kv[1]["mtime"], reverse=True):
         if "/scratch-workspaces/" in cwd or not os.path.isdir(cwd):
@@ -130,11 +181,16 @@ def menu_data(projects: int = 8, per_side: int = 6) -> dict:
         newest = lambda xs: sorted(xs, key=lambda s: s.mtime, reverse=True)[:per_side]
         out.append({"cwd": cwd, "name": os.path.basename(cwd),
                     "updated": datetime.fromtimestamp(p["mtime"]).strftime("%m-%d %H:%M"),
-                    "codex": rows("codex", newest(p["codex"]), None, mirrors),
-                    "claude": rows("claude", newest(p["claude"]))})
+                    "codex": rows("codex", newest(p["codex"]), None, mirrors)
+                    + cloud_rows("codex", placed["codex"][0].get(cwd, [])[:4], cwd),
+                    "claude": rows("claude", newest(p["claude"]))
+                    + cloud_rows("claude", placed["claude"][0].get(cwd, [])[:4], cwd)})
         if len(out) >= projects:
             break
-    return {"projects": out, "pending_history_repairs": len(repairs.retry_pending())}
+    return {"projects": out, "pending_history_repairs": len(repairs.retry_pending()),
+            "claude_cloud_signin": claude_reason == "not_signed_in",
+            "cloud_other": {"claude": cloud_rows("claude", placed["claude"][1][:8]),
+                            "codex": cloud_rows("codex", placed["codex"][1][:8])}}
 
 
 # ---------------------------------------------------------------- transfers
@@ -145,7 +201,9 @@ def _import_to_codex(src: Session) -> str:
     if prior and codex.find(prior):
         codex.unarchive(prior)  # Codex already has it (from its own app or the official plugin)
         return prior
-    tid = codex.import_claude_session(str(src.path), src.cwd, src.title)
+    # Codex imports only files under ~/.claude/projects: a cloud session's mirror
+    # goes in as a temporary copy filed under its project (as below).
+    tid = None if cloud.is_claude(src.id) else codex.import_claude_session(str(src.path), src.cwd, src.title)
     if tid is None:
         # Codex skipped the file: it was imported before, or its recorded folder
         # looks temporary to Codex (sessions started in a scratch workspace and
@@ -195,12 +253,33 @@ def estimate(tool: str, session_id: str) -> dict:
 def transfer(tool: str, session_id: str, open_app: bool = True) -> dict:
     """Bring `tool`'s session to the other app: native import + pair the first
     time; afterwards just open the partner."""
+    if tool == "codex" and cloud.is_codex(session_id):
+        return _transfer_codex_task(session_id, open_app)
+    if tool == "claude" and cloud.is_claude(session_id):
+        # Read the cloud conversation now (only this one), into its local mirror.
+        item = next((c for c in cloud.claude_sessions()[0] if c["id"] == session_id), None)
+        m = cloud.mirror(session_id)
+        try:
+            cloud.fetch_claude(session_id, m.cwd if m else cloud_cwd(item), item["title"] if item else None)
+        except cloud.Unavailable as e:
+            if not m:
+                why = L(" Claude Code only reads cloud sessions for a program started outside its own sessions: "
+                        "use the ⇄ menu or a regular Terminal.",
+                        " Claude Code 只为在它的会话之外启动的程序读取云端会话：请用 ⇄ 菜单或普通终端。") \
+                    if str(e) == "started_by_session" else ""
+                raise RuntimeError(L(f"Couldn't read this cloud session from Claude Code ({e}).",
+                                     f"无法通过 Claude Code 读取这个云端会话（{e}）。") + why) from e
+        cloud._fresh[session_id] = time.time()
     src = claude.find(session_id) if tool == "claude" else codex.find(session_id)
     if not src:
         raise RuntimeError(f"{NAME[tool]} session {session_id} not found")
     dst = OTHER[tool]
     pair = pairs.find(tool, src.id)
     pending = (0, 0)
+    if pair and _is_cloud(pair[dst]["id"]):
+        # Cloud sessions only come down to this Mac: a local session goes back to a
+        # local one on the other side, and that new pair replaces the cloud link.
+        pair = None
     if pair:
         target, action = pair[dst]["id"], "linked"
         pending = pairs.pending(tool, src.id)
@@ -255,6 +334,38 @@ def transfer(tool: str, session_id: str, open_app: bool = True) -> dict:
                 copy_to_clipboard(f"/goal {g['objective']}")
     if open_app:
         res["opened"] = open_in_app(dst, target)
+    return res
+
+
+def _is_cloud(sid: str) -> bool:
+    return cloud.is_claude(sid) or cloud.is_codex(sid)
+
+
+def _transfer_codex_task(tid: str, open_app: bool) -> dict:
+    """A Codex Cloud task into Claude: a new Claude conversation holding the task's
+    status and code change, linked so a newer result arrives with the next prompt."""
+    t = cloud.codex_task(tid)
+    if not t:
+        raise RuntimeError(L(f"Codex Cloud task {tid} not found.", f"找不到 Codex 云端任务 {tid}。"))
+    pair = pairs.find("codex", tid)
+    if pair:
+        target, n = pair["claude"]["id"], int(t["updated_at"] > pair["codex"].get("updated_at", 0))
+        action = "linked" if n else "in_sync"
+    else:
+        cwd, n = cloud_cwd(t), 0
+        header = (f"[ccx] Imported from Codex Cloud task {tid}. The task ran in the cloud; its change below is "
+                  "not applied to this checkout unless the user asks.")
+        s = claude.write_session(cwd, [("user", header), ("assistant", cloud.codex_task_text(t) + "\n\nPick up from here.")],
+                                 f"⇄ ☁ {t['title'] or 'Codex Cloud task'}")
+        target = s.id
+        pairs.link(pairs.side("claude", target), {"id": tid, "cwd": cwd, "cursor": 0, "updated_at": t["updated_at"]})
+        action = "created"
+    res = {"action": action, "message": _message(action, "codex", t["title"], (n, 0)), "pending": n, "pending_tokens": 0,
+           "source": {"tool": "codex", "id": tid, "title": t["title"]},
+           "target": {"tool": "claude", "id": target, "deep_link": deep_link("claude", target)},
+           "cwd": pairs.find("codex", tid)["codex"]["cwd"]}
+    if open_app:
+        res["opened"] = open_in_app("claude", target)
     return res
 
 

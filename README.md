@@ -111,7 +111,9 @@ Nothing else asks for passwords, admin rights or accessibility access.<br>
 The ⇄ menu lists recent projects and both sides' sessions: ○ not linked yet (click to import and link), ✓ linked (click to open the partner), ↻ has progress the other side hasn't received. English or Chinese via Language / 语言.<br>
 ⇄ 菜单按项目列出两边的会话：○ 未关联（点一下导入并关联），✓ 已关联（点一下打开对面），↻ 有对面还没收到的新进展。可在 Language / 语言 里切换中英文。<br>
 **Unlink · 取消关联:** to stop two conversations syncing, pick ⇄ → the project → **Unlink**, or say "unlink" in either one. Both conversations are kept; handing over again links them afresh.<br>
-要让两个对话不再同步，在 ⇄ → 项目 → **取消关联** 里选它们，或在任一边说“取消关联”。两边对话都保留，再次切换会重新关联。
+要让两个对话不再同步，在 ⇄ → 项目 → **取消关联** 里选它们，或在任一边说“取消关联”。两边对话都保留，再次切换会重新关联。<br>
+**Cloud sessions · 云端会话:** Claude Code on the web sessions and Codex Cloud tasks show up with ☁ under the project that checks out their GitHub repository (others under **Other Cloud Sessions**). The menu lists titles only; clicking one reads just that conversation, through the app's own CLI and sign-in, and links it like any other. Cloud sessions only come down to your Mac: a Claude cloud session's new progress reaches Codex with your next message there, and handing that Codex conversation back makes a local Claude conversation (ccx never writes to the cloud). From a Codex Cloud task, Claude gets its status and code change (not applied; the Codex CLI doesn't expose a task's messages). If you only signed in to the Claude desktop app, pick **Show Claude Cloud Sessions…** once: Claude Code's own sign-in opens in your browser, usually a single click.<br>
+Claude 网页版的云端会话和 Codex Cloud 任务会带着 ☁ 出现在检出了对应 GitHub 仓库的项目下（其余的在 **其他云端会话** 里）。菜单只列标题；点哪个才通过该 app 自己的命令行和登录读取哪个，并像普通会话一样关联。云端只往本机传：Claude 云端会话的新进展会在你下次给 Codex 发消息时带过去；把那个 Codex 对话再传回来，会变成一个本机的 Claude 对话（ccx 从不往云端写）。Codex Cloud 任务带给 Claude 的是状态和代码改动（不会自动应用；Codex 命令行不提供任务的对话内容）。如果你只在 Claude 桌面版里登录过，点一次 **显示 Claude 云端会话…**：浏览器会打开 Claude Code 自己的登录，通常点一下就好。
 
 **A heads-up before either side runs out.** The ⇄ app notifies you once when Claude's or Codex's 5-hour window passes 90% and once when it is used up, and the top of the menu offers that side's newest session to continue in the other app in one click. Nothing to set up; it never interrupts a conversation. Check it with `ccx usage`.<br>
 **额度快用完时提前提醒。** Claude 或 Codex 的 5 小时额度用到 90% 和用完时各通知一次，⇄ 菜单顶部可一键把那边最新的会话切到另一边接着干，无需任何设置。
@@ -143,8 +145,8 @@ Using [magpie](https://github.com/yetone/magpie)? This repository is also a magp
 
 ## FAQ · 常见问题
 
-**Is my code or conversation uploaded anywhere?** No. Sync runs entirely on your Mac; Codex data goes only through Codex's own app-server API. ccx reaches GitHub only to install and check for updates.<br>
-**会把我的代码或对话上传到哪里吗？** 不会。同步完全在本机进行；Codex 的数据只通过 Codex 自己的 app-server 接口读写。ccx 只在安装和检查更新时访问 GitHub。
+**Is my code or conversation uploaded anywhere?** No. Sync runs entirely on your Mac; Codex data goes only through Codex's own app-server API. Cloud sessions are read by Claude Code's and Codex's own CLIs with their own sign-in; ccx never touches a credential. ccx itself reaches GitHub only to install and check for updates.<br>
+**会把我的代码或对话上传到哪里吗？** 不会。同步完全在本机进行；Codex 的数据只通过 Codex 自己的 app-server 接口读写。云端会话由 Claude Code 和 Codex 自己的命令行用它们自己的登录读取，ccx 从不接触任何凭据。ccx 本身只在安装和检查更新时访问 GitHub。
 
 **Does it bypass usage limits?** No. You use your own Claude and ChatGPT/Codex plans, each within its own limits; ccx only moves the task between them.<br>
 **这是在绕过额度限制吗？** 不是。你用的是自己的 Claude 和 ChatGPT/Codex 订阅，各自在各自的额度内；ccx 只是在两边之间搬运任务。

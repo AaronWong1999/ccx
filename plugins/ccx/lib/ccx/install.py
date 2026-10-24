@@ -14,7 +14,7 @@ import time
 from pathlib import Path
 from typing import List, Optional, Tuple
 
-from . import __version__, claude, codex, pairs, presence, repairs
+from . import __version__, claude, cloud, codex, pairs, presence, repairs
 from .common import HOME, STATE_DIR, proxy_env
 
 REPO = "aaronwong1999/ccx"
@@ -350,6 +350,8 @@ def doctor() -> int:
     c = check()
     rows.append((not c["available"], f"Version: {__version__}" + (f" (update available: {c['latest']})" if c["available"] else "")))
     rows.append((True, f"Linked sessions: {len(pairs.load())} · state in {STATE_DIR}"))
+    for name, state in cloud.status().items():
+        rows.append((True, f"{'Claude Code on the web' if name == 'claude' else 'Codex Cloud'}: {state}"))
     queued = repairs.pending()
     if queued:
         rows.append((False, f"History repair queued for {len(queued)} Codex thread(s): quit Codex when convenient; "
