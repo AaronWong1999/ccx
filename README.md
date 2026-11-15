@@ -17,7 +17,7 @@
   <img src="docs/hero.png" alt="ccx - claudecodex: Claude Code ⇄ Codex ⇄ Antigravity. 1. One agent hits its limit. 2. Choose another app from ⇄. 3. Gemini in Antigravity picks up the task." width="100%">
 </p>
 <p align="center">
-  <a href="https://github.com/user-attachments/assets/515f88d4-9b50-4b0d-ad6c-8485409a99d3"><b>🎬 Watch 30 second demo · Claude ⇄ Codex 双端演示</b></a>
+  <a href="https://github.com/user-attachments/assets/2fc0f1d6-5e28-40db-a4e0-d97eb6930b2f"><b>🎬 Watch 30 second demo · 看 30 秒演示</b></a>
 </p>
 
 ## Why ccx · 为什么需要它
