@@ -680,8 +680,15 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
             var obj = ["from": a[i + 1], "id": a[i + 2]]
             let to = a.firstIndex(of: "--to").map { a[$0 + 1] } ?? (a[i + 1] == "claude" ? "codex" : "claude")
             obj["to"] = to
-            if let d = try? JSONDecoder().decode(MenuData.self, from: Data(out.utf8)),
-               let r = d.projects.flatMap({ $0.codex + $0.claude + ($0.antigravity ?? []) }).first(where: { $0.id == a[i + 2] }) {
+            var rows: [Row] = []
+            if let d = try? JSONDecoder().decode(MenuData.self, from: Data(out.utf8)) {
+                for project in d.projects {
+                    rows.append(contentsOf: project.codex)
+                    rows.append(contentsOf: project.claude)
+                    rows.append(contentsOf: project.antigravity ?? [])
+                }
+            }
+            if let r = rows.first(where: { $0.id == a[i + 2] }) {
                 let agy = to == "antigravity" || a[i + 1] == "antigravity"
                 obj["tokens"] = String(agy ? 0 : (r.partner_tokens ?? 0))
                 obj["idle"] = String(r.partner_idle_min ?? 0)
