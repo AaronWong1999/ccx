@@ -5,13 +5,13 @@
     "url": "https://github.com/aaronwong1999"
   },
   "metadata": {
-    "description": "ccx - claudecodex: sync task context between Claude and Codex"
+    "description": "ccx - claudecodex: sync task context between Claude, Codex and Antigravity"
   },
   "plugins": [
     {
       "name": "ccx",
       "source": "./plugins/ccx",
-      "description": "Continue Codex threads in Claude Code, and back"
+      "description": "Continue Codex threads and Antigravity conversations in Claude Code, and back"
     }
   ]
 }

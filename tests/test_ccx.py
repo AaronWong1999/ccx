@@ -20,9 +20,10 @@ from urllib.parse import parse_qs, urlparse
 TMP = tempfile.mkdtemp(prefix="ccx-test-")
 os.environ["CLAUDE_CONFIG_DIR"] = os.path.join(TMP, "claude")
 os.environ["CCX_HOME"] = os.path.join(TMP, "state")
+os.environ["ANTIGRAVITY_HOME"] = os.path.join(TMP, "gemini", "antigravity")  # not installed, unless a test sets it up
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "plugins/ccx/lib"))
 
-from ccx import claude, cloud, codex, hook, mcp_server, pairs, repairs, sync  # noqa: E402
+from ccx import antigravity, claude, cloud, codex, hook, mcp_server, pairs, repairs, sync  # noqa: E402
 from ccx.common import TAG, Session  # noqa: E402
 
 PROJ_A = os.path.join(TMP, "proj-a")
@@ -431,7 +432,7 @@ class Interfaces(Base):
         for k in ("logo", "composerIcon"):
             self.assertTrue((root / "packaging/codex-directory" / pkg["interface"][k]).is_file())
         self.assertEqual(sorted(p.name for p in (root / "packaging/codex-directory/skills").iterdir()),
-                         ["from-claude", "to-claude"])
+                         ["from-antigravity", "from-claude", "to-antigravity", "to-claude"])
 
     def test_hook_injects_only_for_paired_sessions(self):
         claude_file(PROJ_A, "c-hook", [user("hi")], title="hook")
@@ -478,7 +479,8 @@ class Interfaces(Base):
         out = io.StringIO()
         with redirect_stdout(out):
             cli.main(["unlink", "x-unpair", "--json"])  # either side of the pair works
-        self.assertEqual(json.loads(out.getvalue()), {"unlinked": True, "tool": "codex", "id": "x-unpair", "partner": "c-unpair"})
+        self.assertEqual(json.loads(out.getvalue()), {"unlinked": True, "tool": "codex", "id": "x-unpair", "partner": "c-unpair",
+                                                      "partners": {"claude": "c-unpair"}})
         self.assertIsNone(pairs.find("claude", "c-unpair"))
         self.assertIsNotNone(pairs.find("claude", "c-keeppair"))  # other pairs untouched
         self.assertIsNone(self._hook("c-unpair"))  # nothing injected any more, either way
@@ -752,7 +754,7 @@ class NewConversations(unittest.TestCase):
         for target in ("claude", "codex"):
             with self.subTest(target=target):
                 out = io.StringIO()
-                with mock.patch.object(cli, f"new_{target}_conversation"), \
+                with mock.patch.object(cli, "new_conversation"), \
                      mock.patch.object(cli, "L", side_effect=lambda en, zh: en), redirect_stdout(out):
                     cli.main([f"new-{target}", "source-session"])
                 self.assertIn("prompt filled in", out.getvalue())
@@ -1471,6 +1473,244 @@ class CloudSessions(Base):
         self.assertIn("started_by_session", cloud.status()["claude"])
         with self.assertRaises(RuntimeError):
             sync.transfer("claude", "session_A", open_app=False)
+
+
+class FakeAntigravity:
+    """Stands in for the Antigravity desktop app: conversations as lists of steps."""
+
+    def __init__(self):
+        self.convs = {}
+        self.created = []
+
+    def add(self, cid, cwd, title, steps):
+        self.convs[cid] = {"cwd": cwd, "title": title, "steps": list(steps)}
+
+    def append(self, cid, *steps):
+        self.convs[cid]["steps"] += steps
+
+    def find(self, cid):
+        c = self.convs.get(cid)
+        if not c:
+            return None
+        s = Session("antigravity", cid, c["cwd"], 2000.0 + len(c["steps"]), c["title"])
+        s.steps = len(c["steps"])
+        return s
+
+    def sessions(self, cwd=None, query=None, limit=60):
+        return [self.find(c) for c in self.convs
+                if (not cwd or self.convs[c]["cwd"] == cwd) and (not query or query in self.convs[c]["title"])][:limit]
+
+    def steps(self, cid, launch=True):
+        return list(self.convs[cid]["steps"])
+
+    def new_conversation(self, cwd, title, prompt):
+        cid = f"a-new-{len(self.created)}"
+        self.add(cid, cwd, title, [ag_user(prompt), ag_reply("I have the context and am ready.")])
+        self.created.append(cid)
+        return cid
+
+    def patch(self, test):
+        for name, fn in (("installed", lambda: True), ("find", self.find), ("sessions", self.sessions),
+                         ("steps", self.steps), ("new_conversation", self.new_conversation),
+                         ("wait_idle", lambda cid, timeout=90: len(self.convs[cid]["steps"])),
+                         ("project_for", lambda cwd: {"id": "p1", "name": "proj", "folders": [cwd]}),
+                         ("open_app", lambda: True)):
+            p = mock.patch.object(antigravity, name, fn)
+            p.start()
+            test.addCleanup(p.stop)
+
+
+def ag_user(t):
+    return {"type": "CORTEX_STEP_TYPE_USER_INPUT", "status": "CORTEX_STEP_STATUS_DONE", "userInput": {"userResponse": t}}
+
+
+def ag_reply(t, calls=None):
+    return {"type": "CORTEX_STEP_TYPE_PLANNER_RESPONSE", "status": "CORTEX_STEP_STATUS_DONE",
+            "plannerResponse": {"response": t, **({"toolCalls": calls} if calls else {})}}
+
+
+class ThreeApps(Base):
+    """Claude, Codex and Antigravity: any two link, and a task in all three stays one task."""
+
+    def setUp(self):
+        super().setUp()
+        self.ag = FakeAntigravity()
+        self.ag.patch(self)
+        p = mock.patch.object(sync, "_import_to_codex", side_effect=self.import_to_codex)
+        p.start()
+        self.addCleanup(p.stop)
+        claude_file(PROJ_A, "c-tri", [user("build the parser"), assistant(text("parser built"))], title="Parser")
+
+    def import_to_codex(self, src):
+        tid = "x-from-" + src.id
+        self.cx.add(tid, src.cwd, "⇄ " + src.title, [umsg("imported"), amsg("ok")])
+        return tid
+
+    def test_without_antigravity_ccx_is_the_two_app_tool(self):
+        with mock.patch.object(antigravity, "installed", lambda: False):
+            from ccx.common import others
+            self.assertEqual(others("claude"), ["codex"])
+            self.assertEqual(sync.apps(), ["claude", "codex"])
+            self.assertEqual([t["name"] for t in mcp_server.tools("claude")][1], "continue_here")
+            self.assertIn("Codex", mcp_server.tools("claude")[1]["description"])
+            self.assertNotIn("Antigravity", mcp_server.tools("claude")[1]["description"])
+            with self.assertRaisesRegex(RuntimeError, "Antigravity"):
+                sync.transfer("claude", "c-tri", open_app=False, dst="antigravity")
+
+    def test_units_skip_what_ccx_brought_in(self):
+        steps = [ag_user(f'<{TAG} from="claude" session="c" title="t">\n[user] hi\n</{TAG}>\n\n[ccx] note'),
+                 ag_reply("I have the context and am ready."),
+                 ag_user("add tests"),
+                 ag_reply("", [{"name": "call_mcp_tool", "argumentsJson": '{"ServerName":"ccx_ccx"}'}]),
+                 {"type": "CORTEX_STEP_TYPE_MCP_TOOL", "mcpTool": {"serverName": "ccx_ccx", "resultString": "x"}},
+                 {"type": "CORTEX_STEP_TYPE_RUN_COMMAND", "runCommand": {"commandLine": "pytest", "combinedOutput": {"full": "3 passed"}}},
+                 {"type": "CORTEX_STEP_TYPE_SYSTEM_MESSAGE", "systemMessage": {"message": f"<{TAG}>progress</{TAG}>"}},
+                 ag_reply("tests added")]
+        us = antigravity.units(steps)
+        self.assertEqual(us, [None, None, ("user", "add tests"), None, None,
+                              ("assistant", "[ran] pytest\n[output] 3 passed"), None, ("assistant", "tests added")])
+        full = antigravity.units(steps, include_imported=True)
+        self.assertIn("[user] hi", full[0][1])  # the import is the conversation's history
+        self.assertIsNone(full[1])              # its one-line acknowledgement never is
+
+    def test_claude_to_antigravity_imports_once_then_syncs_both_ways(self):
+        first = sync.transfer("claude", "c-tri", open_app=False, dst="antigravity")
+        self.assertEqual(first["action"], "created")
+        cid = first["target"]["id"]
+        prompt = self.ag.convs[cid]["steps"][0]["userInput"]["userResponse"]
+        self.assertIn("parser built", prompt)
+        self.assertIn("do not start working", prompt)
+        self.assertEqual(self.ag.convs[cid]["title"], "⇄ Parser")
+        self.assertIn("Parser", first["message"])  # says where to find it: Antigravity has no link to a conversation
+        self.assertEqual(sync.transfer("claude", "c-tri", open_app=False, dst="antigravity")["action"], "in_sync")
+        self.assertEqual(len(self.ag.created), 1)
+        self.assertEqual(pairs.links(self.ag.find(cid)), {"claude": {"id": "c-tri", "status": "linked"}})
+
+        # Claude moves on: Antigravity's hook brings it in on the first model call of the next message, once.
+        claude_file(PROJ_A, "c-tri", [user("build the parser"), assistant(text("parser built")),
+                                      user("now the lexer"), assistant(text("lexer done"))], title="Parser")
+        self.assertEqual(pairs.links(claude.find("c-tri"))["antigravity"]["status"], "updated")
+        for num, expect in (("1", False), ("0", True), ("0", False)):
+            out = io.StringIO()
+            with mock.patch.object(sys, "stdin", io.StringIO(json.dumps({"conversationId": cid, "invocationNum": num}))), \
+                 mock.patch.object(sys, "argv", ["hook", "--antigravity"]), redirect_stdout(out), self.assertRaises(SystemExit):
+                hook.main()
+            d = json.loads(out.getvalue())
+            self.assertEqual(bool(d), expect, (num, d))
+            if expect:
+                # exactly the shape Antigravity accepts: anything richer fails its hook runner
+                self.assertEqual(list(d), ["injectSteps"])
+                self.assertEqual(list(d["injectSteps"][0]), ["systemMessage"])
+                self.assertEqual(list(d["injectSteps"][0]["systemMessage"]), ["systemMessage"])
+                self.assertIn("lexer done", d["injectSteps"][0]["systemMessage"]["systemMessage"])
+
+        # Antigravity moves on: Claude's hook gets exactly that, once.
+        self.ag.append(cid, ag_user("ship it"), ag_reply("shipped"))
+        self.assertEqual(pairs.links(self.ag.find(cid))["claude"]["status"], "updated")
+        res = pairs.pull("claude", "c-tri")
+        self.assertEqual((res["from"], res["count"]), ("antigravity", 2))
+        self.assertIn("shipped", res["context"])
+        self.assertNotIn("am ready", res["context"])
+        self.assertIsNone(pairs.pull("claude", "c-tri"))
+
+    def test_antigravity_to_claude_and_codex(self):
+        self.ag.add("a-own", PROJ_A, "Billing", [ag_user("fix billing"), ag_reply("billing fixed")])
+        res = sync.transfer("antigravity", "a-own", open_app=False, dst="claude")
+        self.assertEqual(res["action"], "created")
+        c = claude.find(res["target"]["id"])
+        self.assertEqual(c.title, "⇄ Billing")
+        self.assertIn("billing fixed", c.path.read_text())
+        self.assertIn("Imported from Antigravity conversation a-own", c.path.read_text())
+        res = sync.transfer("antigravity", "a-own", open_app=False, dst="codex")
+        self.assertEqual(res["action"], "created")
+        # all three are one task now: the Claude copy and the Codex copy are linked too
+        self.assertEqual(sorted(pairs.links(self.ag.find("a-own"))), ["claude", "codex"])
+        self.assertEqual(pairs.find("claude", c.id, "codex")["codex"]["id"], res["target"]["id"])
+
+    def test_third_app_joins_the_same_task_instead_of_a_second_copy(self):
+        x = sync.transfer("claude", "c-tri", open_app=False, dst="codex")["target"]["id"]
+        a = sync.transfer("codex", x, open_app=False, dst="antigravity")["target"]["id"]
+        self.assertEqual(len(self.ag.created), 1)
+        # the triangle closed by itself: Claude is linked to that Antigravity conversation
+        self.assertEqual(pairs.find("claude", "c-tri", "antigravity")["antigravity"]["id"], a)
+        self.assertIn(sync.transfer("claude", "c-tri", open_app=False, dst="antigravity")["action"], ("in_sync", "linked"))
+        self.assertEqual(len(self.ag.created), 1)
+
+        # Progress in Claude reaches both others, each exactly once.
+        claude_file(PROJ_A, "c-tri", [user("build the parser"), assistant(text("parser built")),
+                                      user("more"), assistant(text("more done"))], title="Parser")
+        for host, sid in (("codex", x), ("antigravity", a)):
+            res = pairs.pull(host, sid)
+            self.assertEqual((res["sources"], res["count"]), (["claude"], 2), host)
+            self.assertIsNone(pairs.pull(host, sid))
+
+        # Progress in two apps arrives together in the third.
+        self.cx.append(x, umsg("codex ask"), amsg("codex did it"))
+        self.ag.append(a, ag_user("agy ask"), ag_reply("agy did it"))
+        res = pairs.pull("claude", "c-tri")
+        self.assertEqual(sorted(res["sources"]), ["antigravity", "codex"])
+        self.assertIn("codex did it", res["context"])
+        self.assertIn("agy did it", res["context"])
+
+    def test_two_source_failure_preserves_both_deltas_for_retry(self):
+        x = sync.transfer("claude", "c-tri", open_app=False, dst="codex")["target"]["id"]
+        a = sync.transfer("claude", "c-tri", open_app=False, dst="antigravity")["target"]["id"]
+        self.cx.append(x, amsg("codex delta"))
+        self.ag.append(a, ag_user("new request"), ag_reply("antigravity delta"))
+        before = pairs.load()
+        wrap = pairs.wrap
+        def fail_second(body, session, cwd, first):
+            if session.tool == "antigravity":
+                raise RuntimeError("second source failed")
+            return wrap(body, session, cwd, first)
+        with mock.patch.object(pairs, "wrap", side_effect=fail_second):
+            with self.assertRaisesRegex(RuntimeError, "second source failed"):
+                pairs.pull("claude", "c-tri")
+        self.assertEqual(pairs.load(), before)
+        result = pairs.pull("claude", "c-tri")
+        self.assertIn("codex delta", result["context"])
+        self.assertIn("antigravity delta", result["context"])
+        self.assertIsNone(pairs.pull("claude", "c-tri"))
+
+    def test_adopts_the_conversation_linked_through_the_third_app(self):
+        self.cx.add("x-mid", PROJ_A, "Parser", [umsg("hi"), amsg("yo")])
+        self.ag.add("a-far", PROJ_A, "Parser", [ag_user("hi"), ag_reply("yo")])
+        pairs.link(pairs.side("claude", "c-tri"), pairs.side("codex", "x-mid"))
+        pairs.link(pairs.side("codex", "x-mid"), pairs.side("antigravity", "a-far"), tools=("codex", "antigravity"))
+        res = sync.transfer("claude", "c-tri", open_app=False, dst="antigravity")
+        self.assertEqual(res["target"]["id"], "a-far")
+        self.assertEqual(self.ag.created, [])
+
+    def test_unlink_one_app_keeps_the_other_link(self):
+        from ccx import cli
+        x = sync.transfer("claude", "c-tri", open_app=False, dst="codex")["target"]["id"]
+        a = sync.transfer("claude", "c-tri", open_app=False, dst="antigravity")["target"]["id"]
+        out = io.StringIO()
+        with redirect_stdout(out):
+            cli.main(["unlink", "c-tri", "--with", "antigravity", "--json"])
+        self.assertEqual(json.loads(out.getvalue())["partners"], {"antigravity": a})
+        self.assertEqual(sorted(pairs.links(claude.find("c-tri"))), ["codex"])
+        self.assertIsNotNone(pairs.find("codex", x, "antigravity"))  # the other two stay linked
+        with mock.patch.dict(os.environ, {"CLAUDE_CODE_SESSION_ID": "c-tri"}):
+            self.assertIn("Unlinked from Codex", mcp_server.call("claude", "unlink", {"cwd": PROJ_A}))
+        self.assertEqual(pairs.links(claude.find("c-tri")), {})
+
+    def test_menu_and_tools_name_every_app(self):
+        self.ag.add("a-menu", PROJ_A, "Menu", [ag_user("hi"), ag_reply("yo")])
+        sync.transfer("antigravity", "a-menu", open_app=False, dst="claude")
+        with mock.patch.object(cloud, "claude_sessions", return_value=([], None)), \
+             mock.patch.object(cloud, "codex_tasks", return_value=([], None)):
+            d = sync.menu_data()
+        self.assertEqual(d["apps"], ["claude", "codex", "antigravity"])
+        proj = next(p for p in d["projects"] if p["cwd"] == os.path.realpath(PROJ_A))
+        row = next(r for r in proj["antigravity"] if r["id"] == "a-menu")
+        self.assertEqual((row["status"], list(row["links"])), ("linked", ["claude"]))
+        listing = mcp_server.call("claude", "list_sessions", {"cwd": PROJ_A, "app": "antigravity"})
+        self.assertIn("Menu", listing)
+        self.assertNotIn("Codex sessions", listing)
+        self.assertEqual(mcp_server.tools("antigravity")[1]["inputSchema"]["properties"]["app"]["enum"], ["claude", "codex"])
+        self.assertEqual(sync.default_target("antigravity", "a-menu"), "claude")
+        self.assertEqual(sync.deep_link("antigravity", "a-menu"), "")
 
 
 if __name__ == "__main__":

@@ -1,5 +1,6 @@
 """Install, update, check and remove ccx, using the CLIs bundled inside the
-Claude and Codex desktop apps (no separate CLI installs needed)."""
+Claude and Codex desktop apps (no separate CLI installs needed) and
+Antigravity's plugin folder."""
 
 from __future__ import annotations
 
@@ -14,7 +15,7 @@ import time
 from pathlib import Path
 from typing import List, Optional, Tuple
 
-from . import __version__, claude, cloud, codex, pairs, presence, repairs
+from . import __version__, antigravity, claude, cloud, codex, pairs, presence, repairs
 from .common import HOME, STATE_DIR, proxy_env
 
 REPO = "aaronwong1999/ccx"
@@ -111,6 +112,8 @@ def needs_setup() -> List[str]:
             out.append("codex")
     except RuntimeError:
         pass
+    if antigravity.installed() and antigravity_plugin_version() != repo_version():
+        out.append("antigravity")
     return out
 
 
@@ -182,6 +185,44 @@ def setup_codex(source: str, quiet: bool = False) -> bool:
         except Exception as e:
             say(False, f"could not trust ccx's hook in Codex: {e} (Codex → Settings → Hooks)", quiet)
     return ok
+
+
+# -------------------------------------------------------------- Antigravity
+
+def antigravity_plugin_version() -> Optional[str]:
+    try:
+        return json.loads((antigravity.PLUGIN_DIR / "plugin.json").read_text()).get("version")
+    except (OSError, ValueError):
+        return None
+
+
+def setup_antigravity(quiet: bool = False) -> bool:
+    """Antigravity loads plugins from a folder: write ours there (skills, the MCP
+    server and the sync hook, all pointing at this copy of ccx)."""
+    if not antigravity.installed():
+        say(False, "Antigravity: desktop app not installed or never opened (https://antigravity.google); skipping", quiet)
+        return False
+    root, d = SRC / "plugins/ccx", antigravity.PLUGIN_DIR
+    try:
+        shutil.rmtree(d, ignore_errors=True)
+        d.mkdir(parents=True)
+        (d / "plugin.json").write_text(json.dumps({
+            "name": "ccx", "version": repo_version(),
+            "description": "ccx - claudecodex: sync task context between Claude, Codex and Antigravity.",
+            "author": {"name": "Aaron Wong", "url": "https://github.com/aaronwong1999"},
+            "homepage": REPO_URL, "repository": REPO_URL}, indent=2))
+        (d / "mcp_config.json").write_text(json.dumps({"mcpServers": {"ccx": {
+            "command": "/bin/sh", "args": [str(root / "bin/ccx-mcp"), "--host", "antigravity"]}}}, indent=2))
+        # Before each model call; ccx itself syncs only on the first call after a new message.
+        hook = f"/bin/sh '{root / 'hooks/ccx-hook.sh'}' --antigravity"
+        (d / "hooks.json").write_text(json.dumps({"ccx-sync": {"PreInvocation": [
+            {"type": "command", "command": hook, "timeout": 30}]}}, indent=2))
+        shutil.copytree(root / "skills/antigravity", d / "skills")
+    except OSError as e:
+        say(False, f"Antigravity plugin install failed: {e}", quiet)
+        return False
+    say(True, f"Antigravity plugin ccx {repo_version()} installed (new conversations pick it up)", quiet)
+    return True
 
 
 # ------------------------------------------------------------------ menu bar
@@ -275,6 +316,7 @@ def setup(dev: bool = False, quiet: bool = False) -> int:
         print(f"ccx - claudecodex {__version__} · plugin source: {source}")
     ok_claude = setup_claude(source, quiet)
     ok_codex = setup_codex(source, quiet)
+    ok_agy = setup_antigravity(quiet)
     LINK.parent.mkdir(parents=True, exist_ok=True)
     if LINK.is_symlink() or LINK.exists():
         LINK.unlink()
@@ -284,18 +326,19 @@ def setup(dev: bool = False, quiet: bool = False) -> int:
     shutil.rmtree(HOME / "Applications/ClaudeCodex.app", ignore_errors=True)
     if build_menubar(quiet, force=True) and not AGENT.exists():
         autostart(True)
+    done = [n for n, ok in (("Claude", ok_claude), ("Codex", ok_codex), ("Antigravity", ok_agy)) if ok]
     if not quiet:
-        if ok_claude and ok_codex:
-            print("\nDone. ccx is set up in both apps. Start a new conversation (or keep using an existing one) "
-                  "and click ⇄ in the menu bar to move a conversation to the other app, or say "
-                  "“continue the <name> session from Codex/Claude”.")
-        elif ok_claude or ok_codex:
-            print(f"\nccx is set up in {'Claude' if ok_claude else 'Codex'}. Install the "
-                  f"{'Codex' if ok_claude else 'Claude'} desktop app too: ccx finishes setting it up by itself.")
+        if len(done) >= 2:
+            print(f"\nDone. ccx is set up in {' and '.join([', '.join(done[:-1]), done[-1]])}. Start a new conversation "
+                  "(or keep using an existing one) and click ⇄ in the menu bar to move a conversation to another app, "
+                  f"or say “continue the <name> session from {done[0]}” in any of them.")
+        elif done:
+            print(f"\nccx is set up in {done[0]}. Install another of the Claude, Codex or Antigravity desktop apps too: "
+                  "ccx finishes setting it up by itself.")
         else:
-            print("\nccx is installed, but neither app could be set up yet (see above). `ccx doctor` shows what's missing.")
+            print("\nccx is installed, but no app could be set up yet (see above). `ccx doctor` shows what's missing.")
         print(f"Like it? Star it: {REPO_URL} · follow the author for updates: https://x.com/aaron0x10")
-    return 0 if (ok_claude or ok_codex) else 1
+    return 0 if done else 1
 
 
 def update(quiet: bool = False) -> int:
@@ -320,6 +363,8 @@ def refresh(quiet: bool = False) -> int:
     source = marketplace_source(is_dev_checkout())
     setup_claude(source, quiet)
     setup_codex(source, quiet)
+    if antigravity.installed():
+        setup_antigravity(quiet)
     build_menubar(quiet)
     say(True, f"ccx is up to date: {__version__}", quiet)
     return 0
@@ -344,6 +389,13 @@ def doctor() -> int:
             rows.append((bool(trusted), "Codex sync hook: " + ("trusted" if trusted else "not trusted (run `ccx setup`)")))
     except RuntimeError as e:
         rows.append((False, str(e)))
+    if antigravity.installed():
+        v = antigravity_plugin_version()
+        rows.append((True, "Antigravity: " + ("running" if antigravity.hub() else "not running (ccx starts it in the "
+                                                                                  "background when it needs to read a conversation)")))
+        rows.append((bool(v), f"Antigravity plugin: ccx {v}" if v else "Antigravity plugin: not installed (run `ccx setup`)"))
+    else:
+        rows.append((True, "Antigravity: not installed (optional)"))
     running = menubar_running()
     rows.append((running, "Menu bar icon: " + ("running" if running else "not running (open ~/Applications/ccx.app)")))
     rows.append((True, "Start at login: " + ("on" if autostart(None) else "off")))
@@ -372,6 +424,7 @@ def uninstall(purge: bool = False) -> int:
         run([cb, "plugin", "marketplace", "remove", "ccx"])
     except RuntimeError:
         pass
+    shutil.rmtree(antigravity.PLUGIN_DIR, ignore_errors=True)
     autostart(False)
     run(["pkill", "-a", "-x", "ccx"])
     shutil.rmtree(APP, ignore_errors=True)

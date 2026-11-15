@@ -1,5 +1,5 @@
 #!/bin/sh
-# UserPromptSubmit hook: brings the linked session's new progress into this one.
+# The sync hook: brings the linked sessions' new progress into this one.
 # Claude Code may run with a minimal PATH, so find a usable python3 ourselves.
 # /usr/bin/python3 is only a stub until the Command Line Tools are installed
 # (running it would pop an installer dialog), so check for them first.

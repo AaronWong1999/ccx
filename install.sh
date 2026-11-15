@@ -30,14 +30,15 @@ fi
 
 # --- which desktop apps are here -------------------------------------------
 app() { [ -d "/Applications/$1.app" ] || [ -d "$HOME/Applications/$1.app" ]; }
-HAS_CLAUDE=0; HAS_CODEX=0
+HAS_CLAUDE=0; HAS_CODEX=0; HAS_AGY=0
 app Claude && HAS_CLAUDE=1
+app Antigravity && HAS_AGY=1
 { app ChatGPT || app Codex; } && HAS_CODEX=1
-if [ $HAS_CLAUDE = 0 ] && [ $HAS_CODEX = 0 ]; then
-  say "ccx connects the Claude and Codex desktop apps, and neither is installed yet."
+if [ $HAS_CLAUDE = 0 ] && [ $HAS_CODEX = 0 ] && [ $HAS_AGY = 0 ]; then
+  say "ccx connects the Claude, Codex and Antigravity desktop apps; none is installed yet."
   say "  Claude:  https://claude.com/download   (then open it once and click Code)"
   say "  Codex:   https://openai.com/codex      (the Codex / ChatGPT desktop app)"
-  say "Install at least one (ideally both), then run this command again. Nothing was changed."
+  say "Install at least one (ideally two), then run this command again. Nothing was changed."
   exit 1
 fi
 
@@ -96,7 +97,8 @@ case ":$PATH:" in
     ;;
 esac
 
-[ $HAS_CLAUDE = 0 ] && say "Note: the Claude desktop app isn't installed; ccx sets up Codex now. Install Claude later and ccx finishes setup by itself (or run: ccx setup)."
-[ $HAS_CODEX = 0 ] && say "Note: the Codex desktop app isn't installed; ccx sets up Claude now. Install Codex later and ccx finishes setup by itself (or run: ccx setup)."
+[ $HAS_CLAUDE = 0 ] && say "Note: the Claude desktop app isn't installed; ccx sets up your other apps now. Install Claude later and ccx finishes setup by itself (or run: ccx setup)."
+[ $HAS_CODEX = 0 ] && say "Note: the Codex desktop app isn't installed; ccx sets up your other apps now. Install Codex later and ccx finishes setup by itself (or run: ccx setup)."
+[ -d "$HOME/.gemini/antigravity" ] && say "Antigravity is here too: ccx is set up in all your apps, and the ⇄ menu moves a task between any two of them."
 exec "$DEST/plugins/ccx/bin/ccx" setup
 }

@@ -1,4 +1,4 @@
-"""Listing both sides, and bringing a session over to the other app: the first
+"""Listing every app's sessions, and bringing a session over to another app: the first
 time by a native import (which pairs the two), afterwards by opening the
 partner, where the new progress arrives with the next prompt (see pairs.py)."""
 
@@ -12,17 +12,23 @@ from datetime import datetime
 from typing import Dict, List, Optional
 from urllib.parse import quote, urlencode
 
-from . import claude, cloud, codex, pairs, repairs
-from .common import HOME, copy_to_clipboard, est_tokens, L, NAME, OTHER, Session, git_snapshot, real, same_dir
+from . import antigravity, claude, cloud, codex, pairs, repairs
+from .common import (HOME, TOOLS, copy_to_clipboard, est_tokens, L, NAME, OTHER, Session, git_snapshot,
+                     real, same_dir)
 
 STATUS = {"new": "not linked", "linked": "linked", "updated": "has new progress", "mirror": "imported copy"}
 
 
 def deep_link(tool: str, sid: str) -> str:
+    """The app's own link to a conversation ('' for Antigravity, which has none)."""
+    if tool == "antigravity":
+        return ""
     return f"codex://threads/{sid}" if tool == "codex" else f"claude://resume?session={sid}"
 
 
 def open_in_app(tool: str, sid: str) -> bool:
+    if tool == "antigravity":
+        return antigravity.open_app()
     return subprocess.run(["open", deep_link(tool, sid)], capture_output=True).returncode == 0
 
 
@@ -36,28 +42,29 @@ def _open_new_conversation(url: str, app: str) -> str:
     return url
 
 
-def new_claude_conversation(codex_id: str) -> str:
-    """Open a new Claude conversation in the thread's folder, prefilled to continue it."""
-    t = codex.find(codex_id)
-    if not t:
-        raise RuntimeError(f"Codex thread {codex_id} not found")
-    prompt = f"Continue the \u201c{t.title}\u201d session from Codex (session id {t.id})."
-    url = "claude://code/new?" + urlencode({"folder": real(t.cwd), "q": prompt}, quote_via=quote)
-    return _open_new_conversation(url, "Claude")
+def new_conversation(dst: str, sid: str) -> str:
+    """Open a new `dst` conversation in the session's folder, prefilled to continue
+    it. Each app's own deep link leaves sending to the user and never uses the
+    clipboard (Codex: https://learn.chatgpt.com/docs/reference/commands#deep-links)."""
+    src = pairs.locate(sid, [t for t in TOOLS if t != dst])
+    if not src:
+        raise RuntimeError(f"session {sid} not found")
+    prompt = f"Continue the \u201c{src.title}\u201d session from {NAME[src.tool]} (session id {src.id})."
+    if dst == "claude":
+        url = "claude://code/new?" + urlencode({"folder": real(src.cwd), "q": prompt}, quote_via=quote)
+    elif dst == "codex":
+        url = "codex://new?" + urlencode({"path": real(src.cwd), "prompt": prompt}, quote_via=quote)
+    else:
+        url = antigravity.new_conversation_link(real(src.cwd), prompt)
+    return _open_new_conversation(url, NAME[dst])
 
 
-def new_codex_conversation(claude_id: str) -> str:
-    """Open a new Codex chat in the session's folder with its prompt prefilled.
+def new_claude_conversation(sid: str) -> str:
+    return new_conversation("claude", sid)
 
-    The native deep link leaves sending to the user and never uses the clipboard.
-    See https://learn.chatgpt.com/docs/reference/commands#deep-links.
-    """
-    c = claude.find(claude_id)
-    if not c:
-        raise RuntimeError(f"Claude session {claude_id} not found")
-    prompt = f"Continue the \u201c{c.title}\u201d session from Claude (session id {c.id})."
-    url = "codex://new?" + urlencode({"path": real(c.cwd), "prompt": prompt}, quote_via=quote)
-    return _open_new_conversation(url, "Codex")
+
+def new_codex_conversation(sid: str) -> str:
+    return new_conversation("codex", sid)
 
 
 def continue_phrase(tool: str) -> str:
@@ -70,19 +77,23 @@ def continue_phrase(tool: str) -> str:
 def sessions(tool: str, cwd: Optional[str] = None, query: Optional[str] = None, limit: int = 30) -> List[Session]:
     if tool == "claude":
         return claude.sessions(cwd, query)[:limit]
+    if tool == "antigravity":
+        return antigravity.sessions(cwd, query, limit)
     return codex.threads(cwd, query, limit)
 
 
 def rows(tool: str, ss: List[Session], here_cwd: Optional[str] = None, mirrors=frozenset()) -> List[dict]:
     out = []
     for s in ss:
-        st, partner = pairs.status(s)
-        if partner and _is_cloud(partner):
-            st, partner = "new", None  # going back means a new local conversation over there
+        # going back from a cloud session means a new local conversation over there
+        lk = {t: v for t, v in pairs.links(s).items() if not _is_cloud(v["id"])}
+        st = "updated" if any(v["status"] == "updated" for v in lk.values()) else "linked" if lk else "new"
+        partner = (lk.get(OTHER[tool]) or next(iter(lk.values())))["id"] if lk else None
         if st == "new" and s.id in mirrors:
             st = "mirror"
-        row = {"id": s.id, "title": s.title, "updated": s.when, "status": st, "linked_to": partner,
+        row = {"id": s.id, "title": s.title, "updated": s.when, "status": st, "linked_to": partner, "links": lk,
                "cwd": s.cwd, "other_folder": bool(here_cwd and s.cwd and not same_dir(s.cwd, here_cwd))}
+        partner = (lk.get(OTHER[tool]) or {}).get("id") if tool in ("claude", "codex") else None
         if tool == "claude":
             # Sending a long Claude conversation to Codex: a full import makes Codex
             # read all of it on its first reply; a linked Codex thread may be idle.
@@ -126,7 +137,7 @@ def cloud_rows(tool: str, items: List[dict], cwd: Optional[str] = None) -> List[
     progress the partner hasn't received."""
     out = []
     for c in items:
-        pair = pairs.find(tool, c["id"])
+        pair = pairs.find(tool, c["id"], OTHER[tool])
         st, partner = "new", None
         if pair:
             partner, mine = pair[OTHER[tool]]["id"], pair[tool]
@@ -138,13 +149,30 @@ def cloud_rows(tool: str, items: List[dict], cwd: Optional[str] = None) -> List[
                     bool(m and any(claude.units(m.path)[mine["cursor"]:]))
             st = "updated" if newer else "linked"
         out.append({"id": c["id"], "title": c["title"] or c["id"], "status": st, "linked_to": partner,
+                    "links": {OTHER[tool]: {"id": partner, "status": st}} if partner else {},
                     "updated": datetime.fromtimestamp(c["updated_at"]).strftime("%m-%d %H:%M"),
                     "cwd": cwd or "", "cloud": True})
     return out
 
 
 def _known_cwds() -> List[str]:
-    return list(dict.fromkeys(real(s.cwd) for s in claude.sessions() + codex.threads(limit=300) if s.cwd))
+    return list(dict.fromkeys(real(s.cwd) for s in _all_sessions() if s.cwd))
+
+
+def _all_sessions() -> List[Session]:
+    out = list(claude.sessions())
+    try:
+        out += codex.threads(limit=300)
+    except RuntimeError:
+        pass  # Codex isn't installed
+    if antigravity.installed():
+        out += antigravity.sessions(limit=300)
+    return out
+
+
+def apps() -> List[str]:
+    """The apps ccx moves conversations between on this Mac, in menu order."""
+    return ["claude", "codex"] + (["antigravity"] if antigravity.installed() else [])
 
 
 def cloud_cwd(item: Optional[dict]) -> str:
@@ -156,16 +184,16 @@ def cloud_cwd(item: Optional[dict]) -> str:
 
 
 def menu_data(projects: int = 8, per_side: int = 6) -> dict:
-    """Recent projects with both sides' sessions, for the menu bar app."""
+    """Recent projects with every app's sessions, for the menu bar app."""
     # The cloud listings (each cached for a few minutes) load while the local sessions are read.
     with ThreadPoolExecutor(2) as ex:
         claude_cloud, codex_cloud = ex.submit(cloud.claude_sessions), ex.submit(cloud.codex_tasks)
         mirrors = frozenset(codex.import_history().values())
         by_cwd: Dict[str, dict] = {}
-        for s in claude.sessions() + codex.threads(limit=300):
+        for s in _all_sessions():
             if not s.cwd:
                 continue
-            p = by_cwd.setdefault(real(s.cwd), {"claude": [], "codex": [], "mtime": 0.0})
+            p = by_cwd.setdefault(real(s.cwd), {"claude": [], "codex": [], "antigravity": [], "mtime": 0.0})
             p[s.tool].append(s)
             p["mtime"] = max(p["mtime"], s.mtime)
         (claude_cloud, claude_reason), codex_cloud = claude_cloud.result(), codex_cloud.result()[0]
@@ -184,10 +212,11 @@ def menu_data(projects: int = 8, per_side: int = 6) -> dict:
                     "codex": rows("codex", newest(p["codex"]), None, mirrors)
                     + cloud_rows("codex", placed["codex"][0].get(cwd, [])[:4], cwd),
                     "claude": rows("claude", newest(p["claude"]))
-                    + cloud_rows("claude", placed["claude"][0].get(cwd, [])[:4], cwd)})
+                    + cloud_rows("claude", placed["claude"][0].get(cwd, [])[:4], cwd),
+                    "antigravity": rows("antigravity", newest(p["antigravity"]))})
         if len(out) >= projects:
             break
-    return {"projects": out, "pending_history_repairs": len(repairs.retry_pending()),
+    return {"projects": out, "apps": apps(), "pending_history_repairs": len(repairs.retry_pending()),
             "claude_cloud_signin": claude_reason == "not_signed_in",
             "cloud_other": {"claude": cloud_rows("claude", placed["claude"][1][:8]),
                             "codex": cloud_rows("codex", placed["codex"][1][:8])}}
@@ -195,8 +224,43 @@ def menu_data(projects: int = 8, per_side: int = 6) -> dict:
 
 # ---------------------------------------------------------------- transfers
 
+def _turns(us: list) -> list:
+    """Alternating (user, assistant) turns from units, for writing a Claude session."""
+    turns: list = []
+    for u in us:
+        if not u:
+            continue
+        if turns and turns[-1][0] == u[0]:
+            turns[-1][1].append(u[1])
+        else:
+            turns.append([u[0], [u[1]]])
+    while turns and turns[0][0] != "user":
+        turns.pop(0)
+    return [(r, "\n\n".join(c)) for r, c in turns]
+
+
+KIND = {"claude": "Claude session", "codex": "Codex thread", "antigravity": "Antigravity conversation"}
+
+
+def _marked(src: Session) -> str:
+    """The title an imported copy gets: ⇄ in front, once, however many apps it has been through."""
+    return "⇄ " + ((src.title or "").lstrip("⇄ ").strip() or KIND[src.tool])
+
+
 def _import_to_codex(src: Session) -> str:
-    """Native import of a Claude session into Codex; returns the thread id."""
+    """Native import into Codex; returns the thread id. A Claude session goes in
+    as it is; an Antigravity conversation as a temporary Claude-format copy,
+    because Codex's own importer is what gives the thread real history."""
+    if src.tool != "claude":
+        tmp = claude.write_session(src.cwd, _claude_turns(src), _marked(src))
+        try:
+            tid = codex.import_claude_session(str(tmp.path), src.cwd, _marked(src))
+        finally:
+            tmp.path.unlink(missing_ok=True)
+        if not tid:
+            raise RuntimeError(f"Codex skipped this conversation during import (folder {src.cwd}). "
+                               f"Run `ccx doctor`, or report it at https://github.com/aaronwong1999/ccx/issues")
+        return tid
     prior = codex.import_history().get(str(src.path))
     if prior and codex.find(prior):
         codex.unarchive(prior)  # Codex already has it (from its own app or the official plugin)
@@ -219,11 +283,15 @@ def _import_to_codex(src: Session) -> str:
     return tid
 
 
-def _import_to_claude(src: Session) -> str:
-    turns = codex.turns_for_claude(codex.items(src.id))
+def _claude_turns(src: Session) -> list:
+    """`src`'s conversation as Claude turns, with where it came from and the state of the folder."""
+    if src.tool == "codex":
+        turns = codex.turns_for_claude(codex.items(src.id))
+    else:
+        turns = _turns(pairs.session_units(src.tool, src.id, include_imported=True)[1])
     if not turns:
-        raise RuntimeError("this Codex thread has no conversation to import")
-    header = (f"[ccx] Imported from Codex thread {src.id} ({src.when}). Tool calls and output are "
+        raise RuntimeError(f"this {KIND[src.tool]} has no conversation to import")
+    header = (f"[ccx] Imported from {KIND[src.tool]} {src.id} ({src.when}). Tool calls and output are "
               "condensed; the files on disk are the source of truth for code.\n\n")
     turns[0] = (turns[0][0], header + turns[0][1])
     tail = f"\n\n---\n[ccx] git status at import:\n```\n{git_snapshot(src.cwd)}\n```\nPick up from here."
@@ -231,16 +299,41 @@ def _import_to_claude(src: Session) -> str:
         turns[-1] = ("assistant", turns[-1][1] + tail)
     else:
         turns.append(("assistant", tail.strip()))
-    return claude.write_session(src.cwd, turns, f"⇄ {src.title or 'Codex thread'}").id
+    return turns
+
+
+def _import_to_claude(src: Session) -> str:
+    return claude.write_session(src.cwd, _claude_turns(src), _marked(src)).id
+
+
+# Antigravity has no way to add history to a conversation: a new one starts with
+# the condensed conversation as its first message, which its model answers once.
+ANTIGRAVITY_IMPORT_NOTE = (
+    "[ccx] The user moved this task here from {app} to keep working on it in Antigravity. This message only "
+    "carries the context: do not start working and do not call any tools yet. Reply with one short line "
+    "saying you have the context from {app} and are ready, then wait for the user's next message.")
+
+
+def _import_to_antigravity(src: Session) -> str:
+    _, us = pairs.session_units(src.tool, src.id, include_imported=True)
+    shown = [u for u in us if u]
+    if not shown:
+        raise RuntimeError(f"this {KIND[src.tool]} has no conversation to import")
+    body = pairs.wrap(pairs.goal_note(pairs.goal(src.tool, src.id), src.tool)
+                      + pairs.render(shown, src.tool, pairs.FULL_BUDGET), src, src.cwd, first=True)
+    cid = antigravity.new_conversation(src.cwd, _marked(src),
+                                       body + "\n\n" + ANTIGRAVITY_IMPORT_NOTE.format(app=NAME[src.tool]))
+    antigravity.wait_idle(cid)  # its one-line reply is part of the import, not progress to send back
+    return cid
 
 
 IMPORT_OVERHEAD = 1.8  # native imports keep tool output ccx clips: measured ~215k vs ~118k rendered
 
 
-def estimate(tool: str, session_id: str) -> dict:
+def estimate(tool: str, session_id: str, dst: Optional[str] = None) -> dict:
     """Rough tokens the other app reads on the first reply: after a full native
     import vs. a new conversation that continues from the condensed progress."""
-    n, added = pairs.pending(tool, session_id)
+    n, added = pairs.pending(tool, session_id, dst)
     s, us = pairs.session_units(tool, session_id, include_imported=True)
     us = [u for u in us if u]
     if not s or not us:
@@ -250,10 +343,44 @@ def estimate(tool: str, session_id: str) -> dict:
     return {"full": full, "condensed": min(condensed, full), "pending": n, "pending_tokens": added}
 
 
-def transfer(tool: str, session_id: str, open_app: bool = True) -> dict:
-    """Bring `tool`'s session to the other app: native import + pair the first
+def default_target(tool: str, session_id: str) -> str:
+    """Where a session goes when the app isn't named: its one linked partner,
+    else the usual partner app (Claude and Codex to each other)."""
+    linked = [pairs.partner_tool(p, tool) for p in pairs.find_all(tool, session_id)]
+    if len(linked) == 1:
+        return linked[0]
+    return OTHER[tool]
+
+
+def _adopt(tool: str, sid: str, dst: str) -> Optional[dict]:
+    """`tool`'s session has no partner in `dst`, but the conversation it is linked
+    to in the third app has one: that is this task's `dst` conversation, so link
+    to it instead of importing a second copy."""
+    third = next(t for t in TOOLS if t not in (tool, dst))
+    pa = pairs.find(tool, sid, third)
+    pb = pairs.find(third, pa[third]["id"], dst) if pa else None
+    if not pb or _is_cloud(pa[third]["id"]) or _is_cloud(pb[dst]["id"]) or pairs.find(dst, pb[dst]["id"], tool):
+        return None
+    if not pairs.lookup(dst, pb[dst]["id"]):
+        return None
+    # Each side owes the other what it still owed (or had sent) through the third app.
+    return pairs.link(dict(pa[tool]), dict(pb[dst]), tools=(tool, dst))
+
+
+def transfer(tool: str, session_id: str, open_app: bool = True, dst: Optional[str] = None) -> dict:
+    """Bring `tool`'s session to another app (`dst`): import + pair the first
     time; afterwards just open the partner."""
+    dst = dst or default_target(tool, session_id)
+    if dst == tool or dst not in TOOLS:
+        raise RuntimeError(f"can't move a {NAME[tool]} session to {NAME.get(dst, dst)}")
+    if dst == "antigravity" and not antigravity.installed():
+        raise RuntimeError(L("The Antigravity desktop app isn't set up on this Mac: open it once, then try again.",
+                             "这台 Mac 上还没有用过 Antigravity 桌面版：先打开它一次，再试。"))
     if tool == "codex" and cloud.is_codex(session_id):
+        if dst != "claude":
+            raise RuntimeError(L("A Codex Cloud task comes down into Claude only. Bring it into Claude first, then "
+                                 f"move that conversation to {NAME[dst]}.",
+                                 f"Codex 云端任务只能带进 Claude。先带进 Claude，再把那个对话转到 {NAME[dst]}。"))
         return _transfer_codex_task(session_id, open_app)
     if tool == "claude" and cloud.is_claude(session_id):
         # Read the cloud conversation now (only this one), into its local mirror.
@@ -270,38 +397,41 @@ def transfer(tool: str, session_id: str, open_app: bool = True) -> dict:
                 raise RuntimeError(L(f"Couldn't read this cloud session from Claude Code ({e}).",
                                      f"无法通过 Claude Code 读取这个云端会话（{e}）。") + why) from e
         cloud._fresh[session_id] = time.time()
-    src = claude.find(session_id) if tool == "claude" else codex.find(session_id)
+    src = pairs.lookup(tool, session_id)
     if not src:
         raise RuntimeError(f"{NAME[tool]} session {session_id} not found")
-    dst = OTHER[tool]
-    pair = pairs.find(tool, src.id)
+    pair = pairs.find(tool, src.id, dst)
     pending = (0, 0)
     if pair and _is_cloud(pair[dst]["id"]):
         # Cloud sessions only come down to this Mac: a local session goes back to a
         # local one on the other side, and that new pair replaces the cloud link.
         pair = None
+    if pair and dst == "antigravity" and not antigravity.find(pair[dst]["id"]):
+        pair = None  # that Antigravity conversation was deleted: import afresh
+    pair = pair or _adopt(tool, src.id, dst)
     if pair:
         target, action = pair[dst]["id"], "linked"
-        pending = pairs.pending(tool, src.id)
+        pending = pairs.pending(tool, src.id, dst)
         if not pending[0]:
             action = "in_sync"
     else:
-        # Capture the source cursor BEFORE the import. A running Claude turn may
-        # finish while Codex imports; those late records still need delivery.
+        # Capture the source cursor BEFORE the import. A running turn may finish
+        # while the other app imports; those late records still need delivery.
         source_side = pairs.side(tool, src.id)
-        if dst == "codex" and codex.import_history().get(str(src.path)):
+        if dst == "codex" and tool == "claude" and codex.import_history().get(str(src.path)):
             # An earlier native import is only a snapshot, not proof that today's
             # source progress was delivered. Re-read it once in the first hook.
             source_side["cursor"] = 0
-        target = _import_to_codex(src) if dst == "codex" else _import_to_claude(src)
-        sides = {tool: source_side, dst: pairs.side(dst, target)}
-        pairs.link(sides["claude"], sides["codex"])
+        target = globals()[f"_import_to_{dst}"](src)
+        pairs.link(source_side, pairs.side(dst, target), tools=(tool, dst))
+        pairs.close_triangle(tool, src.id, dst, target)
         action = "created"
-        pending = (0, estimate(tool, src.id)["full"]) if dst == "codex" else (0, 0)
-    res = {"action": action, "message": _message(action, tool, src.title, pending),
-           "pending": pending[0], "pending_tokens": pending[1],
-           "source": {"tool": tool, "id": src.id, "title": src.title},
+        pending = (0, estimate(tool, src.id, dst)["full"]) if (tool, dst) == ("claude", "codex") else (0, 0)
+    res = {"action": action, "message": _message(action, tool, src.title, pending, dst), "pending": pending[0],
+           "pending_tokens": pending[1], "source": {"tool": tool, "id": src.id, "title": src.title},
            "target": {"tool": dst, "id": target, "deep_link": deep_link(dst, target)}, "cwd": src.cwd}
+    if dst == "antigravity":
+        res["message"] += _where_in_antigravity(target, src.cwd)
     if dst == "codex":
         # Save the pair before grouping: if grouping fails, retry repairs this
         # thread instead of importing another copy. Also repairs pre-0.0.9 pairs.
@@ -337,6 +467,17 @@ def transfer(tool: str, session_id: str, open_app: bool = True) -> dict:
     return res
 
 
+def _where_in_antigravity(cid: str, cwd: str) -> str:
+    """Antigravity has no link that opens one conversation, so say where it is."""
+    a = antigravity.find(cid)
+    p = antigravity.project_for(cwd)
+    title, project = (a.title if a else ""), (p["name"] if p else "")
+    return L(f"\n\nIn Antigravity, find it in the sidebar" + (f" under the project “{project}”" if project else "")
+             + (f": “{title}”." if title else "."),
+             "\n\n在 Antigravity 的侧边栏里" + (f"，项目「{project}」下" if project else "")
+             + (f"找到「{title}」即可。" if title else "即可找到。"))
+
+
 def _is_cloud(sid: str) -> bool:
     return cloud.is_claude(sid) or cloud.is_codex(sid)
 
@@ -347,7 +488,7 @@ def _transfer_codex_task(tid: str, open_app: bool) -> dict:
     t = cloud.codex_task(tid)
     if not t:
         raise RuntimeError(L(f"Codex Cloud task {tid} not found.", f"找不到 Codex 云端任务 {tid}。"))
-    pair = pairs.find("codex", tid)
+    pair = pairs.find("codex", tid, "claude")
     if pair:
         target, n = pair["claude"]["id"], int(t["updated_at"] > pair["codex"].get("updated_at", 0))
         action = "linked" if n else "in_sync"
@@ -363,7 +504,7 @@ def _transfer_codex_task(tid: str, open_app: bool) -> dict:
     res = {"action": action, "message": _message(action, "codex", t["title"], (n, 0)), "pending": n, "pending_tokens": 0,
            "source": {"tool": "codex", "id": tid, "title": t["title"]},
            "target": {"tool": "claude", "id": target, "deep_link": deep_link("claude", target)},
-           "cwd": pairs.find("codex", tid)["codex"]["cwd"]}
+           "cwd": pairs.find("codex", tid, "claude")["codex"]["cwd"]}
     if open_app:
         res["opened"] = open_in_app("claude", target)
     return res
@@ -373,14 +514,14 @@ def _k(tokens: int) -> str:
     return f"{max(1, round(tokens / 1000))}k"
 
 
-def _message(action: str, tool: str, title: str, pending=(0, 0)) -> str:
-    dst = OTHER[tool]
+def _message(action: str, tool: str, title: str, pending=(0, 0), dst: Optional[str] = None) -> str:
+    dst = dst or OTHER[tool]
     n, tokens = pending
     if action == "created":
         cost = L(f" Its first reply there reads about {_k(tokens)} tokens of history.",
                  f"它在那边第一次回复时大约读取 {_k(tokens)} token 的历史。") if tokens else ""
         return L(f"Imported {NAME[tool]} \u201c{title}\u201d into {NAME[dst]} and linked them; they stay in sync from now on.",
-                 f"已把 {NAME[tool]} 的「{title}」导入 {NAME[dst]} 并关联，之后两边会自动同步。") + cost
+                 f"已把 {NAME[tool]} 的「{title}」导入 {NAME[dst]} 并关联，之后会自动同步。") + cost
     if action == "in_sync":
         return L(f"\u201c{title}\u201d is already in sync with {NAME[dst]}: nothing new to bring over, nothing was added. "
                  f"Opened the {NAME[dst]} conversation.",

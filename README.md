@@ -32,6 +32,23 @@
 ccx links a Claude Code session with a Codex thread and keeps them in sync in both directions, inside both **desktop apps**, with a ⇄ menu bar icon for one-click switching. Everything runs on your Mac: no account, no server, no telemetry.<br>
 ccx 把一个 Claude Code 会话和一个 Codex 线程关联起来，在两个**桌面版** app 里双向同步，菜单栏 ⇄ 图标一点就能切换。全部在你的 Mac 上运行：不用注册、没有服务器、不收集数据。
 
+### New in 0.1: Antigravity · 0.1 新增：Antigravity
+
+ccx now works with the **Antigravity** desktop app too. Any of the three can hand a task to any other, and a task that lives in all three stays one task: progress made in one reaches the other two, each exactly once.<br>
+ccx 现在也支持 **Antigravity** 桌面版。三个 app 之间可以任意互转；同一个任务在三边各有一个对话时，它们是同一个任务：任何一边的新进展都会带到另外两边，各只带一次。
+
+```
+        Claude Code
+         ⇄       ⇄
+     Codex   ⇄   Antigravity
+```
+
+- **Nothing to turn on.** If Antigravity is on your Mac, ccx sets itself up there and the ⇄ menu shows three apps; without it, ccx is the same two-app tool as before.<br>**不用开任何开关。** 装了 Antigravity，ccx 会自己装进去，⇄ 菜单变成三个 app；没装，ccx 和以前的双 app 版本完全一样。
+- **⇄ → project → session → “Continue in …”.** Each target shows its state: ○ first time (imports and links), ✓ linked and in sync, ↻ linked with new progress to bring.<br>**⇄ → 项目 → 会话 → “去 … 接着干”。** 每个去向都标着状态：○ 首次（导入并关联），✓ 已关联且已同步，↻ 已关联、有新进展待带入。
+- **In a conversation:** `/to-antigravity` · `/from-antigravity` in Claude, `$to-antigravity` · `$from-antigravity` in Codex, and “continue the ‹name› session from Claude / Codex” in Antigravity.<br>**在对话里：** Claude 里用 `/to-antigravity` · `/from-antigravity`，Codex 里用 `$to-antigravity` · `$from-antigravity`，Antigravity 里说“从 Claude / Codex 把 ‹名称› 那个会话导入，接着干”。
+- **Two things Antigravity does differently.** It can't take history into a conversation, so a task sent there starts a new Antigravity conversation whose first message is the condensed conversation; Antigravity answers that once, with a single line. And it has no link that opens one conversation, so ccx opens the app and tells you which conversation it is (titled `⇄ …`, under the project).<br>**Antigravity 有两点不一样。** 它不能往对话里写入历史，所以传过去的任务会新开一个 Antigravity 对话，第一条消息是压缩后的对话内容，Antigravity 会回复一行确认。它也没有“打开某个对话”的链接，所以 ccx 打开 app 后会告诉你是哪一个（标题带 `⇄`，在对应项目下）。
+- **How it reads Antigravity.** Titles, folders and sync state come from Antigravity's own summary database and work with the app closed. A conversation's content is read through the app's local service, so ccx starts Antigravity in the background when it needs to read one.<br>**怎么读取 Antigravity。** 标题、目录和同步状态来自 Antigravity 自己的摘要数据库，app 关着也能读。对话内容通过 app 的本机服务读取，所以需要读某个对话而 Antigravity 没开时，ccx 会在后台把它启动。
+
 ## Install · 安装
 
 **The easy way:** paste this into Claude Code or Codex, and it installs ccx for you.<br>
@@ -58,8 +75,8 @@ curl -fsSL https://raw.githubusercontent.com/aaronwong1999/ccx/main/install.sh |
 Before Claude Code 2.1.275: `/plugin marketplace add AaronWong1999/ccx`, then `/plugin install ccx@ccx`.<br>
 Claude Code 2.1.275 之前的版本：先 `/plugin marketplace add AaronWong1999/ccx`，再 `/plugin install ccx@ccx`。
 
-**You need** a Mac with macOS 13 or later and the [Claude](https://claude.com/download) and/or [Codex](https://openai.com/codex) desktop app.<br>
-**需要：** macOS 13 及以上的 Mac，以及 [Claude](https://claude.com/download) 桌面版和/或 [Codex](https://openai.com/codex) 桌面版（Codex / ChatGPT 桌面版）。
+**You need** a Mac with macOS 13 or later and the [Claude](https://claude.com/download) and/or [Codex](https://openai.com/codex) desktop app. [Antigravity](https://antigravity.google) is optional: with it installed, all three connect.<br>
+**需要：** macOS 13 及以上的 Mac，以及 [Claude](https://claude.com/download) 桌面版和/或 [Codex](https://openai.com/codex) 桌面版（Codex / ChatGPT 桌面版）。[Antigravity](https://antigravity.google) 可选：装了它，三个 app 就能互通。
 
 <details>
 <summary><b>What you may be asked · 安装时可能出现的确认</b></summary>
@@ -107,6 +124,7 @@ Nothing else asks for passwords, admin rights or accessibility access.<br>
 | One side is stuck; let the other try<br>一边卡住了，让另一边试试 | Same switch: click ⇄, or `/to-codex` · `$to-claude`. Once it's solved, open the original conversation and send anything; the fix comes back with it.<br>一样的切换：点 ⇄，或者 `/to-codex` · `$to-claude`。搞定后打开原来的对话随便说一句，解决过程会一起带回来 |
 | Pull progress now<br>立刻同步一下 | Claude: `/from-codex` · Codex: `$from-claude` |
 | Hand this conversation over<br>把当前对话交给另一边 | Claude: `/to-codex` · Codex: `$to-claude` · or click ⇄ · 或点 ⇄ |
+| Bring Antigravity in<br>让 Antigravity 也加入 | Click ⇄ → project → session → **Continue in Antigravity**, or `/to-antigravity` · `$to-antigravity`. From Antigravity: ⇄ → its conversation → **Continue in Claude / Codex**.<br>点 ⇄ → 项目 → 会话 → **去 Antigravity 接着干**，或 `/to-antigravity` · `$to-antigravity`。从 Antigravity 出发：⇄ → 它的对话 → **去 Claude / Codex 接着干** |
 
 The ⇄ menu lists recent projects and both sides' sessions: ○ not linked yet (click to import and link), ✓ linked (click to open the partner), ↻ has progress the other side hasn't received. English or Chinese via Language / 语言.<br>
 ⇄ 菜单按项目列出两边的会话：○ 未关联（点一下导入并关联），✓ 已关联（点一下打开对面），↻ 有对面还没收到的新进展。可在 Language / 语言 里切换中英文。<br>
@@ -145,8 +163,8 @@ Using [magpie](https://github.com/yetone/magpie)? This repository is also a magp
 
 ## FAQ · 常见问题
 
-**Is my code or conversation uploaded anywhere?** No. Sync runs entirely on your Mac; Codex data goes only through Codex's own app-server API. Cloud sessions are read by Claude Code's and Codex's own CLIs with their own sign-in; ccx never touches a credential. ccx itself reaches GitHub only to install and check for updates.<br>
-**会把我的代码或对话上传到哪里吗？** 不会。同步完全在本机进行；Codex 的数据只通过 Codex 自己的 app-server 接口读写。云端会话由 Claude Code 和 Codex 自己的命令行用它们自己的登录读取，ccx 从不接触任何凭据。ccx 本身只在安装和检查更新时访问 GitHub。
+**Is my code or conversation uploaded anywhere?** No. Sync runs entirely on your Mac; Codex data goes only through Codex's own app-server API. Cloud sessions are read by Claude Code's and Codex's own CLIs with their own sign-in; ccx never touches a credential. Antigravity is read and written through its own local service and its `agentapi` command; a task you send to Antigravity becomes a message in your own Antigravity conversation, like one you typed. ccx itself reaches GitHub only to install and check for updates.<br>
+**会把我的代码或对话上传到哪里吗？** 不会。同步完全在本机进行；Codex 的数据只通过 Codex 自己的 app-server 接口读写。云端会话由 Claude Code 和 Codex 自己的命令行用它们自己的登录读取，ccx 从不接触任何凭据。Antigravity 通过它自己的本机服务和 `agentapi` 命令读写；你传到 Antigravity 的任务会成为你自己 Antigravity 对话里的一条消息，和你手动输入的一样。ccx 本身只在安装和检查更新时访问 GitHub。
 
 **Does it bypass usage limits?** No. You use your own Claude and ChatGPT/Codex plans, each within its own limits; ccx only moves the task between them.<br>
 **这是在绕过额度限制吗？** 不是。你用的是自己的 Claude 和 ChatGPT/Codex 订阅，各自在各自的额度内；ccx 只是在两边之间搬运任务。
@@ -214,7 +232,7 @@ ccx uninstall --purge  # also delete link records in ~/.ccx · 同时删除 ~/.c
 ```bash
 git clone https://github.com/aaronwong1999/ccx && cd ccx
 ./install.sh --dev                      # install the plugin from this checkout · 从本地目录安装插件
-python3 -m unittest discover -s tests   # needs neither Claude nor Codex · 不需要 Claude 或 Codex
+python3 -m unittest discover -s tests   # needs none of the apps · 不需要安装任何一个 app
 ```
 
 `plugins/ccx/` is the plugin, with both a `.claude-plugin` and a `.codex-plugin` manifest; `lib/ccx/` is the core in standard-library Python 3.9+. `menubar/` is the Swift menu bar app. Releases: [docs/RELEASING.md](docs/RELEASING.md).<br>
@@ -238,4 +256,4 @@ python3 -m unittest discover -s tests   # needs neither Claude nor Codex · 不�
   欢迎在 X（<a href="https://x.com/aaron0x10">@aaron0x10</a>）或 <a href="https://github.com/aaronwong1999/ccx/issues">Issues</a> 反馈和提建议。
 </p>
 
-<p align="center"><sub>MIT license · MIT 许可. ccx is an independent open-source project, not affiliated with Anthropic or OpenAI. "Claude", "Claude Code" and "Codex" are trademarks of their owners.<br>ccx 是独立的开源项目，与 Anthropic 和 OpenAI 无关；"Claude"、"Claude Code" 和 "Codex" 是其各自所有者的商标。</sub></p>
+<p align="center"><sub>MIT license · MIT 许可. ccx is an independent open-source project, not affiliated with Anthropic, OpenAI or Google. "Claude", "Claude Code", "Codex" and "Antigravity" are trademarks of their owners.<br>ccx 是独立的开源项目，与 Anthropic、OpenAI 和 Google 无关；"Claude"、"Claude Code"、"Codex" 和 "Antigravity" 是其各自所有者的商标。</sub></p>

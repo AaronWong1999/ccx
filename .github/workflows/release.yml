@@ -20,7 +20,15 @@ jobs:
           grep -q "\"version\": \"$v\"" plugins/ccx/.codex-plugin/plugin.json
       - name: Tests
         run: python3 -m unittest discover -s tests
+      - name: Build menu bar app
+        run: sh menubar/build.sh "$RUNNER_TEMP/ccx.app" "$PWD/plugins/ccx/bin/ccx" "${GITHUB_REF_NAME#v}"
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" --title "ccx - claudecodex $GITHUB_REF_NAME" --generate-notes
+        run: |
+          notes="docs/releases/${GITHUB_REF_NAME#v}.md"
+          if [ -f "$notes" ]; then
+            gh release create "$GITHUB_REF_NAME" --title "ccx $GITHUB_REF_NAME · Claude ⇄ Codex ⇄ Antigravity" --notes-file "$notes"
+          else
+            gh release create "$GITHUB_REF_NAME" --title "ccx - claudecodex $GITHUB_REF_NAME" --generate-notes
+          fi

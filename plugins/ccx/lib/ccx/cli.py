@@ -1,4 +1,4 @@
-"""ccx - claudecodex: continue the same task across Claude Code and Codex."""
+"""ccx - claudecodex: continue the same task across Claude Code, Codex and Antigravity."""
 
 from __future__ import annotations
 
@@ -8,28 +8,41 @@ import os
 import sys
 import time
 
-from . import __version__, claude, cloud, codex, install, pairs, repairs, usage
-from .common import copy_to_clipboard, DEFAULTS, NAME, OTHER, L, Session, real, set_setting, setting
-from .sync import (STATUS, continue_phrase, estimate, find_sessions, menu_data, new_claude_conversation, new_codex_conversation,
-                   transfer)
+from . import __version__, antigravity, claude, cloud, codex, install, pairs, repairs, usage
+from .common import copy_to_clipboard, DEFAULTS, NAME, OTHER, TOOLS, L, Session, names, others, real, set_setting, setting
+from .sync import STATUS, continue_phrase, default_target, estimate, find_sessions, menu_data, new_conversation, transfer
 
 
-def pick(tool: str, cwd: str, ref):
+def newest(tool: str, cwd: str):
+    """The folder's most recent session in `tool` (None when it has none)."""
+    try:
+        ss = claude.sessions(cwd) if tool == "claude" else codex.threads(cwd, limit=1) if tool == "codex" \
+            else antigravity.sessions(cwd, limit=1) if antigravity.installed() else []
+    except RuntimeError:
+        ss = []  # that app isn't installed
+    return ss[0] if ss else None
+
+
+def pick(dst: str, cwd: str, ref, src_tool=None):
+    """The session to take to `dst`: by id (whichever app it is in), else the
+    newest one in this folder among the other apps (or in `src_tool`)."""
+    froms = [src_tool] if src_tool else [t for t in others(dst)]
     if ref:
-        if cloud.is_claude(ref) if tool == "claude" else cloud.is_codex(ref):
-            return Session(tool, ref, cwd, 0, ref)  # a cloud session: transfer reads it
-        s = claude.find(ref) if tool == "claude" else codex.find(ref)
+        for tool in froms:
+            if cloud.is_claude(ref) if tool == "claude" else cloud.is_codex(ref) if tool == "codex" else False:
+                return Session(tool, ref, cwd, 0, ref)  # a cloud session: transfer reads it
+        s = pairs.locate(ref, froms)
         if not s:
-            sys.exit(f"{NAME[tool]} session {ref} not found (see `ccx ls`)")
+            sys.exit(f"{names(froms)} session {ref} not found (see `ccx ls`)")
         return s
-    ss = claude.sessions(cwd) if tool == "claude" else codex.threads(cwd, limit=1)
-    if not ss:
-        sys.exit(f"no {NAME[tool]} session in {cwd}")
-    return ss[0]
+    found = [s for s in (newest(t, cwd) for t in froms) if s]
+    if not found:
+        sys.exit(f"no {names(froms)} session in {cwd}")
+    return max(found, key=lambda s: s.mtime)
 
 
-def run_transfer(src_tool: str, sid: str, a):
-    res = transfer(src_tool, sid, open_app=not a.no_open)
+def run_transfer(src_tool: str, sid: str, a, dst=None):
+    res = transfer(src_tool, sid, open_app=not a.no_open, dst=dst)
     t = res["target"]
     if res["action"] == "linked" and t["tool"] == "codex" and not res.get("goal") and codex.hooks_trusted() is False:
         # Without the hook Codex pulls on request: have the phrase ready to paste.
@@ -39,8 +52,20 @@ def run_transfer(src_tool: str, sid: str, a):
         print(json.dumps(res, ensure_ascii=False))
     else:
         print(f"✓ {res['message']}")
-        if a.no_open:
+        if a.no_open and t["deep_link"]:
             print(f"  open: open '{t['deep_link']}'")
+
+
+def sync_apps() -> list:
+    from .sync import apps
+    return [t for t in ("codex", "claude", "antigravity") if t in apps()]
+
+
+def _codex_hooks_trusted():
+    try:
+        return codex.hooks_trusted()
+    except RuntimeError:
+        return None  # Codex isn't installed
 
 
 def _reorder(argv, commands) -> list:
@@ -62,46 +87,51 @@ def main(argv=None):
     common.add_argument("-C", dest="cwd", default=os.getcwd(), help="project folder (default: current folder)")
     common.add_argument("--no-open", action="store_true", help="import/link only, don't open the desktop app")
     common.add_argument("--json", action="store_true", help="JSON output")
-    p = argparse.ArgumentParser(prog="ccx", description="ccx - claudecodex: continue the same task across Claude Code and Codex")
+    p = argparse.ArgumentParser(prog="ccx", description="ccx - claudecodex: continue the same task across Claude Code, Codex and Antigravity")
     p.add_argument("--version", action="version", version=f"ccx - claudecodex {__version__}")
     sub = p.add_subparsers(dest="cmd")
     _add = sub.add_parser
     sub.add_parser = lambda *args, **kw: _add(*args, parents=[common], **kw)
     sub.add_parser("switch", help="(default) take this folder's most recent session to the other app")
-    for dst in ("codex", "claude"):
-        sp = sub.add_parser(f"to-{dst}", help=f"take a {NAME[OTHER[dst]]} session to {NAME[dst]} "
+    for dst in ("codex", "claude", "antigravity"):
+        sp = sub.add_parser(f"to-{dst}", help=f"take a session from another app to {NAME[dst]} "
                                               f"(import and link the first time, then open the linked one)")
-        sp.add_argument("session", nargs="?", help="session id or prefix (default: newest in this folder)")
-    ls = sub.add_parser("ls", help="list both sides' sessions and their link status")
+        sp.add_argument("session", nargs="?", help="session id or prefix, from any other app (default: newest in this folder)")
+        sp.add_argument("--from", dest="src", choices=[t for t in TOOLS if t != dst],
+                        help="the app the session is in (default: found by its id)")
+    ls = sub.add_parser("ls", help="list every app's sessions and their link status")
     ls.add_argument("-q", "--query", help="search titles in every project")
     ls.add_argument("-n", type=int, default=8)
     sub.add_parser("menu-data", help=argparse.SUPPRESS)
     sub.add_parser("cloud-signin", help="sign in to Claude Code once so its cloud sessions show up (opens Terminal)")
     inf = sub.add_parser("info", help="which app a session belongs to and whether it is linked (for integrations)")
-    inf.add_argument("session", help="Claude session id or Codex thread id")
-    ul = sub.add_parser("unlink", help="stop syncing a linked pair; both conversations are kept")
-    ul.add_argument("session", help="Claude session id or Codex thread id (either side of the pair)")
+    inf.add_argument("session", help="Claude session, Codex thread or Antigravity conversation id")
+    ul = sub.add_parser("unlink", help="stop syncing a linked conversation; every conversation is kept")
+    ul.add_argument("session", help="Claude session, Codex thread or Antigravity conversation id (any side of a link)")
+    ul.add_argument("--with", dest="other", choices=TOOLS, help="only its link with this app (default: all its links)")
     tc = sub.add_parser("call", help="run one of ccx's MCP tools from a shell (for skills used without the MCP server)")
-    tc.add_argument("host", choices=("claude", "codex"), help="the app the conversation is in")
+    tc.add_argument("host", choices=TOOLS, help="the app the conversation is in")
     tc.add_argument("tool", choices=("continue_here", "list_sessions", "send_current_session", "read_session",
                                          "unlink"))
     tc.add_argument("--session-id")
     tc.add_argument("--query")
+    tc.add_argument("--app", choices=TOOLS, help="the other app meant (default: every other app)")
+    tc.add_argument("--conversation-id", help="the calling conversation's own id (Antigravity)")
     tc.add_argument("--offset", type=int, default=0)
     sub.add_parser("usage", help="Claude's and Codex's 5-hour usage (built in, plus CodexBar, Claude Code Usage Monitor or ccusage if installed)")
     es = sub.add_parser("estimate", help=argparse.SUPPRESS)
-    es.add_argument("tool", choices=("claude", "codex"))
+    es.add_argument("tool", choices=TOOLS)
     es.add_argument("session")
-    nc = sub.add_parser("new-claude", help="open a new Claude conversation that continues a Codex thread")
-    nc.add_argument("thread")
-    nx = sub.add_parser("new-codex", help="open Codex to continue a Claude session in a new thread")
-    nx.add_argument("session")
+    es.add_argument("dst", nargs="?", choices=TOOLS)
+    for dst in TOOLS:
+        nc = sub.add_parser(f"new-{dst}", help=f"open a new {NAME[dst]} conversation that continues a session from another app")
+        nc.add_argument("session")
     cf = sub.add_parser("config", help="show or change a setting (language)")
     cf.add_argument("key", nargs="?")
     cf.add_argument("value", nargs="?")
-    st = sub.add_parser("setup", help="install or repair: plugins in both apps, menu bar icon, `ccx` command")
+    st = sub.add_parser("setup", help="install or repair: plugins in every app, menu bar icon, `ccx` command")
     st.add_argument("--dev", action="store_true", help="install the plugin from this checkout (development)")
-    up = sub.add_parser("update", help="update ccx and both apps' plugins")
+    up = sub.add_parser("update", help="update ccx and its plugin in every app")
     up.add_argument("--quiet", action="store_true")
     up.add_argument("--check", action="store_true", help="only check whether a new release is out")
     rf = sub.add_parser("_refresh", help=argparse.SUPPRESS)
@@ -117,21 +147,24 @@ def main(argv=None):
 
     try:
         if a.cmd in (None, "switch"):
-            c, x = claude.sessions(cwd), codex.threads(cwd, limit=1)
-            if not c and not x:
-                sys.exit(f"no Claude or Codex session in {cwd}")
-            src = max((ss[0] for ss in (c, x) if ss), key=lambda s: s.mtime)
+            found = [s for s in (newest(t, cwd) for t in TOOLS) if s]
+            if not found:
+                sys.exit(f"no Claude, Codex or Antigravity session in {cwd}")
+            src = max(found, key=lambda s: s.mtime)
             run_transfer(src.tool, src.id, a)
-        elif a.cmd in ("to-codex", "to-claude"):
-            src_tool = "claude" if a.cmd == "to-codex" else "codex"
-            run_transfer(src_tool, pick(src_tool, cwd, a.session).id, a)
+        elif a.cmd in ("to-codex", "to-claude", "to-antigravity"):
+            dst = a.cmd[3:]
+            src = pick(dst, cwd, a.session, a.src)
+            run_transfer(src.tool, src.id, a, dst)
         elif a.cmd == "ls":
-            for tool in ("codex", "claude"):
+            for tool in sync_apps():
                 rows = find_sessions(tool, cwd, a.query, a.n)
-                print(f"[{NAME[tool]} sessions → continue in {NAME[OTHER[tool]]}]")
+                print(f"[{NAME[tool]} sessions → continue in {names(others(tool))}]")
                 for r in rows:
                     where = f"  ({r['cwd']})" if r["other_folder"] else ""
-                    print(f"  {r['updated']}  {r['id'][:8]}  {STATUS[r['status']]:<16} {r['title']}{where}")
+                    to = " → " + ", ".join(f"{NAME[t]}{' ↻' if v['status'] == 'updated' else ''}"
+                                           for t, v in r.get("links", {}).items()) if r.get("links") else ""
+                    print(f"  {r['updated']}  {r['id'][:8]}  {STATUS[r['status']] + to:<16} {r['title']}{where}")
                 if not rows:
                     print("  (none)")
         elif a.cmd == "cloud-signin":
@@ -142,38 +175,44 @@ def main(argv=None):
         elif a.cmd == "menu-data":
             d = menu_data()
             d["version"] = __version__
-            d["codex_hook_trusted"] = codex.hooks_trusted()
+            d["codex_hook_trusted"] = _codex_hooks_trusted()
             d["needs_setup"] = install.needs_setup()
             print(json.dumps(d, ensure_ascii=False))
         elif a.cmd == "info":
-            s = claude.find(a.session) or codex.find(a.session)
+            s = pairs.locate(a.session)
             if not s:
-                sys.exit(f"no Claude session or Codex thread {a.session}")
+                sys.exit(f"no Claude session, Codex thread or Antigravity conversation {a.session}")
             st, partner = pairs.status(s)
+            lk = pairs.links(s)
             d = {"tool": s.tool, "id": s.id, "title": s.title, "cwd": s.cwd, "status": st,
-                 "linked_to": partner, "continue_in": OTHER[s.tool]}
+                 "linked_to": partner, "links": lk, "continue_in": default_target(s.tool, s.id)}
             print(json.dumps(d, ensure_ascii=False) if a.json else
-                  f"{NAME[s.tool]} · {s.title} · {STATUS[st]}" + (f" · linked to {partner}" if partner else ""))
+                  f"{NAME[s.tool]} · {s.title} · {STATUS[st]}"
+                  + ("".join(f" · linked to {NAME[t]} {v['id']}" for t, v in lk.items()) if len(lk) > 1
+                     else f" · linked to {partner}" if partner else ""))
         elif a.cmd == "unlink":
-            s = claude.find(a.session) or codex.find(a.session)
+            s = pairs.locate(a.session)
             if not s and cloud.is_codex(a.session) and pairs.find("codex", a.session):
                 t = cloud.codex_task(a.session)  # a Codex Cloud task has no local thread
                 s = Session("codex", a.session, pairs.find("codex", a.session)["codex"]["cwd"], 0,
                             t["title"] if t else a.session)
             if not s:
-                sys.exit(f"no Claude session or Codex thread {a.session}")
-            gone = pairs.unlink(s.tool, s.id)
+                sys.exit(f"no Claude session, Codex thread or Antigravity conversation {a.session}")
+            gone = pairs.unlink(s.tool, s.id, a.other)
+            partners = [pairs.partner_tool(g, s.tool) for g in gone]
             if a.json:
                 print(json.dumps({"unlinked": bool(gone), "tool": s.tool, "id": s.id,
-                                  "partner": gone[OTHER[s.tool]]["id"] if gone else None}))
+                                  "partner": gone[0][partners[0]]["id"] if gone else None,
+                                  "partners": {t: g[t]["id"] for t, g in zip(partners, gone)}}))
             else:
-                other = NAME[OTHER[s.tool]]
-                print(L(f"✓ Unlinked “{s.title}” from {other}. Both conversations are kept; they no longer sync.",
-                        f"✓ 已取消“{s.title}”与 {other} 的关联。两边的对话都保留，之后不再同步。") if gone
+                other = names(partners) if gone else names([a.other] if a.other else others(s.tool))
+                print(L(f"✓ Unlinked “{s.title}” from {other}. Every conversation is kept; they no longer sync.",
+                        f"✓ 已取消“{s.title}”与 {other} 的关联。各边的对话都保留，之后不再同步。") if gone
                       else L(f"“{s.title}” isn't linked; nothing to unlink.", f"“{s.title}”没有关联，无需取消。"))
         elif a.cmd == "call":
             from . import mcp_server
-            args = {"cwd": cwd, "session_id": a.session_id, "query": a.query, "offset": a.offset}
+            args = {"cwd": cwd, "session_id": a.session_id, "query": a.query, "offset": a.offset, "app": a.app,
+                    "conversation_id": a.conversation_id or os.environ.get("ANTIGRAVITY_CONVERSATION_ID")}
             print(mcp_server.call(a.host, a.tool, {k: v for k, v in args.items() if v is not None}))
         elif a.cmd == "usage":
             u = usage.usage()
@@ -189,15 +228,12 @@ def main(argv=None):
                     resets = time.strftime("%H:%M", time.localtime(w["resets_at_epoch"])) if w["resets_at_epoch"] else "?"
                     print(f"{NAME[tool]} {'weekly' if w.get('window') == 'weekly' else '5-hour'} window: {pct} used, resets {resets} ({w['level']}, from {w['source']})")
         elif a.cmd == "estimate":
-            print(json.dumps(estimate(a.tool, a.session)))
-        elif a.cmd == "new-claude":
-            new_claude_conversation(a.thread)
-            print("✓ " + L("Opened a new Claude conversation with the prompt filled in. Dismiss this dialog, then send it in Claude to continue.",
-                           "已打开一个新的 Claude 对话，接着干的指令已填入输入框。关闭此提示后，在 Claude 里点击发送即可继续。"))
-        elif a.cmd == "new-codex":
-            new_codex_conversation(a.session)
-            print("✓ " + L("Opened a new Codex conversation with the prompt filled in. Dismiss this dialog, then send it in Codex to continue.",
-                           "已打开一个新的 Codex 对话，接着干的指令已填入输入框。关闭此提示后，在 Codex 里点击发送即可继续。"))
+            print(json.dumps(estimate(a.tool, a.session, a.dst)))
+        elif a.cmd in ("new-claude", "new-codex", "new-antigravity"):
+            app = NAME[a.cmd[4:]]
+            new_conversation(a.cmd[4:], a.session)
+            print("✓ " + L(f"Opened a new {app} conversation with the prompt filled in. Dismiss this dialog, then send it in {app} to continue.",
+                           f"已打开一个新的 {app} 对话，接着干的指令已填入输入框。关闭此提示后，在 {app} 里点击发送即可继续。"))
         elif a.cmd == "config":
             if a.key and a.value is not None:
                 v = {"true": True, "on": True, "false": False, "off": False}.get(a.value.lower(), a.value)
@@ -221,6 +257,8 @@ def main(argv=None):
             sys.exit(install.doctor())
         elif a.cmd == "repair":
             for pair in pairs.load():
+                if "codex" not in pair:
+                    continue
                 side = pair["codex"]
                 codex.ensure_thread_project(side["id"], side["cwd"])
                 status = repairs.prepare(side["id"])

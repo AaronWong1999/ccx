@@ -1,4 +1,5 @@
-// ccx - claudecodex menu bar app: one click to continue a session in the other app.
+// ccx - claudecodex menu bar app: one click to continue a session in another app
+// (Claude, Codex, Antigravity).
 // All the work is done by the `ccx` command; this is only the clickable surface.
 
 import AppKit
@@ -23,12 +24,23 @@ func L(_ en: String, _ zh: String) -> String {
     UserDefaults.standard.string(forKey: "language") == "zh" ? zh : en
 }
 
+/// One link of a session: its conversation in another app, and whether that one
+/// is still missing some of this session's progress.
+struct Link: Decodable {
+    let id: String
+    let status: String  // linked | updated
+}
+
+let appNames = ["claude": "Claude", "codex": "Codex", "antigravity": "Antigravity"]
+func appName(_ key: String) -> String { appNames[key] ?? key }
+
 struct Row: Decodable {
     let id: String
     let title: String
     let updated: String
     let status: String  // new | linked | updated | mirror
     let linked_to: String?
+    let links: [String: Link]?    // by app: where this session is already linked
     let cwd: String
     let partner_tokens: Int?      // Codex rows: size of the linked Claude conversation
     let partner_idle_min: Int?    // … and how long it has been idle
@@ -42,6 +54,9 @@ struct Project: Decodable {
     let updated: String
     let codex: [Row]
     let claude: [Row]
+    let antigravity: [Row]?
+
+    func rows(_ app: String) -> [Row] { app == "claude" ? claude : app == "codex" ? codex : (antigravity ?? []) }
 }
 
 struct CloudOther: Decodable {
@@ -51,6 +66,7 @@ struct CloudOther: Decodable {
 
 struct MenuData: Decodable {
     let projects: [Project]
+    let apps: [String]?           // the apps ccx moves conversations between here; three with Antigravity
     let cloud_other: CloudOther?  // cloud sessions with no local checkout of their repository
     let claude_cloud_signin: Bool? // Claude Code's CLI isn't signed in, so its cloud sessions can't be listed
     let version: String?
@@ -103,6 +119,14 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
         return NSHomeDirectory() + "/.local/bin/ccx"
     }
 
+    /// Claude and Codex, plus Antigravity once its desktop app is used on this Mac.
+    var apps: [String] { data?.apps ?? ["claude", "codex"] }
+    var threeWay: Bool { apps.count > 2 }
+    var allApps: String {
+        let n = apps.map(appName)
+        return n.count > 2 ? L("\(n[0]), \(n[1]) and \(n[2])", "\(n[0])、\(n[1]) 和 \(n[2])") : L("\(n[0]) and \(n[1])", "\(n[0]) 和 \(n[1])")
+    }
+
     var version: String {
         data?.version ?? (Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "")
     }
@@ -118,7 +142,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let bundleVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""
         if let last = defaults.string(forKey: "lastVersion"), last != bundleVersion, !bundleVersion.isEmpty {
             notify(L("ccx updated to \(bundleVersion)", "ccx 已更新到 \(bundleVersion)"),
-                   L("Claude and Codex pick up the new plugin in new conversations.", "Claude 和 Codex 会在新对话里使用新版插件。"))
+                   L("\(allApps) pick up the new plugin in new conversations.", "\(allApps) 会在新对话里使用新版插件。"))
         }
         defaults.set(bundleVersion, forKey: "lastVersion")
         item.button?.toolTip = "ccx - claudecodex"
@@ -274,7 +298,8 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
         i.attributedTitle = s
         // The same row data a click on that session in its project submenu carries.
         let r = data?.projects.flatMap { sw.from == "claude" ? $0.claude : $0.codex }.first { $0.id == sw.session.id }
-        i.representedObject = ["from": sw.from, "id": sw.session.id, "tokens": String(r?.partner_tokens ?? 0),
+        i.representedObject = ["from": sw.from, "to": sw.from == "claude" ? "codex" : "claude",
+                               "id": sw.session.id, "tokens": String(r?.partner_tokens ?? 0),
                                "idle": String(r?.partner_idle_min ?? 0), "own": String(r?.own_tokens ?? 0),
                                "linked": r?.linked_to == nil ? "0" : "1", "title": sw.session.title]
         return i
@@ -288,7 +313,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
         setupTried.formUnion(todo)
         run(["_refresh", "--quiet"]) { code, _, _ in
             if code == 0 {
-                let names = todo.map { $0 == "claude" ? "Claude" : "Codex" }.joined(separator: " & ")
+                let names = todo.map(appName).joined(separator: " & ")
                 self.notify("ccx", L("ccx is now set up in \(names).", "ccx 已在 \(names) 里装好。"))
             }
             self.refresh()
@@ -337,7 +362,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
             self.busy = false
             self.setIcon(busy: false)
             if code == 0 {
-                if announce { self.notify(L("ccx updated to \(latest)", "ccx 已更新到 \(latest)"), L("Claude and Codex pick up the new plugin in new conversations.", "Claude 和 Codex 会在新对话里使用新版插件。")) }
+                if announce { self.notify(L("ccx updated to \(latest)", "ccx 已更新到 \(latest)"), L("\(self.allApps) pick up the new plugin in new conversations.", "\(self.allApps) 会在新对话里使用新版插件。")) }
                 self.release = nil
             } else {
                 self.notify(L("ccx update failed", "ccx 更新失败"), (err + out).trimmingCharacters(in: .whitespacesAndNewlines))
@@ -371,7 +396,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
             .font: NSFont.systemFont(ofSize: 11), .foregroundColor: NSColor.secondaryLabelColor]))
         title.append(NSAttributedString(string: "@aaron0x10", attributes: [
             .font: NSFont.systemFont(ofSize: 11), .foregroundColor: NSColor.linkColor]))
-        title.append(NSAttributedString(string: "\n" + L("Sync task context between Claude and Codex.", "在 Claude 和 Codex 之间同步任务上下文。"),
+        title.append(NSAttributedString(string: "\n" + L("Sync task context between \(allApps).", "在 \(allApps) 之间同步任务上下文。"),
                                         attributes: [.font: NSFont.systemFont(ofSize: NSFont.smallSystemFontSize),
                                                      .foregroundColor: NSColor.secondaryLabelColor]))
         head.attributedTitle = title
@@ -395,7 +420,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 menu.addItem(action(L("History repair pending…", "历史修复待完成…"), #selector(historyRepairInfo), symbol: "exclamationmark.triangle"))
             }
             if d.projects.isEmpty {
-                menu.addItem(caption(L("No Claude or Codex sessions yet", "还没有 Claude 或 Codex 会话")))
+                menu.addItem(caption(L("No sessions yet", "还没有会话")))
             } else {
                 menu.addItem(caption(L("RECENT PROJECTS", "最近的项目")))
                 for p in d.projects { menu.addItem(projectItem(p)) }
@@ -479,7 +504,8 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let it = NSMenuItem(title: name, action: nil, keyEquivalent: "")
         it.image = NSImage(systemSymbolName: "folder", accessibilityDescription: nil)
         it.toolTip = p.cwd
-        let pending = (p.codex + p.claude).contains { $0.status == "updated" }
+        let all = apps.flatMap { p.rows($0) }
+        let pending = all.contains { $0.status == "updated" }
         if pending {
             let t = NSMutableAttributedString(string: name)
             t.append(NSAttributedString(string: "  ↻", attributes: [.foregroundColor: NSColor.controlAccentColor]))
@@ -487,29 +513,51 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         let sub = NSMenu()
         sub.autoenablesItems = false
-        sub.addItem(caption(L("Transfer to Claude · from Codex", "传输到 Claude · 来自 Codex")))
-        if p.codex.isEmpty { sub.addItem(caption(L("No Codex threads", "没有 Codex 会话"))) }
-        for r in p.codex { sub.addItem(sessionItem(r, from: "codex")) }
-        sub.addItem(.separator())
-        sub.addItem(caption(L("Transfer to Codex · from Claude", "传输到 Codex · 来自 Claude")))
-        if p.claude.isEmpty { sub.addItem(caption(L("No Claude sessions", "没有 Claude 会话"))) }
-        for r in p.claude { sub.addItem(sessionItem(r, from: "claude")) }
+        if threeWay {
+            // Three apps: every session opens a small menu of where it can go, with the
+            // state of each link, so one glance says who is linked to whom.
+            for (n, app) in apps.enumerated() {
+                if n > 0 { sub.addItem(.separator()) }
+                sub.addItem(caption(L("\(appName(app)) · pick one to continue it elsewhere", "\(appName(app)) · 选一个，去别处接着干")))
+                let rows = p.rows(app)
+                if rows.isEmpty { sub.addItem(caption(L("No \(appName(app)) conversations here", "这里没有 \(appName(app)) 会话"))) }
+                for r in rows { sub.addItem(sessionMenu(r, from: app)) }
+            }
+        } else {
+            sub.addItem(caption(L("Transfer to Claude · from Codex", "传输到 Claude · 来自 Codex")))
+            if p.codex.isEmpty { sub.addItem(caption(L("No Codex threads", "没有 Codex 会话"))) }
+            for r in p.codex { sub.addItem(sessionItem(r, from: "codex")) }
+            sub.addItem(.separator())
+            sub.addItem(caption(L("Transfer to Codex · from Claude", "传输到 Codex · 来自 Claude")))
+            if p.claude.isEmpty { sub.addItem(caption(L("No Claude sessions", "没有 Claude 会话"))) }
+            for r in p.claude { sub.addItem(sessionItem(r, from: "claude")) }
+        }
         // One way out of a link: ccx forgets the pair, both conversations stay.
-        let fromClaude = p.claude.filter { $0.linked_to != nil }
-        let claudeIDs = Set(fromClaude.map { $0.id })
-        let fromCodex = p.codex.filter { $0.linked_to.map { !claudeIDs.contains($0) } ?? false }
-        if !fromClaude.isEmpty || !fromCodex.isEmpty {
+        var seen = Set<String>()
+        var linksShown: [(id: String, other: String, label: String)] = []
+        for app in apps {
+            for r in p.rows(app) {
+                for (other, link) in (r.links ?? [:]).sorted(by: { $0.key < $1.key }) {
+                    let key = [r.id, link.id].sorted().joined(separator: "|")
+                    if seen.contains(key) { continue }
+                    seen.insert(key)
+                    let partner = p.rows(other).first { $0.id == link.id }?.title ?? L("\(appName(other)) conversation", "\(appName(other)) 对话")
+                    let label = threeWay
+                        ? "\(appName(app)) · \(short(r.title, 22))  ⇄  \(appName(other)) · \(short(partner, 22))"
+                        : app == "claude" ? "\(short(r.title, 28))  ⇄  \(short(partner, 28))" : "\(short(partner, 28))  ⇄  \(short(r.title, 28))"
+                    linksShown.append((r.id, other, label))
+                }
+            }
+        }
+        if !linksShown.isEmpty {
             sub.addItem(.separator())
             let un = NSMenuItem(title: L("Unlink", "取消关联"), action: nil, keyEquivalent: "")
             un.image = NSImage(systemSymbolName: "scissors", accessibilityDescription: nil)
             let pick = NSMenu()
             pick.autoenablesItems = false
-            let pairsShown = fromClaude.map { r in (r, p.codex.first { $0.id == r.linked_to }?.title ?? L("Codex conversation", "Codex 对话"), true) }
-                + fromCodex.map { r in (r, L("Claude conversation", "Claude 对话"), false) }
-            for (r, partner, claudeFirst) in pairsShown {
-                let label = claudeFirst ? "\(short(r.title, 28))  ⇄  \(short(partner, 28))" : "\(short(partner, 28))  ⇄  \(short(r.title, 28))"
-                let i = action(label, #selector(unlinkClicked(_:)))
-                i.representedObject = r.id
+            for l in linksShown {
+                let i = action(l.label, #selector(unlinkClicked(_:)))
+                i.representedObject = [l.id, l.other]
                 i.toolTip = L("Stop syncing these two. Both conversations are kept; transferring again links them afresh.",
                               "不再同步这两个对话。两边都保留；再次传输会重新关联。")
                 pick.addItem(i)
@@ -519,6 +567,46 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         it.submenu = sub
         return it
+    }
+
+    /// A session with a menu of the other apps: "Continue in Codex", "Continue in
+    /// Antigravity", each showing whether that link exists and is up to date.
+    func sessionMenu(_ r: Row, from: String) -> NSMenuItem {
+        let cloud = r.cloud ?? false
+        // A Codex Cloud task only comes down into Claude: nothing to choose.
+        if cloud && from == "codex" { return sessionItem(r, from: from) }
+        let i = sessionItem(r, from: from)
+        i.action = nil
+        i.toolTip = r.title
+        let sub = NSMenu()
+        sub.autoenablesItems = false
+        for to in apps where to != from {
+            let link = r.links?[to]
+            let glyph = link == nil ? "○" : link!.status == "updated" ? "↻" : "✓"
+            let state = link == nil ? L("first time: imports it and links the two", "首次：导入并关联")
+                : link!.status == "updated" ? L("linked · new progress goes along", "已关联 · 会带上新进展")
+                : L("linked · in sync", "已关联 · 已同步")
+            let t = NSMenuItem(title: "", action: #selector(sessionClicked(_:)), keyEquivalent: "")
+            t.target = self
+            t.isEnabled = !busy
+            t.representedObject = ["from": from, "to": to, "id": r.id, "tokens": String(to == "antigravity" || from == "antigravity" ? 0 : (r.partner_tokens ?? 0)),
+                                   "idle": String(r.partner_idle_min ?? 0), "own": String(r.own_tokens ?? 0),
+                                   "linked": link == nil ? "0" : "1", "title": r.title]
+            let s = NSMutableAttributedString(string: "\(glyph)  " + L("Continue in \(appName(to))", "去 \(appName(to)) 接着干"),
+                                              attributes: [.font: NSFont.menuFont(ofSize: 0)])
+            s.append(NSAttributedString(string: "   \(state)", attributes: [
+                .font: NSFont.menuFont(ofSize: NSFont.smallSystemFontSize), .foregroundColor: NSColor.secondaryLabelColor]))
+            t.attributedTitle = s
+            t.toolTip = to == "antigravity" && link == nil
+                ? L("Starts a new Antigravity conversation in this project with the condensed conversation; Antigravity answers once to confirm. They stay in sync from then on.",
+                    "在 Antigravity 的这个项目下新开一个对话，带上压缩后的对话内容；Antigravity 会回复一句确认。之后两边自动同步。")
+                : link == nil
+                ? L("Import into \(appName(to)) and link the two; they stay in sync from then on", "导入到 \(appName(to)) 并关联，之后两边自动同步")
+                : L("Open the linked \(appName(to)) conversation; your next message there brings the new progress", "打开 \(appName(to)) 里关联的会话；在那边发一句话就会带上新进展")
+            sub.addItem(t)
+        }
+        i.submenu = sub
+        return i
     }
 
     /// Cloud sessions whose repository isn't checked out here; they import into the home folder.
@@ -547,7 +635,8 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if r.status == "mirror" { title += L("  (imported copy)", "  （导入的副本）") }
         let i = NSMenuItem(title: "", action: #selector(sessionClicked(_:)), keyEquivalent: "")
         i.target = self
-        i.representedObject = ["from": from, "id": r.id, "tokens": String(r.partner_tokens ?? 0),
+        i.representedObject = ["from": from, "to": from == "claude" ? "codex" : "claude", "id": r.id,
+                               "tokens": String(r.partner_tokens ?? 0),
                                "idle": String(r.partner_idle_min ?? 0), "own": String(r.own_tokens ?? 0),
                                "linked": r.linked_to == nil ? "0" : "1", "title": r.title]
         let s = NSMutableAttributedString(string: "\(glyph)  \(title)", attributes: [
@@ -580,8 +669,8 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 "Codex 仍占用旧导入会话。方便时退出 Codex；ccx 每分钟自动重试。待此提示消失后再打开 Codex。"))
     }
 
-    /// `--click <codex|claude> <session id>` runs exactly what clicking that session in
-    /// the menu runs, prints the outcome instead of showing it, and exits (for tests).
+    /// `--click <codex|claude|antigravity> <session id> [--to <app>]` runs exactly what
+    /// clicking that session (and, with three apps, its target) in the menu runs, prints the outcome instead of showing it, and exits (for tests).
     var clickTest: Bool { CommandLine.arguments.contains("--click") }
 
     func runClickTest() {
@@ -589,12 +678,15 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // Use the same row data a real click carries (size and idle time of the partner).
         run(["menu-data"]) { _, out, _ in
             var obj = ["from": a[i + 1], "id": a[i + 2]]
+            let to = a.firstIndex(of: "--to").map { a[$0 + 1] } ?? (a[i + 1] == "claude" ? "codex" : "claude")
+            obj["to"] = to
             if let d = try? JSONDecoder().decode(MenuData.self, from: Data(out.utf8)),
-               let r = d.projects.flatMap({ $0.codex + $0.claude }).first(where: { $0.id == a[i + 2] }) {
-                obj["tokens"] = String(r.partner_tokens ?? 0)
+               let r = d.projects.flatMap({ $0.codex + $0.claude + ($0.antigravity ?? []) }).first(where: { $0.id == a[i + 2] }) {
+                let agy = to == "antigravity" || a[i + 1] == "antigravity"
+                obj["tokens"] = String(agy ? 0 : (r.partner_tokens ?? 0))
                 obj["idle"] = String(r.partner_idle_min ?? 0)
                 obj["own"] = String(r.own_tokens ?? 0)
-                obj["linked"] = r.linked_to == nil ? "0" : "1"
+                obj["linked"] = (r.links?[to] == nil && !(r.links == nil && r.linked_to != nil)) ? "0" : "1"
             }
             let item = NSMenuItem()
             item.representedObject = obj
@@ -652,7 +744,8 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc func sessionClicked(_ sender: NSMenuItem) {
         guard let o = sender.representedObject as? [String: String], let from = o["from"], let id = o["id"] else { return }
-        let dst = from == "codex" ? "Claude" : "Codex"
+        let to = o["to"] ?? (from == "claude" ? "codex" : "claude")
+        let dst = appName(to)
         // tokens/idle describe the linked conversation on the other side (the target).
         let tokens = Int(o["tokens"] ?? "") ?? 0, idle = Int(o["idle"] ?? "") ?? 0
         let own = Int(o["own"] ?? "") ?? 0, linked = o["linked"] == "1"
@@ -661,11 +754,12 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // 1. The target conversation is huge and idle past its cache lifetime: the next
         //    message there re-reads all of it, however little this transfer adds.
         // 2. An unlinked long Claude session: a full import makes Codex read all of it.
-        let stale = tokens >= (from == "codex" ? 250_000 : 150_000) && idle >= 55
-        let est = stale || (from == "claude" && !linked && own >= 50_000) ? estimate(from, id) : [:]
+        //    (Both only between Claude and Codex: Antigravity always gets or gives the condensed conversation.)
+        let stale = tokens >= (from == "codex" ? 250_000 : 150_000) && idle >= 55 && to != "antigravity" && from != "antigravity"
+        let est = stale || (from == "claude" && to == "codex" && !linked && own >= 50_000) ? estimate(from, id) : [:]
         let full = est["full"] ?? 0, small = max(est["condensed"] ?? 0, 1000)
         let n = est["pending"] ?? 0, added = est["pending_tokens"] ?? 0
-        let fullImport = !stale && from == "claude" && !linked && full >= 100_000
+        let fullImport = !stale && from == "claude" && to == "codex" && !linked && full >= 100_000
         if stale || fullImport {
             let k = { (t: Int) in "\(max(1, (t + 500) / 1000))k" }
             let title: String, msg: String
@@ -699,15 +793,15 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 default: choice = "open"
                 }
             }
-            if choice == "new" { work([from == "codex" ? "new-claude" : "new-codex", id], title: "", showOutput: false, notifyResult: true); return }
+            if choice == "new" { work(["new-\(to)", id], title: "", showOutput: false, notifyResult: true); return }
             if choice == "cancel" { if clickTest { exit(0) }; return }
         }
-        work([from == "codex" ? "to-claude" : "to-codex", id, "--json"], title: "", showOutput: false, notifyResult: true)
+        work(["to-\(to)", id, "--from", from, "--json"], title: "", showOutput: false, notifyResult: true)
     }
 
     @objc func unlinkClicked(_ sender: NSMenuItem) {
-        guard let id = sender.representedObject as? String else { return }
-        work(["unlink", id], title: "", showOutput: false, notifyResult: true)
+        guard let o = sender.representedObject as? [String], o.count == 2 else { return }
+        work(["unlink", o[0], "--with", o[1]], title: "", showOutput: false, notifyResult: true)
     }
 
     @objc func updateNow() { if let l = release?.latest { install(l, announce: true) } }
@@ -778,11 +872,11 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func dump(_ m: NSMenu, _ depth: Int) {
         if depth == 0 { print("status item visible: \(item.button?.window?.isVisible ?? false)") }
-        for (n, i) in m.items.enumerated() {
+        for i in m.items {
             let t = i.isSeparatorItem ? "────" : (i.attributedTitle?.string ?? i.title)
             let st = i.state == .on ? "[on] " : ""
             print(String(repeating: "  ", count: depth) + st + t + (i.isEnabled ? "" : "  [disabled]"))
-            if let sub = i.submenu, depth == 0, n < 6 { dump(sub, depth + 1) }
+            if let sub = i.submenu, depth < 2 { dump(sub, depth + 1) }
         }
     }
 }

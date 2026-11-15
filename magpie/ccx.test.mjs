@@ -42,10 +42,10 @@ test("gives two tools, each with a JSON Schema and an execute", () => {
 
 test("sessions lists the app asked for, by calling from the other side", async () => {
   expect(await call("sessions", { app: "claude" })).toContain("Fix the login bug")
-  expect(lastArgs()).toBe("call codex list_sessions --no-open")
+  expect(lastArgs()).toBe("call codex list_sessions --no-open --app claude")
   await call("sessions", { app: "codex", query: "login", cwd: "/tmp/app" })
-  expect(lastArgs()).toBe("call claude list_sessions --no-open --query login -C /tmp/app")
-  await expect(call("sessions", { app: "cursor" })).rejects.toThrow('app is "claude" or "codex"')
+  expect(lastArgs()).toBe("call claude list_sessions --no-open --app codex --query login -C /tmp/app")
+  await expect(call("sessions", { app: "cursor" })).rejects.toThrow('app is "claude", "codex" or "antigravity"')
 })
 
 test("read answers the page as JSON and pages on with offset", async () => {
@@ -57,9 +57,9 @@ test("read answers the page as JSON and pages on with offset", async () => {
     next_offset: 25,
     total_chars: 25,
   })
-  expect(lastArgs()).toBe("call codex read_session --no-open --session-id bd299fd9")
+  expect(lastArgs()).toBe("call codex read_session --no-open --app claude --session-id bd299fd9")
   await call("read", { app: "codex", session_id: "01a151c0", offset: 6000 })
-  expect(lastArgs()).toBe("call claude read_session --no-open --session-id 01a151c0 --offset 6000")
+  expect(lastArgs()).toBe("call claude read_session --no-open --app codex --session-id 01a151c0 --offset 6000")
 })
 
 test("read says what is wrong instead of guessing", async () => {

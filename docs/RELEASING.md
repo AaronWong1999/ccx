@@ -4,7 +4,8 @@
 
 **Only tags release.** Installed copies run the newest `vX.Y.Z` tag, never `main` itself, so committing and pushing to `main` reaches nobody and triggers no update notice. Both apps install the plugin from the user's local copy, so they follow the same tag. Tags must be exactly `vX.Y.Z`; anything else (for example `v0.1.0-beta`) is ignored by update checks.
 
-1. Set the same version in four places (a test checks the last one):
+1. Set the same version in five places (a test checks the last one):
+   - `package.json`
    - `plugins/ccx/lib/ccx/__init__.py`
    - `plugins/ccx/.claude-plugin/plugin.json`
    - `plugins/ccx/.codex-plugin/plugin.json`
@@ -19,7 +20,7 @@
    ```
 
    The `release` workflow checks that the tag matches the version, runs the tests, and publishes a GitHub Release.
-4. Installed copies see the new tag within a few hours (`ccx update --check` reads the repo's tags). They update themselves: fetch tags, check out the new tag, refresh both apps' plugins, re-trust ccx's Codex hook, rebuild the menu bar app. Users who turned off automatic installs get a notification and an "Update to …" menu item instead.
+4. Installed copies see the new tag within a few hours (`ccx update --check` reads the repo's tags). They update themselves: fetch tags, check out the new tag, refresh the installed apps' plugins, re-trust ccx's Codex hook, rebuild the menu bar app. Users who turned off automatic installs get a notification and an "Update to …" menu item instead.
 
 ## Why an install script and not a DMG (for now)
 
@@ -45,8 +46,8 @@ The one-line install fetches `install.sh` from `main` (`raw.githubusercontent.co
 ## Name and trademarks
 
 - The repository, plugin and app are named **ccx**; "ccx - claudecodex" is the display name.
-- Describe what it works with ("for Claude Code and Codex"), and keep the "not affiliated with Anthropic or OpenAI" line.
-- ccx only uses the apps' public plugin systems, Codex's app-server API and deep links. It reads and writes local files only and never touches accounts or credentials. Cloud sessions are read by the apps' own CLIs with their own sign-in (Claude Code's cloud-session requests over stdin, `codex cloud list/diff`).
+- Describe what it works with ("for Claude Code and Codex"), and keep the "not affiliated with Anthropic, OpenAI or Google" line.
+- ccx uses the apps' plugin systems, Codex's app-server API, deep links, and Antigravity's local service and bundled agentapi. Antigravity's local RPC is not public and may need adapting after app upgrades. It reads and writes local files only and never touches accounts or credentials. Cloud sessions are read by the apps' own CLIs with their own sign-in (Claude Code's cloud-session requests over stdin, `codex cloud list/diff`).
 
 ## Plugin directories
 

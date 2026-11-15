@@ -5,7 +5,7 @@ description: Continue, in this conversation, a task that was being worked on in 
 
 # Continue from Claude
 
-This skill uses the `ccx` command from the ccx app (github.com/aaronwong1999/ccx). If `~/.local/bin/ccx` doesn't exist, tell the user to install ccx with `curl -fsSL https://raw.githubusercontent.com/aaronwong1999/ccx/main/install.sh | sh` and stop. Run every `ccx` command below with `-C "<current working directory>"`; it reads local session files, so if the sandbox blocks it, ask to run it outside the sandbox.
+This skill uses the `ccx` command from the ccx app (github.com/aaronwong1999/ccx). If `~/.local/bin/ccx` doesn't exist, tell the user to install ccx with `curl -fsSL https://raw.githubusercontent.com/aaronwong1999/ccx/main/install.sh | sh` and stop. Run every `ccx` command below with `--app claude -C "<current working directory>"`; it reads local session files, so if the sandbox blocks it, ask to run it outside the sandbox.
 
 1. **The user named the session** (a title, some words from it, or a screenshot): run `~/.local/bin/ccx call codex continue_here --query "<name>"`. Every project is searched.
    - Pick the candidate whose title matches best and run `~/.local/bin/ccx call codex continue_here --session-id <id>`.
@@ -19,4 +19,4 @@ This skill uses the `ccx` command from the ccx app (github.com/aaronwong1999/ccx
 4. **Different folder**: if the block has a "NOTE: … folder" line, tell the user and ask whether to continue in that folder or use the progress only as reference. Never edit the other folder on your own.
 5. To get Claude's newer progress later, run step 2 again. (With the full ccx install, new progress also arrives on its own with each message.)
 
-If the user says "unlink", "stop syncing", 取消关联 or 不要同步了, run `~/.local/bin/ccx call codex unlink -C "<current working directory>"`. It forgets the link to the Claude conversation, so neither side gets the other's progress any more; both conversations are kept, and handing over again links them afresh.
+If the user says "unlink", "stop syncing", 取消关联 or 不要同步了, run `~/.local/bin/ccx call codex unlink --app claude -C "<current working directory>"`. It forgets the link to the Claude conversation, so neither side gets the other's progress any more; both conversations are kept, and handing over again links them afresh.

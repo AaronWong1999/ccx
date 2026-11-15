@@ -1,4 +1,9 @@
-"""Paired sessions (one Claude session <-> one Codex thread) and incremental sync.
+"""Paired sessions and incremental sync.
+
+A pair links two conversations of the same task in two different apps (Claude,
+Codex, Antigravity). A conversation can be in one pair per other app, so a task
+that lives in all three is three pairs: every app's progress reaches the other
+two, each exactly once.
 
 Each side of a pair has a cursor: how many of that side's units have already
 been delivered to the other side. Syncing never edits a live session; the
@@ -15,8 +20,8 @@ import subprocess
 import time
 from typing import List, Optional, Tuple
 
-from . import claude, cloud, codex
-from .common import NAME, OTHER, PLAN, STATE_DIR, TAG, Session, clip, est_tokens, folder_note, git_snapshot
+from . import antigravity, claude, cloud, codex
+from .common import NAME, OTHER, PLAN, STATE_DIR, TAG, TOOLS, Session, clip, est_tokens, folder_note, git_snapshot
 
 PAIRS = STATE_DIR / "pairs.json"
 HOOK_BUDGET = 24_000   # chars injected automatically with a prompt
@@ -39,43 +44,94 @@ def save(pairs: List[dict]):
     os.replace(tmp, PAIRS)
 
 
-def find(tool: str, sid: str) -> Optional[dict]:
-    return next((p for p in load() if p[tool]["id"] == sid), None)
+def tools_of(p: dict) -> List[str]:
+    return [t for t in TOOLS if t in p]
 
 
-def link(claude_side: dict, codex_side: dict) -> dict:
-    """Pair two sessions, replacing any pair either one was in.
+def partner_tool(p: dict, tool: str) -> str:
+    return next(t for t in tools_of(p) if t != tool)
+
+
+def find_all(tool: str, sid: str) -> List[dict]:
+    """Every pair `tool`'s session is in: at most one per other app."""
+    return [p for p in load() if tool in p and p[tool]["id"] == sid]
+
+
+def find(tool: str, sid: str, other: Optional[str] = None) -> Optional[dict]:
+    """The session's pair with `other` (any pair when not given; the usual
+    partner app first)."""
+    ps = [p for p in find_all(tool, sid) if other is None or other in p]
+    return next((p for p in ps if OTHER[tool] in p), ps[0] if ps else None)
+
+
+def link(a: dict, b: dict, tools: Tuple[str, str] = ("claude", "codex")) -> dict:
+    """Pair two sessions (of the two `tools`, in that order), replacing any pair
+    between those two apps either one was in.
     Each side: {"id", "cwd", "cursor"} (+ "size" for Codex)."""
-    pairs = [p for p in load() if p["claude"]["id"] != claude_side["id"] and p["codex"]["id"] != codex_side["id"]]
-    p = {"claude": claude_side, "codex": codex_side, "linked_at": time.time(), "synced_at": time.time()}
+    ta, tb = tools
+    pairs = [p for p in load() if not (ta in p and tb in p and (p[ta]["id"] == a["id"] or p[tb]["id"] == b["id"]))]
+    p = {ta: a, tb: b, "linked_at": time.time(), "synced_at": time.time()}
     save(pairs + [p])
     return p
 
 
-def unlink(tool: str, sid: str) -> Optional[dict]:
-    """Forget the pair `tool`'s session is in, with its cursors; both
-    conversations stay as they are. Returns the pair it removed, if any."""
+def unlink(tool: str, sid: str, other: Optional[str] = None) -> List[dict]:
+    """Forget the pairs `tool`'s session is in (only the one with `other`, when
+    given), with their cursors; every conversation stays as it is. Returns the
+    pairs it removed."""
     pairs = load()
-    gone = next((p for p in pairs if p[tool]["id"] == sid), None)
+    gone = [p for p in pairs if tool in p and p[tool]["id"] == sid and (other is None or other in p)]
     if gone:
-        save([p for p in pairs if p is not gone])
+        save([p for p in pairs if not any(p is g for g in gone)])
     return gone
 
 
-def _set_cursor(claude_id: str, side: str, cursor: int, size: Optional[int] = None,
-                updated_at: Optional[float] = None, goal_sent: Optional[str] = None):
+def _update(pair: dict, tool: str, **fields):
+    """Move one side of a pair on (cursor, and what detects the next change)."""
+    a, b = tools_of(pair)
     pairs = load()
     for p in pairs:
-        if p["claude"]["id"] == claude_id:
-            p[side]["cursor"] = cursor
-            if goal_sent is not None:
-                p[side]["goal_sent"] = goal_sent
-            if size is not None:
-                p[side]["size"] = size
-            if updated_at is not None:
-                p[side]["updated_at"] = updated_at
+        if a in p and b in p and p[a]["id"] == pair[a]["id"] and p[b]["id"] == pair[b]["id"]:
+            p[tool].update({k: v for k, v in fields.items() if v is not None})
             p["synced_at"] = time.time()
     save(pairs)
+
+
+def lookup(tool: str, sid: str) -> Optional[Session]:
+    try:
+        if tool == "claude":
+            return claude.find(sid)
+        if tool == "codex":
+            return codex.find(sid)
+        return antigravity.find(sid) if antigravity.installed() else None
+    except RuntimeError:
+        return None  # that app isn't installed
+
+
+def locate(sid: str, among=TOOLS) -> Optional[Session]:
+    """The session with this id, whichever app it belongs to (ids never collide)."""
+    for t in among:
+        s = lookup(t, sid)
+        if s:
+            return s
+    return None
+
+
+def close_triangle(a_tool: str, a_id: str, b_tool: str, b_id: str):
+    """`a` and `b` were just linked. When `a` is also linked to a conversation in
+    the third app, link that one to `b` too, so all three stay in sync. It owes
+    `b` exactly the progress it still owes `a`."""
+    third = next((t for t in TOOLS if t not in (a_tool, b_tool)), None)
+    pa = find(a_tool, a_id, third) if third else None
+    if not pa or cloud.is_claude(pa[third]["id"]) or cloud.is_codex(pa[third]["id"]):
+        return
+    if find(third, pa[third]["id"], b_tool) or find(b_tool, b_id, third):
+        return
+    try:
+        b_side = side(b_tool, b_id)
+    except RuntimeError:
+        return
+    link(dict(pa[third]), b_side, tools=(third, b_tool))
 
 
 # --------------------------------------------------------------------- goal
@@ -84,6 +140,8 @@ def goal(tool: str, sid: str) -> Optional[dict]:
     """A session's /goal, read from the app itself (never set by ccx)."""
     if tool == "codex":
         return codex.goal(sid)
+    if tool == "antigravity":
+        return None
     s = claude.find(sid)
     return claude.goal(s.path) if s and s.path else None
 
@@ -106,6 +164,9 @@ def session_units(tool: str, sid: str, include_imported: bool = False) -> Tuple[
     if tool == "claude":
         s = cloud.refresh_claude(sid) if cloud.is_claude(sid) else claude.find(sid)
         return s, (claude.units(s.path, include_imported) if s else [])
+    if tool == "antigravity":
+        s = antigravity.find(sid)
+        return s, (antigravity.units(antigravity.steps(s.id), include_imported) if s else [])
     s = codex.find(sid)
     return s, (codex.units(codex.items(sid)) if s else [])
 
@@ -168,7 +229,7 @@ def wrap(body: str, src: Session, here_cwd: str, first: bool) -> str:
 
 
 def pull(here_tool: str, here_id: str, budget: int = HOOK_BUDGET) -> Optional[dict]:
-    """The partner's progress since the last sync, or None. Advances the cursor.
+    """The partners' progress since the last sync, or None. Advances the cursors.
     Serialized across processes, so two copies of the hook (e.g. a plugin from a
     directory next to the script-installed one) never deliver the same updates twice."""
     import fcntl
@@ -179,16 +240,33 @@ def pull(here_tool: str, here_id: str, budget: int = HOOK_BUDGET) -> Optional[di
 
 
 def _pull(here_tool: str, here_id: str, budget: int) -> Optional[dict]:
-    pair = find(here_tool, here_id)
-    if not pair:
+    got, updates = [], []
+    for pair in find_all(here_tool, here_id):
+        try:
+            d = _delta(pair, here_tool, budget, updates)
+        except antigravity.Unavailable:
+            continue  # Antigravity is closed: its progress comes with a later prompt
+        if d:
+            got.append(d)
+    # Commit only after every source rendered successfully. A failure in source
+    # two must not consume source one before the hook can deliver its context.
+    for pair, other, fields in updates:
+        _update(pair, other, **fields)
+    if not got:
         return None
-    other = OTHER[here_tool]
+    return {"from": got[0]["from"], "sources": [d["from"] for d in got], "session": got[0]["session"],
+            "count": sum(d["count"] for d in got), "context": "\n\n".join(d["context"] for d in got)}
+
+
+def _delta(pair: dict, here_tool: str, budget: int, updates: list) -> Optional[dict]:
+    """One partner's new progress; moves that partner's cursor on."""
+    other = partner_tool(pair, here_tool)
     o = pair[other]
     # Rollout size is not a valid change detector for paginated history (new items
     # may live in the history DB). The thread's updatedAt is: skip the full read
     # when it hasn't moved since the last sync (and isn't from the last few seconds).
     if other == "codex" and cloud.is_codex(o["id"]):
-        return _pull_codex_task(pair, here_tool)
+        return _pull_codex_task(pair, here_tool, updates)
     if other == "codex":
         s = codex.find(o["id"])
         if not s:
@@ -196,6 +274,11 @@ def _pull(here_tool: str, here_id: str, budget: int) -> Optional[dict]:
         if o.get("updated_at") == s.mtime and time.time() - s.mtime > 5:
             return None
         us = codex.units(codex.items(s.id))
+    elif other == "antigravity":
+        s = antigravity.find(o["id"])
+        if not s or s.steps <= o["cursor"]:
+            return None  # read from Antigravity's summary table: no need for the app to run
+        us = antigravity.units(antigravity.steps(s.id))
     else:
         s, us = session_units(other, o["id"])
         if not s:
@@ -207,12 +290,12 @@ def _pull(here_tool: str, here_id: str, budget: int) -> Optional[dict]:
     # hook logs and skips this run; the next prompt must still receive it.
     result = {"from": other, "session": s.id, "count": len(new),
               "context": wrap(note + render(new, other, budget), s, pair[here_tool]["cwd"], first=False)} if new else None
-    _set_cursor(pair["claude"]["id"], other, len(us), codex.size_of(s) if other == "codex" else None,
-                s.mtime if other == "codex" else None, _goal_key(g) if new else None)
+    updates.append((pair, other, dict(cursor=len(us), size=codex.size_of(s) if other == "codex" else None,
+                   updated_at=s.mtime if other == "codex" else None, goal_sent=_goal_key(g) if new else None)))
     return result
 
 
-def _pull_codex_task(pair: dict, here_tool: str) -> Optional[dict]:
+def _pull_codex_task(pair: dict, here_tool: str, updates: list) -> Optional[dict]:
     """A Codex Cloud task's new result (a newer attempt or change) since the last sync."""
     o = pair["codex"]
     t = cloud.codex_task(o["id"])
@@ -222,24 +305,25 @@ def _pull_codex_task(pair: dict, here_tool: str) -> Optional[dict]:
     result = {"from": "codex", "session": t["id"], "count": 1,
               "context": wrap(render([("assistant", cloud.codex_task_text(t))], "codex", HOOK_BUDGET),
                               s, pair[here_tool]["cwd"], first=False)}
-    _set_cursor(pair["claude"]["id"], "codex", 0, updated_at=t["updated_at"])
+    updates.append((pair, "codex", dict(cursor=0, updated_at=t["updated_at"])))
     return result
 
 
-def continue_from(here_tool: str, here_id: str, here_cwd: str, other_id: str) -> dict:
-    """Pair this conversation with `other_id` on the other side and return that
+def continue_from(here_tool: str, here_id: str, here_cwd: str, other_id: str, other: Optional[str] = None) -> dict:
+    """Pair this conversation with `other_id` in another app and return that
     session's whole (compressed) conversation to carry on from."""
-    other = OTHER[here_tool]
+    if not other:
+        found = locate(other_id, [t for t in TOOLS if t != here_tool])
+        other = found.tool if found else ("claude" if cloud.is_claude(other_id) else OTHER[here_tool])
     if other == "claude" and cloud.is_claude(other_id) and not cloud.mirror(other_id):
         cloud.refresh_claude(other_id, here_cwd)  # first read: file it under this folder
     s, us = session_units(other, other_id)
-    # A Claude session ccx wrote from a Codex thread, not yet continued in Claude:
+    # A session ccx wrote from another app's conversation, not yet continued there:
     # its imported records are the whole conversation, so show those.
     shown = us if any(us) else session_units(other, other_id, include_imported=True)[1]
     if not s or not any(shown):
         raise RuntimeError(f"{NAME[other]} session {other_id} not found or empty")
-    here = side(here_tool, here_id) if (claude.find(here_id) if here_tool == "claude" else codex.find(here_id)) \
-        else {"id": here_id, "cwd": here_cwd, "cursor": 0}
+    here = side(here_tool, here_id) if lookup(here_tool, here_id) else {"id": here_id, "cwd": here_cwd, "cursor": 0}
     here["cwd"] = here_cwd or here["cwd"]
     if here_tool == "codex":
         # In-conversation imports stay in the current thread's own workspace.
@@ -253,38 +337,56 @@ def continue_from(here_tool: str, here_id: str, here_cwd: str, other_id: str) ->
     if other == "codex":
         there["size"], there["updated_at"] = codex.size_of(s), s.mtime
     context = wrap(goal_note(g, other) + render([u for u in shown if u], other, FULL_BUDGET), s, here["cwd"], first=True)
-    link(**({"claude_side": here, "codex_side": there} if here_tool == "claude"
-            else {"claude_side": there, "codex_side": here}))
+    link(here, there, tools=(here_tool, other))
+    close_triangle(other, s.id, here_tool, here_id)
     return {"from": other, "session": s.id, "title": s.title, "cwd": s.cwd,
             "context": context}
 
 
-def pending(tool: str, sid: str) -> Tuple[int, int]:
-    """(updates, estimated tokens) of `tool`'s progress its partner hasn't received
-    yet; the next prompt over there brings them in. Does not advance the cursor."""
-    pair = find(tool, sid)
+def pending(tool: str, sid: str, other: Optional[str] = None) -> Tuple[int, int]:
+    """(updates, estimated tokens) of `tool`'s progress its partner in `other`
+    hasn't received yet; the next prompt over there brings them in. Does not
+    advance the cursor."""
+    pair = find(tool, sid, other)
     if not pair:
         return 0, 0
     if tool == "codex":
         t = codex.find(sid)
         if not t or (pair[tool].get("updated_at") == t.mtime and time.time() - t.mtime > 5):
             return 0, 0
+    if tool == "antigravity":
+        a = antigravity.find(sid)
+        if not a or a.steps <= pair[tool]["cursor"]:
+            return 0, 0
     s, us = session_units(tool, sid)
     new = [u for u in us[pair[tool]["cursor"]:] if u] if s else []
     return len(new), (est_tokens(render(new, tool, HOOK_BUDGET)) + 500 if new else 0)
 
 
+def links(s: Session) -> dict:
+    """{other app: {"id", "status"}} for every app this session is linked in.
+    Status 'updated' means it has progress that partner hasn't received yet."""
+    out, us = {}, None
+    for pair in find_all(s.tool, s.id):
+        other, mine = partner_tool(pair, s.tool), pair[s.tool]
+        if s.tool == "antigravity":
+            # Step counts come from Antigravity's summary table: the app needn't run.
+            st = "updated" if getattr(s, "steps", 0) > mine["cursor"] else "linked"
+        elif s.tool == "codex" and mine.get("updated_at") == s.mtime and time.time() - s.mtime > 5:
+            st = "linked"
+        else:
+            if us is None:
+                us = codex.units(codex.items(s.id)) if s.tool == "codex" else (claude.units(s.path) if s.path else [])
+            st = "updated" if any(us[mine["cursor"]:]) else "linked"
+        out[other] = {"id": pair[other]["id"], "status": st}
+    return out
+
+
 def status(s: Session) -> Tuple[str, Optional[str]]:
-    """('new' | 'linked' | 'updated', partner id) for one session.
-    'updated' means it has progress its partner hasn't received yet."""
-    pair = find(s.tool, s.id)
-    if not pair:
+    """('new' | 'linked' | 'updated', partner id) for one session, over all its
+    links; the partner is the one in its usual partner app when it has several."""
+    lk = links(s)
+    if not lk:
         return "new", None
-    mine, partner = pair[s.tool], pair[OTHER[s.tool]]["id"]
-    if s.tool == "codex":
-        if mine.get("updated_at") == s.mtime and time.time() - s.mtime > 5:
-            return "linked", partner
-        us = codex.units(codex.items(s.id))
-    else:
-        us = claude.units(s.path) if s.path else []
-    return ("updated" if any(us[mine["cursor"]:]) else "linked"), partner
+    partner = (lk.get(OTHER[s.tool]) or next(iter(lk.values())))["id"]
+    return ("updated" if any(v["status"] == "updated" for v in lk.values()) else "linked"), partner

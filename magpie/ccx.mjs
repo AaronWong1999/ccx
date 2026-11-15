@@ -7,7 +7,7 @@ import { homedir } from "node:os"
 import { join } from "node:path"
 
 export const INSTALL =
-  "ccx is not installed. It needs macOS and the Claude and/or Codex desktop app. Install it with: " +
+  "ccx is not installed. It needs macOS and the Claude, Codex or Antigravity desktop app. Install it with: " +
   "curl -fsSL https://raw.githubusercontent.com/aaronwong1999/ccx/main/install.sh | sh"
 
 // CCX_BIN first (tests and custom installs), then where install.sh puts it,
@@ -33,16 +33,16 @@ export function run(args, { signal, env = process.env, timeout = 120000 } = {}) 
 }
 
 // ccx's `call <app> …` runs a tool as if from inside <app>, and lists or reads
-// the *other* app's conversations. These tools name the app whose
-// conversations they want, so they call from the opposite side.
+// another app's conversations (`--app` says which). These tools name the app
+// whose conversations they want, so they call from a different one.
 export const fromOther = (app) => {
   if (app === "claude") return "codex"
-  if (app === "codex") return "claude"
-  throw new Error('app is "claude" or "codex"')
+  if (app === "codex" || app === "antigravity") return "claude"
+  throw new Error('app is "claude", "codex" or "antigravity"')
 }
 
 export function sessionsArgs({ app, query, cwd } = {}) {
-  const a = ["call", fromOther(app), "list_sessions", "--no-open"]
+  const a = ["call", fromOther(app), "list_sessions", "--no-open", "--app", app]
   if (query !== undefined && query !== "") a.push("--query", String(query))
   if (cwd !== undefined && cwd !== "") a.push("-C", String(cwd))
   return a
@@ -50,7 +50,7 @@ export function sessionsArgs({ app, query, cwd } = {}) {
 
 export function readArgs({ app, session_id, offset } = {}) {
   if (typeof session_id !== "string" || !session_id.trim()) throw new Error("session_id is a string, from ccx_sessions")
-  const a = ["call", fromOther(app), "read_session", "--no-open", "--session-id", session_id.trim()]
+  const a = ["call", fromOther(app), "read_session", "--no-open", "--app", app, "--session-id", session_id.trim()]
   if (offset !== undefined) {
     const n = Number(offset)
     if (!Number.isInteger(n) || n < 0) throw new Error("offset is a whole number, the next_offset of the last read")

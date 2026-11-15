@@ -5,13 +5,13 @@ description: Continue, in this conversation, a task that was being worked on in 
 
 # Continue from Claude
 
-Use ccx's `continue_here` tool. Always pass the current working directory as `cwd`.
+Use ccx's `continue_here` tool. Always pass the current working directory as `cwd` and `"claude"` as `app`.
 
 1. **The user named the session** (a title, some words from it, or a screenshot):
    - Take the name from the message or read the session title in the screenshot, and call `continue_here` with it as `query` (every project is searched).
    - Pick the candidate whose title matches best and call `continue_here` again with its `session_id`.
    - If several look equally likely, let the user choose: use a choice tool if you have one; otherwise list up to 5 (number, title, updated, status, folder if different) and wait for the number.
-2. **The user did not name one** ("continue from claude", "sync"): call `continue_here` with no arguments.
+2. **The user did not name one** ("continue from claude", "sync"): call `continue_here` with only `cwd` and `app`.
    - Already linked: you get the other side's new progress.
    - Not linked yet: you get candidates; choose as in step 1.
 3. With the `<ccx-sync>` block in hand, tell the user in one sentence what came over, then **carry on with their task right here**. Treat the block as work you did yourself; the files on disk are the source of truth.
@@ -22,4 +22,4 @@ Use ccx's `continue_here` tool. Always pass the current working directory as `cw
 
 If the user only pasted some Claude output and doesn't need a link, you can also just continue from what they pasted.
 
-If the user says "unlink", "stop syncing", 取消关联 or 不要同步了, call ccx's `unlink` with the current working directory as `cwd`. It forgets the link to the Claude conversation, so neither side gets the other's progress any more; both conversations are kept, and handing over again links them afresh.
+If the user says "unlink", "stop syncing", 取消关联 or 不要同步了, call ccx's `unlink` with the current working directory as `cwd` and `"claude"` as `app`. It forgets the link to the Claude conversation, so neither side gets the other's progress any more; both conversations are kept, and handing over again links them afresh.

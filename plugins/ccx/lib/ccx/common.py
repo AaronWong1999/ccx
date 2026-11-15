@@ -1,4 +1,4 @@
-"""Small helpers shared by the Claude and Codex sides."""
+"""Small helpers shared by the Claude, Codex and Antigravity sides."""
 
 from __future__ import annotations
 
@@ -13,8 +13,24 @@ from typing import Optional
 
 HOME = Path.home()
 STATE_DIR = Path(os.environ.get("CCX_HOME", HOME / ".ccx"))
-NAME = {"claude": "Claude", "codex": "Codex"}
-OTHER = {"claude": "codex", "codex": "claude"}
+NAME = {"claude": "Claude", "codex": "Codex", "antigravity": "Antigravity"}
+TOOLS = ("claude", "codex", "antigravity")
+# Where a session goes when nobody says: Claude and Codex to each other.
+OTHER = {"claude": "codex", "codex": "claude", "antigravity": "claude"}
+
+
+def others(tool: str) -> list:
+    """The other apps a `tool` session can go to. Antigravity only counts once
+    its desktop app has been used on this Mac, so without it ccx is the same
+    two-app tool it always was."""
+    from . import antigravity
+    return [t for t in TOOLS if t != tool and (t != "antigravity" or antigravity.installed())]
+
+
+def names(tools) -> str:
+    """'Codex', 'Codex and Antigravity', 'Claude, Codex and Antigravity'."""
+    ns = [NAME[t] for t in tools]
+    return ns[0] if len(ns) == 1 else ", ".join(ns[:-1]) + " and " + ns[-1] if ns else ""
 
 SETTINGS = STATE_DIR / "settings.json"
 DEFAULTS = {"language": "en"}
@@ -51,7 +67,7 @@ TAG = "ccx-sync"
 
 @dataclass
 class Session:
-    tool: str  # "claude" | "codex"
+    tool: str  # "claude" | "codex" | "antigravity"
     id: str
     cwd: str
     mtime: float
