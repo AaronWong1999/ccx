@@ -6,7 +6,18 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 APP="${1:-$HOME/Applications/ccx.app}"
 CCX="${2:-$(cd "$HERE/.." && pwd)/plugins/ccx/bin/ccx}"
 VERSION="${3:-0.0.0}"
-TMP="$(mktemp -d)"
+mkdir -p "$(dirname "$APP")"
+TMP="$(mktemp -d "$(dirname "$APP")/.ccx-build.XXXXXX")"
+cleanup() {
+  # Compile/sign before touching the installed app. Restore it if the final
+  # same-filesystem rename fails or the update is interrupted normally.
+  if [ ! -e "$APP" ] && [ -d "$TMP/previous.app" ]; then
+    mv "$TMP/previous.app" "$APP"
+  fi
+  rm -rf "$TMP"
+}
+trap cleanup EXIT
+trap 'exit 1' HUP INT TERM
 mkdir -p "$TMP/ccx.app/Contents/MacOS" "$TMP/ccx.app/Contents/Resources"
 swiftc -O -swift-version 5 -o "$TMP/ccx.app/Contents/MacOS/ccx" "$HERE/main.swift" -framework AppKit
 cp "$HERE/AppIcon.icns" "$TMP/ccx.app/Contents/Resources/AppIcon.icns"
@@ -31,8 +42,6 @@ cat > "$TMP/ccx.app/Contents/Info.plist" <<PLIST
 </dict></plist>
 PLIST
 codesign --force -s - "$TMP/ccx.app" >/dev/null 2>&1 || true
-mkdir -p "$(dirname "$APP")"
-rm -rf "$APP"
+if [ -e "$APP" ]; then mv "$APP" "$TMP/previous.app"; fi
 mv "$TMP/ccx.app" "$APP"
-rm -rf "$TMP"
 echo "$APP"

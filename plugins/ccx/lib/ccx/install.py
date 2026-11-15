@@ -228,7 +228,8 @@ def setup_antigravity(quiet: bool = False) -> bool:
 # ------------------------------------------------------------------ menu bar
 
 def _swift_hash() -> str:
-    return hashlib.sha256((SRC / "menubar/main.swift").read_bytes() + __version__.encode()).hexdigest()[:16]
+    return hashlib.sha256((SRC / "menubar/main.swift").read_bytes() + (SRC / "menubar/build.sh").read_bytes()
+                          + str(PLUGIN_BIN).encode() + __version__.encode()).hexdigest()[:16]
 
 
 def build_menubar(quiet: bool = False, force: bool = False) -> bool:
@@ -324,11 +325,14 @@ def setup(dev: bool = False, quiet: bool = False) -> int:
     say(True, f"`ccx` command → {LINK}", quiet)
     run(["pkill", "-a", "-x", "ClaudeCodex"])  # the pre-rename menu bar app
     shutil.rmtree(HOME / "Applications/ClaudeCodex.app", ignore_errors=True)
-    if build_menubar(quiet, force=True) and not AGENT.exists():
+    menu_ok = build_menubar(quiet)
+    if menu_ok and not AGENT.exists():
         autostart(True)
     done = [n for n, ok in (("Claude", ok_claude), ("Codex", ok_codex), ("Antigravity", ok_agy)) if ok]
     if not quiet:
-        if len(done) >= 2:
+        if not menu_ok:
+            print("\nSetup is incomplete: the menu bar app could not be built. Your conversations and links are kept. Retry with `ccx setup` after fixing the error above.")
+        elif len(done) >= 2:
             print(f"\nDone. ccx is set up in {' and '.join([', '.join(done[:-1]), done[-1]])}. Start a new conversation "
                   "(or keep using an existing one) and click ⇄ in the menu bar to move a conversation to another app, "
                   f"or say “continue the <name> session from {done[0]}” in any of them.")
@@ -338,7 +342,7 @@ def setup(dev: bool = False, quiet: bool = False) -> int:
         else:
             print("\nccx is installed, but no app could be set up yet (see above). `ccx doctor` shows what's missing.")
         print(f"Like it? Star it: {REPO_URL} · follow the author for updates: https://x.com/aaron0x10")
-    return 0 if done else 1
+    return 0 if done and menu_ok else 1
 
 
 def update(quiet: bool = False) -> int:
@@ -361,13 +365,22 @@ def update(quiet: bool = False) -> int:
 
 def refresh(quiet: bool = False) -> int:
     source = marketplace_source(is_dev_checkout())
-    setup_claude(source, quiet)
-    setup_codex(source, quiet)
-    if antigravity.installed():
-        setup_antigravity(quiet)
-    build_menubar(quiet)
-    say(True, f"ccx is up to date: {__version__}", quiet)
-    return 0
+    claude_ok = setup_claude(source, quiet)
+    codex_ok = setup_codex(source, quiet)
+    agy_ok = setup_antigravity(quiet) if antigravity.installed() else True
+    menu_ok = build_menubar(quiet)
+    # Missing optional apps are fine. Failures for apps actually present are not:
+    # keep the retry visible instead of announcing a successful update.
+    claude_required = bool(claude.desktop_cli())
+    try:
+        codex.codex_bin()
+        codex_required = True
+    except RuntimeError:
+        codex_required = False
+    ok = (not claude_required or claude_ok) and (not codex_required or codex_ok) and agy_ok and menu_ok
+    say(bool(ok), f"ccx is up to date: {__version__}" if ok else
+        "Update needs attention: see the failure above. Run `ccx setup` to retry; your conversations and links are kept.", quiet)
+    return 0 if ok else 1
 
 
 def doctor() -> int:

@@ -81,7 +81,7 @@ else
   git clone --quiet "https://github.com/$REPO.git" "$DEST" ||
     { say "Could not download ccx from github.com/$REPO (no network, or the repository isn't reachable)."; exit 1; }
 fi
-TAG="$(git -C "$DEST" tag -l 'v[0-9]*' --sort=-v:refname | head -n 1)"
+TAG="$(git -C "$DEST" tag -l 'v[0-9]*' --sort=-v:refname | awk '/^v[0-9]+\.[0-9]+\.[0-9]+$/ { print; exit }')"
 [ -n "$TAG" ] || { say "No ccx release found yet at github.com/$REPO."; exit 1; }
 git -C "$DEST" checkout --quiet --force "$TAG"
 
