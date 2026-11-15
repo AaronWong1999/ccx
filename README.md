@@ -1,8 +1,8 @@
 <h1 align="center">ccx - claudecodex</h1>
 
 <p align="center">
-  <b>Hit a limit in Claude Code, Codex or Antigravity, or stuck on a bug? Let another agent take over with the context, then switch back.</b><br>
-  Claude Code、Codex 或 Antigravity 额度用完了，或者卡在某个问题上？带着上下文交给另一个 agent 接着干，搞定再切回来。
+  <b>Hit a limit in Claude Code, Codex or Antigravity? Hand the task to another agent with its context, then switch back.</b><br>
+  Claude Code、Codex 或 Antigravity 额度用完了？带着上下文换一个 agent 接着干，随时再切回来。
 </p>
 
 <p align="center">
@@ -33,7 +33,7 @@
 ccx connects **Claude Code, Codex and Antigravity** on your Mac. Move a task between their **desktop apps** with the ⇄ menu, keeping the conversation, plan and progress together. First time: import and link. Next time: continue the linked conversation with new progress. No ccx account, server or telemetry.<br>
 ccx 把 Mac 上的 **Claude Code、Codex 和 Antigravity** 连起来。通过菜单栏 ⇄ 在三个**桌面版**之间接力，对话、计划和进展一起带过去。第一次导入并关联，之后回到关联的对话就能带入新进展。不需要 ccx 账号、服务器，也不收集数据。
 
-### Claude, Codex and Gemini · 三家接力
+### Claude, Codex and Antigravity · 三家接力
 
 Gemini’s latest models make **[Antigravity](https://antigravity.google/docs/models)** another strong coding option alongside Claude Code and Codex. Want Gemini to tackle the bug, or has one app hit its limit? Hand over the task with its context instead of starting over. Claude → Codex → Antigravity → back again: use the agent and quota available to you, and keep the same task moving.<br>
 Gemini 的新模型让 **[Antigravity](https://antigravity.google/docs/models)** 成为 Claude Code 和 Codex 之外的又一个强力编程选择。想让 Gemini 换个思路解题，或者哪一家额度用完了？把任务连同上下文交过去，不必从头解释。Claude → Codex → Antigravity → 再切回来：哪边还有额度、哪边更适合，就让哪边接着干。
