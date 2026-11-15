@@ -1,8 +1,8 @@
 <h1 align="center">ccx - claudecodex</h1>
 
 <p align="center">
-  <b>Hit a limit in Claude Code, Codex or Antigravity? Hand the task to another agent with its context, then switch back.</b><br>
-  Claude Code、Codex 或 Antigravity 额度用完了？带着上下文换一个 agent 接着干，随时再切回来。
+  <b>Hit a limit in Claude Code, Codex or Antigravity, or stuck on a bug? Let another agent take over with the context, then switch back.</b><br>
+  Claude Code、Codex 或 Antigravity 额度用完了，或者卡在某个问题上？带着上下文交给另一个 agent 接着干，搞定再切回来。
 </p>
 
 <p align="center">
