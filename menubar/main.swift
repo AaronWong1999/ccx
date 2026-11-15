@@ -102,6 +102,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
     let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
     let menu = NSMenu()
     let defaults = UserDefaults.standard
+    var folderAccess: [URL] = []  // keep user-selected security scopes open while the app runs
     var data: MenuData?
     var release: Release?
     var usage: Usage?
@@ -138,6 +139,8 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func applicationDidFinishLaunching(_ n: Notification) {
         setIcon(busy: false)
+        restoreFolderAccess()
+        let firstInstall = defaults.string(forKey: "lastVersion") == nil
         // An update restarts this app, so announce it from the new copy.
         let bundleVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""
         if let last = defaults.string(forKey: "lastVersion"), last != bundleVersion, !bundleVersion.isEmpty {
@@ -150,6 +153,9 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.autoenablesItems = false
         item.menu = menu
         if clickTest { runClickTest(); return }
+        if firstInstall && !CommandLine.arguments.contains("--selftest") {
+            configureFolderAccess()
+        }
         run(["config", "language", defaults.string(forKey: "language") ?? "en"]) { _, _, _ in }
         rebuild()
         refresh()
@@ -173,6 +179,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
         DispatchQueue.global(qos: .userInitiated).async {
             let p = Process()
             p.executableURL = URL(fileURLWithPath: self.ccx)
+            p.currentDirectoryURL = FileManager.default.homeDirectoryForCurrentUser
             p.arguments = args
             let out = Pipe(), err = Pipe()
             p.standardOutput = out
@@ -192,6 +199,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
     func runNow(_ args: [String]) -> String {
         let p = Process()
         p.executableURL = URL(fileURLWithPath: ccx)
+        p.currentDirectoryURL = FileManager.default.homeDirectoryForCurrentUser
         p.arguments = args
         let out = Pipe()
         p.standardOutput = out
@@ -461,6 +469,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
         auto.state = autoInstall ? .on : .off
         menu.addItem(auto)
         menu.addItem(action(L("Check for Updates…", "检查更新…"), #selector(checkUpdate)))
+        menu.addItem(action(L("Project Folder Access…", "项目目录权限…"), #selector(configureFolderAccess), symbol: "folder.badge.gearshape"))
         menu.addItem(action(L("Diagnostics…", "诊断…"), #selector(showDoctor)))
         menu.addItem(action(L("Refresh", "刷新"), #selector(refreshClicked), key: "r"))
         menu.addItem(.separator())
@@ -815,6 +824,60 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc func checkUpdate() { checkRelease(manual: true) }
     @objc func showDoctor() { work(["doctor"], title: L("ccx diagnostics", "ccx 诊断"), showOutput: true) }
     @objc func fixHook() { work(["setup"], title: L("ccx setup", "ccx 设置"), showOutput: true) }
+    /// Ask through macOS's own folder picker, only at first install or when the
+    /// person chooses this menu item. Never from a timer or a failed retry.
+    @objc func configureFolderAccess() {
+        NSApp.activate(ignoringOtherApps: true)
+        let alert = NSAlert()
+        alert.messageText = L("Allow access to your project folders", "允许访问你的项目目录")
+        alert.informativeText = L(
+            "Choose the folder containing your projects (for example Desktop/Projects). macOS may ask for Desktop, Documents or Downloads access: allow the folders you use. Each app manages its own permissions. If you declined before, open Privacy & Security → Files and Folders, allow the relevant folder for ccx, then click Refresh. You can return here any time from ⇄ → Project Folder Access. Full Disk Access is not required.",
+            "选择存放项目的目录（例如“桌面/项目”）。macOS 如询问桌面、文稿或下载目录权限，请允许你使用的目录。各 app 的权限独立管理。如果之前拒绝了，可在“隐私与安全性 → 文件与文件夹”里允许 ccx 访问对应目录，再点“刷新”。之后随时可以从 ⇄ → 项目目录权限回来设置。无需开启完全磁盘访问。")
+        alert.addButton(withTitle: L("Choose Folders…", "选择项目目录…"))
+        alert.addButton(withTitle: L("Open Privacy Settings", "打开权限设置"))
+        alert.addButton(withTitle: L("Later", "稍后"))
+        switch alert.runModal() {
+        case .alertFirstButtonReturn:
+            let panel = NSOpenPanel()
+            panel.title = L("Choose your project folders", "选择存放项目的目录")
+            panel.prompt = L("Allow Access", "允许访问")
+            panel.canChooseFiles = false
+            panel.canChooseDirectories = true
+            panel.allowsMultipleSelection = true
+            panel.directoryURL = FileManager.default.homeDirectoryForCurrentUser
+            guard panel.runModal() == .OK else { return }
+            var saved = defaults.array(forKey: "projectFolderBookmarks") as? [Data] ?? []
+            for url in panel.urls {
+                _ = url.startAccessingSecurityScopedResource()
+                folderAccess.append(url)
+                if let bookmark = try? url.bookmarkData(options: .withSecurityScope, includingResourceValuesForKeys: nil, relativeTo: nil), !saved.contains(bookmark) {
+                    saved.append(bookmark)
+                }
+            }
+            defaults.set(saved, forKey: "projectFolderBookmarks")
+            refresh()
+        case .alertSecondButtonReturn:
+            if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_FilesAndFolders") {
+                NSWorkspace.shared.open(url)
+            }
+        default: break
+        }
+    }
+
+    func restoreFolderAccess() {
+        let saved = defaults.array(forKey: "projectFolderBookmarks") as? [Data] ?? []
+        var renewed: [Data] = []
+        for bookmark in saved {
+            var stale = false
+            guard let url = try? URL(resolvingBookmarkData: bookmark, options: [.withSecurityScope, .withoutUI], relativeTo: nil, bookmarkDataIsStale: &stale) else { continue }
+            _ = url.startAccessingSecurityScopedResource()
+            folderAccess.append(url)
+            let replacement = stale ? try? url.bookmarkData(options: .withSecurityScope, includingResourceValuesForKeys: nil, relativeTo: nil) : nil
+            renewed.append(replacement ?? bookmark)
+        }
+        defaults.set(renewed, forKey: "projectFolderBookmarks")
+    }
+
     @objc func refreshClicked() { refresh() }
     /// Explain before anything opens: the browser shouldn't pop up out of nowhere.
     @objc func cloudSignin() {

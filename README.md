@@ -49,6 +49,12 @@ ccx 现在也支持 **Antigravity** 桌面版。三个 app 之间可以任意互
 - **Two things Antigravity does differently.** It can't take history into a conversation, so a task sent there starts a new Antigravity conversation whose first message is the condensed conversation; Antigravity answers that once, with a single line. And it has no link that opens one conversation, so ccx opens the app and tells you which conversation it is (titled `⇄ …`, under the project).<br>**Antigravity 有两点不一样。** 它不能往对话里写入历史，所以传过去的任务会新开一个 Antigravity 对话，第一条消息是压缩后的对话内容，Antigravity 会回复一行确认。它也没有“打开某个对话”的链接，所以 ccx 打开 app 后会告诉你是哪一个（标题带 `⇄`，在对应项目下）。
 - **How it reads Antigravity.** Titles, folders and sync state come from Antigravity's own summary database and work with the app closed. A conversation's content is read through the app's local service, so ccx starts Antigravity in the background when it needs to read one.<br>**怎么读取 Antigravity。** 标题、目录和同步状态来自 Antigravity 自己的摘要数据库，app 关着也能读。对话内容通过 app 的本机服务读取，所以需要读某个对话而 Antigravity 没开时，ccx 会在后台把它启动。
 
+### Project folder permissions · 项目目录权限
+
+On first launch, ccx offers a macOS folder picker: select where your projects live. It saves folder bookmarks and restores them on later launches. If you declined a system prompt, choose **⇄ → Project Folder Access…** to select folders or open **Privacy & Security → Files and Folders**, then refresh. ccx never repeatedly opens its permission wizard from the background; Full Disk Access is not required. Each coding app has its own permissions. Because this release is locally built and ad-hoc signed, macOS may ask again after an update; preserving privacy grants reliably across versions requires a stable Developer ID signature.
+
+首次启动时，ccx 会引导你用系统目录选择器选取项目目录，并保存目录书签，后续启动自动恢复。如果拒绝过系统弹窗，可从 **⇄ → 项目目录权限…** 重新选择目录，或打开 **隐私与安全性 → 文件与文件夹** 修改权限，再点刷新。授权向导不会在后台反复弹出，无需完全磁盘访问。各 coding app 的权限独立。这版仍在本机编译并临时签名，更新后 macOS 可能重新询问；跨版本可靠保留授权需要固定的 Developer ID 签名。
+
 ## Install · 安装
 
 **The easy way:** paste this into Claude Code or Codex, and it installs ccx for you.<br>

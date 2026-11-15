@@ -53,6 +53,7 @@ fi
 
 say "Installing ccx - claudecodex. What you may see:"
 say "  • a macOS notice \"Background Items Added\" — that's the menu bar icon starting at login; keep it on;"
+say "  • on first launch, choose your project folders; allow Desktop/Documents access if macOS asks. You can fix a denial from ⇄ → Project Folder Access;"
 say "  • later, a request to allow notifications — allow it to see sync results;"
 say "  • in Codex, \"Trust this folder?\" the first time ccx opens a project there — that's Codex's own check."
 say ""

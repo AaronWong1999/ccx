@@ -24,6 +24,9 @@ cat > "$TMP/ccx.app/Contents/Info.plist" <<PLIST
   <key>CFBundleVersion</key><string>$VERSION</string>
   <key>LSMinimumSystemVersion</key><string>13.0</string>
   <key>LSUIElement</key><true/>
+  <key>NSDesktopFolderUsageDescription</key><string>ccx needs access to project folders on your Desktop to continue tasks between your coding apps.</string>
+  <key>NSDocumentsFolderUsageDescription</key><string>ccx needs access to project folders in Documents to continue tasks between your coding apps.</string>
+  <key>NSDownloadsFolderUsageDescription</key><string>ccx needs access to project folders in Downloads to continue tasks between your coding apps.</string>
   <key>CCXPath</key><string>$CCX</string>
 </dict></plist>
 PLIST
