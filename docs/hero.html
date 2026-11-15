@@ -1,13 +1,13 @@
 <!doctype html>
 <html><head><meta charset="utf-8">
-<!-- Source of docs/hero.png (1280x640, rendered at 2x, then scaled to 1760x880 and
-     palette-compressed to about 150 KB). Same light look as the launch video:
+<!-- Source of docs/hero.png (1280x640 layout rendered at 2x).
+     Preserves the original light three-step layout:
      "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless --hide-scrollbars \
        --force-device-scale-factor=2 --window-size=1280,640 --screenshot=docs/hero.png docs/hero.html
      Read top to bottom: the name, what it does, how to use it in three steps, where to find it. -->
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  :root { --ink: #111113; --ink2: #6E6E73; --claude: #D97757; --codex: #2F6BFF; --red: #E5484D; --green: #1F9D55;
+  :root { --ink: #111113; --ink2: #6E6E73; --claude: #D97757; --codex: #2F6BFF; --agy: #168B78; --red: #E5484D; --green: #1F9D55;
           --grad: linear-gradient(135deg, #F08A5D 0%, #A55CFF 52%, #3F7BFF 100%); --side: 64px; }
   body { width: 1280px; height: 640px; overflow: hidden; position: relative; color: var(--ink);
          font-family: -apple-system, "SF Pro Display", "SF Pro Text", "Helvetica Neue", sans-serif;
@@ -32,8 +32,8 @@
   h1 .dash { color: #A1A1A6; }
   h1 .grad { background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent; padding-bottom: 8px; }
 
-  .slogan { margin-top: 18px; text-align: center; font-size: 36px; font-weight: 600; letter-spacing: -.8px; line-height: 1.15; }
-  .slogan .c1 { color: var(--claude); } .slogan .c2 { color: var(--codex); }
+  .slogan { margin-top: 18px; text-align: center; font-size: 30px; font-weight: 600; letter-spacing: -.7px; line-height: 1.15; }
+  .slogan .c1 { color: var(--claude); } .slogan .c2 { color: var(--codex); } .slogan .c3 { color: var(--agy); }
 
   /* how to use it: three steps, each a pared-down real screen */
   .steps { margin-top: 40px; display: flex; gap: 36px; position: relative; }
@@ -81,7 +81,7 @@
   .it { display: flex; align-items: center; gap: 6px; padding: 4px 9px; border-radius: 6px; }
   .it .chev { margin-left: auto; color: #8E8E93; } .it .up { color: #0A64D8; font-weight: 700; font-size: 14px; }
   .it.sel { background: #0A64D8; color: #fff; } .it.sel .chev, .it.sel .up { color: #fff; }
-  .cursor { position: absolute; left: 236px; top: 112px; width: 30px; height: 30px; filter: drop-shadow(0 3px 5px rgba(0,0,0,.3)); z-index: 2; }
+  .cursor { position: absolute; left: 236px; top: 142px; width: 30px; height: 30px; filter: drop-shadow(0 3px 5px rgba(0,0,0,.3)); z-index: 2; }
 
   .say { margin-top: 18px; display: flex; justify-content: center; align-items: center; gap: 10px; height: 34px;
          font-size: 25px; font-weight: 700; letter-spacing: -.5px; white-space: nowrap; }
@@ -139,7 +139,7 @@
       <h1>ccx <span class="dash">-</span> <span class="grad">claudecodex</span></h1>
     </div>
 
-    <div class="slogan">Sync task context between <span class="c1">Claude</span> and <span class="c2">Codex.</span></div>
+    <div class="slogan">Sync task context: <span class="c1">Claude</span> ⇄ <span class="c2">Codex</span> ⇄ <span class="c3">Antigravity</span></div>
 
     <div class="steps">
       <div class="step">
@@ -151,7 +151,7 @@
             <div class="banner warn"><svg><use href="#alert"/></svg><span><b>Usage limit reached</b><small>Resets in 4 h 52 min</small></span></div>
           </div>
         </div>
-        <div class="say"><span class="num">1</span>Claude hits its limit</div>
+        <div class="say"><span class="num">1</span>One agent hits its limit</div>
       </div>
       <div class="step">
         <div class="win desk">
@@ -159,25 +159,25 @@
             <svg class="wifi" viewBox="0 0 20 16" fill="none" stroke="#1D1D1F" stroke-width="2" stroke-linecap="round"><path d="M2 5.5a12 12 0 0 1 16 0M5 9a7.5 7.5 0 0 1 10 0M8 12.4a3 3 0 0 1 4 0"/></svg>
             <span class="mbicon"><svg><use href="#swap"/></svg></span><span>Fri 9:41</span></div>
           <div class="menu">
-            <div class="hd">ccx - claudecodex<small>0.0.31 <u>@aaron0x10</u></small></div>
+            <div class="hd">ccx - claudecodex<small>Claude · Codex · Antigravity <u>@aaron0x10</u></small></div>
             <div class="sep"></div>
-            <div class="it sel">shop-app <span class="up">↻</span><span class="chev">›</span></div>
-            <div class="it">landing-site<span class="chev">›</span></div>
+            <div class="it">✓ Continue in Codex<span class="chev">›</span></div>
+            <div class="it sel">○ Continue in Antigravity<span class="chev">›</span></div>
           </div>
           <svg class="cursor" viewBox="0 0 28 28"><path d="M5 3.5v18.2l4.6-4.4 3 7 3.3-1.4-3-6.9h6.4z" fill="#111" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/></svg>
         </div>
-        <div class="say"><span class="num">2</span>Click ⇄ in the menu bar</div>
+        <div class="say"><span class="num">2</span>Choose the next app</div>
       </div>
       <div class="step">
         <div class="win codex">
           <div class="bar"><span class="tl r"></span><span class="tl y"></span><span class="tl g"></span>
-            <span class="t"><span class="glyph" style="background:var(--ink)"><svg><use href="#term"/></svg></span>Codex</span></div>
+            <span class="t"><span class="glyph" style="background:var(--agy)"><svg><use href="#term"/></svg></span>Antigravity · Gemini</span></div>
           <div class="in">
-            <div class="banner note"><span class="gi"><svg><use href="#swap"/></svg></span><span><b>14 updates from Claude Code</b><small>The plan, the bug, where it stopped</small></span></div>
+            <div class="banner note"><span class="gi"><svg><use href="#swap"/></svg></span><span><b>Context from Claude Code</b><small>The plan, the bug, where it stopped</small></span></div>
             <div class="done"><svg><use href="#check"/></svg>Tests pass · checkout fixed</div>
           </div>
         </div>
-        <div class="say"><span class="num">3</span>Codex picks up the task</div>
+        <div class="say"><span class="num">3</span>Gemini picks up the task</div>
       </div>
       <span class="arrow" style="left: calc((100% - 72px) / 3 + 18px - 20px)"><svg><use href="#next"/></svg></span>
       <span class="arrow" style="left: calc((100% - 72px) / 3 * 2 + 54px - 20px)"><svg><use href="#next"/></svg></span>
