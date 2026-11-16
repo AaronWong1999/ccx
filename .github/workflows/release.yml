@@ -22,13 +22,23 @@ jobs:
         run: python3 -m unittest discover -s tests
       - name: Build menu bar app
         run: sh menubar/build.sh "$RUNNER_TEMP/ccx.app" "$PWD/plugins/ccx/bin/ccx" "${GITHUB_REF_NAME#v}"
+      - name: Pack the app for download
+        run: |
+          # The app is built from source, so it carries no Developer ID
+          # signature and macOS asks the user to confirm it on first launch.
+          # That is the same trade the install script makes, so the zip is
+          # offered as the app itself rather than as a way to skip the script.
+          cd "$RUNNER_TEMP"
+          ditto -c -k --keepParent ccx.app "ccx-${GITHUB_REF_NAME#v}-macos.zip"
+          ls -l "ccx-${GITHUB_REF_NAME#v}-macos.zip"
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           notes="docs/releases/${GITHUB_REF_NAME#v}.md"
+          asset="ccx-${GITHUB_REF_NAME#v}-macos.zip"
           if [ -f "$notes" ]; then
-            gh release create "$GITHUB_REF_NAME" --title "ccx $GITHUB_REF_NAME · Claude ⇄ Codex ⇄ Antigravity" --notes-file "$notes"
+            gh release create "$GITHUB_REF_NAME" --title "ccx $GITHUB_REF_NAME · Claude ⇄ Codex ⇄ Antigravity" --notes-file "$notes" "$RUNNER_TEMP/$asset"
           else
-            gh release create "$GITHUB_REF_NAME" --title "ccx - claudecodex $GITHUB_REF_NAME" --generate-notes
+            gh release create "$GITHUB_REF_NAME" --title "ccx - claudecodex $GITHUB_REF_NAME" --generate-notes "$RUNNER_TEMP/$asset"
           fi
