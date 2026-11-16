@@ -19,7 +19,19 @@ cleanup() {
 trap cleanup EXIT
 trap 'exit 1' HUP INT TERM
 mkdir -p "$TMP/ccx.app/Contents/MacOS" "$TMP/ccx.app/Contents/Resources"
-swiftc -O -swift-version 5 -o "$TMP/ccx.app/Contents/MacOS/ccx" "$HERE/main.swift" -framework AppKit
+# The app runs on both Apple silicon and Intel Macs. A release is built on
+# whichever Mac the runner is, so it is compiled for both and the two are
+# merged; a local install is compiled for the Mac it is installed on, where
+# one slice is all it needs and half the build time.
+if [ "${CCX_UNIVERSAL:-0}" = "1" ]; then
+  swiftc -O -swift-version 5 -target arm64-apple-macos13.0 \
+    -o "$TMP/ccx-arm64" "$HERE/main.swift" -framework AppKit
+  swiftc -O -swift-version 5 -target x86_64-apple-macos13.0 \
+    -o "$TMP/ccx-x86_64" "$HERE/main.swift" -framework AppKit
+  lipo -create -output "$TMP/ccx.app/Contents/MacOS/ccx" "$TMP/ccx-arm64" "$TMP/ccx-x86_64"
+else
+  swiftc -O -swift-version 5 -o "$TMP/ccx.app/Contents/MacOS/ccx" "$HERE/main.swift" -framework AppKit
+fi
 cp "$HERE/AppIcon.icns" "$TMP/ccx.app/Contents/Resources/AppIcon.icns"
 cat > "$TMP/ccx.app/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>

@@ -21,7 +21,15 @@ jobs:
       - name: Tests
         run: python3 -m unittest discover -s tests
       - name: Build menu bar app
+        env:
+          # The runner is one architecture; the app has to run on both.
+          CCX_UNIVERSAL: "1"
         run: sh menubar/build.sh "$RUNNER_TEMP/ccx.app" "$PWD/plugins/ccx/bin/ccx" "${GITHUB_REF_NAME#v}"
+      - name: The app runs on both kinds of Mac
+        run: |
+          lipo -info "$RUNNER_TEMP/ccx.app/Contents/MacOS/ccx"
+          lipo -info "$RUNNER_TEMP/ccx.app/Contents/MacOS/ccx" | grep -q "x86_64"
+          lipo -info "$RUNNER_TEMP/ccx.app/Contents/MacOS/ccx" | grep -q "arm64"
       - name: Pack the app for download
         run: |
           # The app is built from source, so it carries no Developer ID
