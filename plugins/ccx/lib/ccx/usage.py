@@ -5,9 +5,10 @@ Built in, from what the apps themselves report on this Mac:
 - Antigravity: its local service's `RetrieveUserQuotaSummary` (the Gemini
   models' 5-hour and weekly limits), read while Antigravity is open; the last
   reading is kept for when it is closed.
-- Claude: the "You've hit your … limit · resets …" reply Claude Code writes into
-  the session file. Claude keeps no other local usage signal, so built in, ccx
-  can only tell that the limit was hit, not that it is close.
+- Claude: the 5-hour and weekly utilization Claude Code itself last fetched from
+  Anthropic and keeps in `~/.claude.json` (`cachedUsageUtilization`, for the
+  signed-in account; fresh while Claude Code is in use), and the "You've hit your
+  … limit · resets …" reply Claude Code writes into the session file.
 
 Usage tools the user already runs fill in the rest, each only when it is found,
 and only through its documented output:
@@ -57,6 +58,7 @@ CLAUDE_CONFIG = (Path(os.environ["CLAUDE_CONFIG_DIR"]) if os.environ.get("CLAUDE
 AGENT_SESSIONS_SNAPSHOT = HOME / "Library/Application Support/com.triada.AgentSessions/claude_usage_latest.json"
 NEAR = 90.0               # percent of the 5-hour window: suggest switching
 FRESH = 15 * 60           # an older state file means the monitor isn't running
+CLAUDE_CACHE_FRESH = 60 * 60  # Claude Code refreshes its own reading while it is in use
 CLI_EVERY = 5 * 60        # how often to ask a usage tool's CLI (each takes seconds)
 CODEX_EVERY = 2 * 60      # how often to ask Codex's app-server
 ANTIGRAVITY_EVERY = 2 * 60  # … and Antigravity's local service
@@ -182,6 +184,24 @@ def antigravity_app(now: float) -> Dict[str, dict]:
     if not five:
         return {}
     return {"antigravity": _window(used(five), five.get("resetTime"), "antigravity", now)}
+
+
+def claude_code(now: float) -> Dict[str, dict]:
+    """The utilization Claude Code fetched for its signed-in account (Anthropic's own
+    numbers, the ones its /usage shows). Only the account's own, and only fresh."""
+    d = _read_json(CLAUDE_CONFIG)
+    c = d.get("cachedUsageUtilization") if isinstance(d, dict) else None
+    if not isinstance(c, dict) or not isinstance(c.get("fetchedAtMs"), (int, float)):
+        return {}
+    me = (d.get("oauthAccount") or {}).get("accountUuid")
+    if me and c.get("accountUuid") and c["accountUuid"] != me:
+        return {}
+    if not 0 <= now - c["fetchedAtMs"] / 1000 < CLAUDE_CACHE_FRESH:
+        return {}
+    u = c.get("utilization") or {}
+    five, week = u.get("five_hour") or {}, u.get("seven_day") or {}
+    return _claude_window(five.get("utilization"), five.get("resets_at"), week.get("utilization"),
+                          week.get("resets_at"), "claude-code", now)
 
 
 RESETS = re.compile(r"resets (.+?)(?: \(([^)]+)\))?\s*$")
@@ -410,7 +430,7 @@ def ccusage(now: float) -> Dict[str, dict]:
 
 # Most exact first. Built in for Claude only reports a hit limit, so the tools,
 # which can also see it coming, are asked when it hasn't been hit.
-SOURCES = (codex_app, antigravity_app, claude_sessions, codexbar, abtop, claude_hud, claude_statusbar, agent_sessions, magpie, ccstatusline, ccometixline,
+SOURCES = (codex_app, antigravity_app, claude_sessions, claude_code, codexbar, abtop, claude_hud, claude_statusbar, agent_sessions, magpie, ccstatusline, ccometixline,
            claude_monitor, ccusage)
 
 
@@ -445,6 +465,10 @@ def usage(now: Optional[float] = None) -> dict:
     if not found:
         return {"available": False}
     out = {"available": True, **found}
+    # Installed, but nothing reports its usage right now: the menu says "unknown".
+    there = {"claude": lambda: claude.CLAUDE_HOME.exists(), "codex": lambda: codex.CODEX_HOME.exists(),
+             "antigravity": antigravity.installed}
+    out["unread"] = [a for a in APPS if a not in found and there[a]()]
     # The one to act on: a used-up window first, then Claude, Codex, Antigravity.
     for app in sorted((a for a in found if found[a]["level"] in ("near", "limit")),
                       key=lambda a: (found[a]["level"] != "limit", APPS.index(a))):

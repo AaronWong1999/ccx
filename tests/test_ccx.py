@@ -1177,7 +1177,7 @@ class Usage(Base):
                {"provider": "deepseek", "kind": "balance", "windows": [], "balance": "¥3"}]
         self.tool("magpie", out)
         # two Claude accounts and Claude Code's sign-in unknown: no guess
-        self.assertEqual(set(self.u.usage()) - {"available"}, {"codex"})
+        self.assertEqual(set(self.u.usage()) - {"available", "unread"}, {"codex"})
         self.write(self.u.CLAUDE_CONFIG, {"oauthAccount": {"emailAddress": "B@x.com"}})
         self.u.CACHE.unlink()
         u = self.u.usage()
@@ -1319,6 +1319,32 @@ class Usage(Base):
             self.assertEqual(antigravity.new_conversation("/tmp", "t", "hello", model="flash_lite"), "x1")
         self.assertEqual(calls, [["new-conversation", "--title=t", "--model=flash_lite", "hello"],
                                  ["new-conversation", "--title=t", "hello"]])
+
+    def claude_cache(self, five, week=0, age=60, account="acc-1"):
+        now = time.time()
+        self.u.CLAUDE_CONFIG.write_text(json.dumps({"oauthAccount": {"accountUuid": "acc-1"}, "cachedUsageUtilization": {
+            "fetchedAtMs": (now - age) * 1000, "accountUuid": account, "utilization": {
+                "five_hour": {"utilization": five, "resets_at": self.iso(now + 3600)},
+                "seven_day": {"utilization": week, "resets_at": self.iso(now + 86400)}}}}))
+
+    def test_claude_code_own_usage_reading(self):
+        self.claude_cache(3)
+        c = self.u.usage()["claude"]
+        self.assertEqual((c["level"], c["used_percentage"], c["source"]), ("ok", 3, "claude-code"))
+        self.claude_cache(93)
+        self.assertEqual(self.u.usage()["claude"]["level"], "near")
+        self.claude_cache(40, week=100)
+        self.assertEqual(self.u.usage()["claude"].get("window"), "weekly")
+        for stale in ({"age": 2 * 3600}, {"account": "someone-else"}):  # old, or another account's
+            self.claude_cache(50, **stale)
+            self.assertNotIn("claude", self.u.usage())
+
+    def test_installed_apps_without_a_reading_are_listed(self):
+        self.codex_window(10)
+        with mock.patch.object(self.u.claude, "CLAUDE_HOME", self.dir), \
+             mock.patch.object(self.u.antigravity, "installed", lambda: False):
+            u = self.u.usage()
+        self.assertEqual(u["unread"], ["claude"])
 
     def test_hooks_never_read_usage(self):
         src = (Path(__file__).resolve().parents[1] / "plugins/ccx/lib/ccx/hook.py").read_text()

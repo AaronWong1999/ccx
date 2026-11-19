@@ -223,10 +223,13 @@ def main(argv=None):
                       "Claude Code Usage Monitor or ccusage, when installed, add more.")
             for tool in usage.APPS:
                 w = None if a.json else u.get(tool)
-                if w:
+                if not a.json and tool in u.get("unread", []):
+                    print(f"{NAME[tool]}: no usage reading right now")
+                elif w:
                     pct = "?" if w["used_percentage"] is None else f"{w['used_percentage']:g}%"
                     resets = time.strftime("%H:%M", time.localtime(w["resets_at_epoch"])) if w["resets_at_epoch"] else "?"
-                    print(f"{NAME[tool]} {'weekly' if w.get('window') == 'weekly' else '5-hour'} window: {pct} used, resets {resets} ({w['level']}, from {w['source']})")
+                    left = "" if w["used_percentage"] is None else f" ({max(0, 100 - w['used_percentage']):g}% left)"
+                    print(f"{NAME[tool]} {'weekly' if w.get('window') == 'weekly' else '5-hour'} window: {pct} used{left}, resets {resets} ({w['level']}, from {w['source']})")
         elif a.cmd == "estimate":
             print(json.dumps(estimate(a.tool, a.session, a.dst)))
         elif a.cmd in ("new-claude", "new-codex", "new-antigravity"):

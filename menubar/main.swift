@@ -90,6 +90,7 @@ struct Usage: Decodable {
     let claude: Window?
     let codex: Window?
     let antigravity: Window?
+    let unread: [String]?           // installed, but nothing reports its usage right now
     let `switch`: Switch?           // the newest session of the app running out
 }
 
@@ -278,14 +279,27 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// most room left, as `ccx usage` picked it.
     func switchTarget(_ sw: Usage.Switch) -> String { sw.to ?? (sw.from == "claude" ? "codex" : "claude") }
 
-    /// "5-hour: Claude 12% · Codex 0% · Antigravity 0%": all three at a glance.
+    /// "5-hour quota left: Claude 97% · Codex 100% · Antigravity used up (back 17:00)":
+    /// all three at a glance, always as what is left, so the number can't be misread.
     func usageSummary(_ u: Usage) -> NSMenuItem? {
-        let parts = ["claude", "codex", "antigravity"].compactMap { app -> String? in
-            guard let w = window(u, app), w.level != "unknown" else { return nil }
-            let v = w.level == "limit" ? L("used up", "用完") : w.used_percentage.map { "\(Int($0.rounded()))%" } ?? "?"
+        let none = Usage.Window(level: "unknown", used_percentage: nil, resets_at_epoch: nil, window: nil)
+        let shown = ["claude", "codex", "antigravity"].compactMap { app in
+            window(u, app).map { (app, $0) } ?? ((u.unread ?? []).contains(app) ? (app, none) : nil)
+        }
+        guard shown.contains(where: { $0.1.level != "unknown" }) else { return nil }
+        let parts = shown.map { app, w -> String in
+            let v: String
+            if w.level == "limit" {
+                let back = w.resets_at_epoch == nil ? "" : L(" (back \(resetTime(w)))", "（\(resetTime(w)) 恢复）")
+                v = (w.window == "weekly" ? L("used up this week", "本周已用完") : L("used up", "已用完")) + back
+            } else if w.level == "unknown" || w.used_percentage == nil {
+                v = L("unknown", "未知")
+            } else {
+                v = "\(max(0, 100 - Int(w.used_percentage!.rounded())))%"
+            }
             return "\(appName(app)) \(v)"
         }
-        return parts.count < 2 ? nil : caption(L("5-hour: ", "5 小时额度：") + parts.joined(separator: " · "))
+        return caption(L("5-hour quota left: ", "5 小时额度剩余：") + parts.joined(separator: " · "))
     }
 
     /// Notify once when an app's 5-hour window is nearly used up and once when it is

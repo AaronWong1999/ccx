@@ -154,12 +154,12 @@ The ⇄ menu groups conversations by project and app. Choose a session, then a d
 **Cloud sessions · 云端会话:** Claude Code on the web sessions and Codex Cloud tasks show up with ☁ under the project that checks out their GitHub repository (others under **Other Cloud Sessions**). The menu lists titles only; clicking one reads just that conversation, through the app's own CLI and sign-in, and links it like any other. Cloud sessions only come down to your Mac: a Claude cloud session's new progress reaches Codex or Antigravity with your next message there, and handing that Codex conversation back makes a local Claude conversation (ccx never writes to the cloud). From a Codex Cloud task, Claude gets its status and code change (not applied; the Codex CLI doesn't expose a task's messages). If you only signed in to the Claude desktop app, pick **Show Claude Cloud Sessions (Sign In Once)…**: after a short explanation, Claude Code's own sign-in opens in your browser, usually a single click, and only once.<br>
 Claude 网页版的云端会话和 Codex Cloud 任务会带着 ☁ 出现在检出了对应 GitHub 仓库的项目下（其余的在 **其他云端会话** 里）。菜单只列标题；点哪个才通过该 app 自己的命令行和登录读取哪个，并像普通会话一样关联。云端只往本机传：Claude 云端会话的新进展会在你下次给 Codex 或 Antigravity 发消息时带过去；把那个 Codex 对话再传回来，会变成一个本机的 Claude 对话（ccx 从不往云端写）。Codex Cloud 任务带给 Claude 的是状态和代码改动（不会自动应用；Codex 命令行不提供任务的对话内容）。如果你只在 Claude 桌面版里登录过，点 **显示 Claude 云端会话（需登录一次）…**：先看到一段说明，再在浏览器里完成 Claude Code 自己的登录，通常点一下就好，只需一次。
 
-**Usage heads-up for all three apps.** The top of the ⇄ menu shows Claude's, Codex's and Antigravity's 5-hour usage side by side. The app notifies you once when one passes 90% and once when it is used up, and offers that side's newest session to continue in one click in whichever app has the most room left. Nothing to set up; it never interrupts a conversation. Check it with `ccx usage`.<br>
-**三家额度一眼看全，快用完时提前提醒。** ⇄ 菜单顶部并排显示 Claude、Codex、Antigravity 的 5 小时额度。哪家用到 90% 和用完时各通知一次，并可一键把那边最新的会话切到剩余额度最多的那一家接着干，无需任何设置。
+**Usage heads-up for all three apps.** The top of the ⇄ menu shows how much of Claude's, Codex's and Antigravity's 5-hour quota is left, side by side. The app notifies you once when one passes 90% and once when it is used up, and offers that side's newest session to continue in one click in whichever app has the most room left. Nothing to set up; it never interrupts a conversation. Check it with `ccx usage`.<br>
+**三家额度一眼看全，快用完时提前提醒。** ⇄ 菜单顶部并排显示 Claude、Codex、Antigravity 的 5 小时剩余额度。哪家用到 90% 和用完时各通知一次，并可一键把那边最新的会话切到剩余额度最多的那一家接着干，无需任何设置。
 
 ### Works with · 搭配使用
 
-Built in: Codex's own numbers (its app-server's `account/rateLimits/read`), Antigravity's own numbers (its local service's quota summary for the Gemini models, read while Antigravity is open; the last reading is kept while it is closed), and Claude Code's "You've hit your limit · resets …" reply. Claude keeps no local signal before that, so for a warning before Claude runs out, ccx also reads what these tools print or keep on disk when they are installed. It only reads, and never estimates usage itself:
+Built in: Codex's own numbers (its app-server's `account/rateLimits/read`), Antigravity's own numbers (its local service's quota summary for the Gemini models, read while Antigravity is open; the last reading is kept while it is closed), and Claude's own numbers: the 5-hour and weekly usage Claude Code fetches for your account while you use it (the same numbers its `/usage` shows), plus its "You've hit your limit · resets …" reply. When Claude Code hasn't been used for an hour, ccx also reads what these tools print or keep on disk when they are installed. It only reads, and never estimates usage itself:
 
 | Tool | What ccx reads | What you get |
 |---|---|---|
@@ -174,7 +174,7 @@ Built in: Codex's own numbers (its app-server's `account/rateLimits/read`), Anti
 | [Claude Code Usage Monitor](https://github.com/Maciek-roboblog/Claude-Code-Usage-Monitor) | its `--write-state` file, or `claude-monitor --once --output json` | Claude's 5-hour window, near and used up |
 | [ccusage](https://github.com/ccusage/ccusage) | `ccusage blocks --json --token-limit max` | a heads-up when the current block is on pace to pass your largest one |
 
-内置读取 Codex 和 Antigravity 自己报告的额度，以及 Claude Code 的撞限提示；装了上面任一工具时，Claude 快用完也会提前提醒。
+内置读取三家自己报告的额度：Codex、Antigravity，以及 Claude Code 使用时为你的账号拉取的 5 小时和每周额度（和它的 `/usage` 一致）。Claude Code 闲置超过一小时后，装了上面任一工具时也会用它们的读数。
 
 Using [CloudCLI](https://github.com/siteboon/claudecodeui)? The [ccx plugin](https://github.com/AaronWong1999/cloudcli-plugin-ccx) adds a tab for Claude / Codex usage and hands the open session between those two apps.<br>
 用 CloudCLI？[ccx 插件](https://github.com/AaronWong1999/cloudcli-plugin-ccx) 加一个标签页：显示 Claude / Codex 的额度，并在这两个 app 之间转交当前会话。
