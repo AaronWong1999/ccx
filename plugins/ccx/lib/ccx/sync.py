@@ -314,6 +314,9 @@ ANTIGRAVITY_IMPORT_NOTE = (
     "saying you have the context from {app} and are ready, then wait for the user's next message.")
 
 
+ANTIGRAVITY_ACK_MODEL = "flash_lite"
+
+
 def _import_to_antigravity(src: Session) -> str:
     _, us = pairs.session_units(src.tool, src.id, include_imported=True)
     shown = [u for u in us if u]
@@ -321,8 +324,11 @@ def _import_to_antigravity(src: Session) -> str:
         raise RuntimeError(f"this {KIND[src.tool]} has no conversation to import")
     body = pairs.wrap(pairs.goal_note(pairs.goal(src.tool, src.id), src.tool)
                       + pairs.render(shown, src.tool, pairs.FULL_BUDGET), src, src.cwd, first=True)
+    # The light model only says "got it" (seconds, not a minute on the default
+    # model); the user's next message goes to the model they picked.
     cid = antigravity.new_conversation(src.cwd, _marked(src),
-                                       body + "\n\n" + ANTIGRAVITY_IMPORT_NOTE.format(app=NAME[src.tool]))
+                                       body + "\n\n" + ANTIGRAVITY_IMPORT_NOTE.format(app=NAME[src.tool]),
+                                       model=ANTIGRAVITY_ACK_MODEL)
     antigravity.wait_idle(cid)  # its one-line reply is part of the import, not progress to send back
     return cid
 

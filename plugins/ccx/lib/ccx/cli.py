@@ -118,7 +118,7 @@ def main(argv=None):
     tc.add_argument("--app", choices=TOOLS, help="the other app meant (default: every other app)")
     tc.add_argument("--conversation-id", help="the calling conversation's own id (Antigravity)")
     tc.add_argument("--offset", type=int, default=0)
-    sub.add_parser("usage", help="Claude's and Codex's 5-hour usage (built in, plus CodexBar, Claude Code Usage Monitor or ccusage if installed)")
+    sub.add_parser("usage", help="Claude's, Codex's and Antigravity's 5-hour usage (built in, plus CodexBar, Claude Code Usage Monitor or ccusage if installed)")
     es = sub.add_parser("estimate", help=argparse.SUPPRESS)
     es.add_argument("tool", choices=TOOLS)
     es.add_argument("session")
@@ -219,9 +219,9 @@ def main(argv=None):
             if a.json:
                 print(json.dumps(u, ensure_ascii=False))
             elif not u["available"]:
-                print("No usage reading yet: Codex isn't installed and Claude hasn't hit a limit. CodexBar, "
+                print("No usage reading yet: Codex isn't installed, Antigravity hasn't been opened and Claude hasn't hit a limit. CodexBar, "
                       "Claude Code Usage Monitor or ccusage, when installed, add more.")
-            for tool in ("claude", "codex"):
+            for tool in usage.APPS:
                 w = None if a.json else u.get(tool)
                 if w:
                     pct = "?" if w["used_percentage"] is None else f"{w['used_percentage']:g}%"

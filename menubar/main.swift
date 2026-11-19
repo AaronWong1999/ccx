@@ -75,9 +75,9 @@ struct MenuData: Decodable {
     let pending_history_repairs: Int?
 }
 
-/// Claude's and Codex's 5-hour windows, read by `ccx usage` from what
-/// both apps report themselves, plus usage tools the user already has (CodexBar,
-/// Claude Code Usage Monitor, ccusage).
+/// Claude's, Codex's and Antigravity's 5-hour windows, read by `ccx usage` from
+/// what the apps report themselves, plus usage tools the user already has
+/// (CodexBar, Claude Code Usage Monitor, ccusage).
 struct Usage: Decodable {
     struct Window: Decodable {
         let level: String             // ok | near | limit | unknown
@@ -86,9 +86,10 @@ struct Usage: Decodable {
         let window: String?           // "weekly" when the weekly limit is what ran out
     }
     struct Session: Decodable { let id: String; let title: String }
-    struct Switch: Decodable { let from: String; let session: Session }
+    struct Switch: Decodable { let from: String; let to: String?; let session: Session }
     let claude: Window?
     let codex: Window?
+    let antigravity: Window?
     let `switch`: Switch?           // the newest session of the app running out
 }
 
@@ -269,21 +270,44 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
         return (L("\(name) is close to its 5-hour limit", "\(name) 快到 5 小时上限了"), used + L("resets \(at)", "\(at) 重置"))
     }
 
+    func window(_ u: Usage?, _ app: String) -> Usage.Window? {
+        app == "claude" ? u?.claude : app == "codex" ? u?.codex : u?.antigravity
+    }
+
+    /// Where the newest session of the app running out should go: the app with the
+    /// most room left, as `ccx usage` picked it.
+    func switchTarget(_ sw: Usage.Switch) -> String { sw.to ?? (sw.from == "claude" ? "codex" : "claude") }
+
+    /// "5-hour: Claude 12% · Codex 0% · Antigravity 0%": all three at a glance.
+    func usageSummary(_ u: Usage) -> NSMenuItem? {
+        let parts = ["claude", "codex", "antigravity"].compactMap { app -> String? in
+            guard let w = window(u, app), w.level != "unknown" else { return nil }
+            let v = w.level == "limit" ? L("used up", "用完") : w.used_percentage.map { "\(Int($0.rounded()))%" } ?? "?"
+            return "\(appName(app)) \(v)"
+        }
+        return parts.count < 2 ? nil : caption(L("5-hour: ", "5 小时额度：") + parts.joined(separator: " · "))
+    }
+
     /// Notify once when an app's 5-hour window is nearly used up and once when it is
     /// used up; a new window starts over.
     func usageAlert() {
-        for (key, name, other, w) in [("claude", "Claude", "Codex", usage?.claude), ("codex", "Codex", "Claude", usage?.codex)] {
+        let sw = usage?.switch
+        for key in ["claude", "codex", "antigravity"] {
+            let name = appName(key), w = window(usage, key)
+            // The app the ⇄ menu offers, or else any other with room left.
+            let room = ["claude", "codex", "antigravity"].filter { $0 != key && window(usage, $0)?.level != "limit" }
+                .sorted { (window(usage, $0)?.level == "ok" ? 0 : 1) < (window(usage, $1)?.level == "ok" ? 0 : 1) }
+            let other = sw?.from == key ? appName(switchTarget(sw!)) : room.first.map(appName) ?? ""
             guard let w = w, near(w) else { continue }
             let rank = w.level == "limit" ? 2 : 1
-            let window = String(w.resets_at_epoch ?? Int(Date().timeIntervalSince1970) / (5 * 3600))
+            let span = String(w.resets_at_epoch ?? Int(Date().timeIntervalSince1970) / (5 * 3600))
             let last = (defaults.string(forKey: "usageAlert.\(key)") ?? "").split(separator: ":").map(String.init)
-            if last.count == 2, last[0] == window, Int(last[1]) ?? 0 >= rank { continue }
-            defaults.set("\(window):\(rank)", forKey: "usageAlert.\(key)")
+            if last.count == 2, last[0] == span, Int(last[1]) ?? 0 >= rank { continue }
+            defaults.set("\(span):\(rank)", forKey: "usageAlert.\(key)")
             let t = usageText(name, w)
-            let otherOut = (key == "claude" ? usage?.codex : usage?.claude)?.level == "limit"
             let lead = t.detail.isEmpty ? "" : t.detail.prefix(1).uppercased() + t.detail.dropFirst() + L(". ", "。")
-            notify(t.title, lead + (otherOut ? L("\(other) is used up too.", "\(other) 也用完了。")
-                                             : L("Open the ⇄ menu to continue in \(other) in one click.", "打开 ⇄ 菜单，一键切到 \(other) 接着干。")))
+            notify(t.title, lead + (other.isEmpty ? L("The other apps are used up too.", "其他应用也用完了。")
+                                                  : L("Open the ⇄ menu to continue in \(other) in one click.", "打开 ⇄ 菜单，一键切到 \(other) 接着干。")))
         }
     }
 
@@ -292,11 +316,11 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
     func usageItem(_ u: Usage) -> NSMenuItem? {
         guard let sw = u.switch else {
             // Both used up: nowhere to move to, so just say when each comes back.
-            let out = [("Claude", u.claude), ("Codex", u.codex)].compactMap { n, w in w.flatMap { near($0) ? usageText(n, $0) : nil } }
+            let out = ["claude", "codex", "antigravity"].compactMap { a in window(u, a).flatMap { near($0) ? usageText(appName(a), $0) : nil } }
             return out.isEmpty ? nil : caption(out.map { $0.detail.isEmpty ? $0.title : "\($0.title) · \($0.detail)" }.joined(separator: "\n"))
         }
-        guard let w = sw.from == "claude" ? u.claude : u.codex, near(w) else { return nil }
-        let name = sw.from == "claude" ? "Claude" : "Codex", other = sw.from == "claude" ? "Codex" : "Claude"
+        guard let w = window(u, sw.from), near(w) else { return nil }
+        let to = switchTarget(sw), name = appName(sw.from), other = appName(to)
         let t = usageText(name, w)
         let i = action("", #selector(sessionClicked(_:)), symbol: "gauge.with.dots.needle.100percent")
         let s = NSMutableAttributedString(string: (t.detail.isEmpty ? t.title : "\(t.title) · \(t.detail)") + "\n", attributes: [.font: NSFont.menuFont(ofSize: 0)])
@@ -305,11 +329,12 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
                                                  .foregroundColor: NSColor.controlAccentColor]))
         i.attributedTitle = s
         // The same row data a click on that session in its project submenu carries.
-        let r = data?.projects.flatMap { sw.from == "claude" ? $0.claude : $0.codex }.first { $0.id == sw.session.id }
-        i.representedObject = ["from": sw.from, "to": sw.from == "claude" ? "codex" : "claude",
-                               "id": sw.session.id, "tokens": String(r?.partner_tokens ?? 0),
+        let r = data?.projects.flatMap { $0.rows(sw.from) }.first { $0.id == sw.session.id }
+        let ag = to == "antigravity" || sw.from == "antigravity"
+        i.representedObject = ["from": sw.from, "to": to,
+                               "id": sw.session.id, "tokens": String(ag ? 0 : (r?.partner_tokens ?? 0)),
                                "idle": String(r?.partner_idle_min ?? 0), "own": String(r?.own_tokens ?? 0),
-                               "linked": r?.linked_to == nil ? "0" : "1", "title": sw.session.title]
+                               "linked": (ag ? r?.links?[to] == nil : r?.linked_to == nil) ? "0" : "1", "title": sw.session.title]
         return i
     }
 
@@ -419,9 +444,11 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(.separator())
 
         if busy { menu.addItem(caption(L("Working…", "正在处理…"))) }
-        if let u = usage, let ui = usageItem(u) {
-            menu.addItem(ui)
-            menu.addItem(.separator())
+        if let u = usage {
+            let ui = usageItem(u), sum = usageSummary(u)
+            if let ui = ui { menu.addItem(ui) }
+            if let sum = sum { menu.addItem(sum) }
+            if ui != nil || sum != nil { menu.addItem(.separator()) }
         }
         if let d = data {
             if (d.pending_history_repairs ?? 0) > 0 {

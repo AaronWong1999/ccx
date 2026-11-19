@@ -1,7 +1,10 @@
-"""How much of the 5-hour window Claude and Codex have left. Nothing to configure.
+"""How much of the 5-hour window Claude, Codex and Antigravity have left. Nothing to configure.
 
 Built in, from what the apps themselves report on this Mac:
 - Codex: its app-server's `account/rateLimits/read` (exact percentages).
+- Antigravity: its local service's `RetrieveUserQuotaSummary` (the Gemini
+  models' 5-hour and weekly limits), read while Antigravity is open; the last
+  reading is kept for when it is closed.
 - Claude: the "You've hit your … limit · resets …" reply Claude Code writes into
   the session file. Claude keeps no other local usage signal, so built in, ccx
   can only tell that the limit was hit, not that it is close.
@@ -27,7 +30,7 @@ and only through its documented output:
   largest 5-hour block so far, not the real limit, so it never reports "limit").
 
 ccx never estimates usage itself. The menu bar app uses it to suggest moving a task
-to the other app before one runs out; hooks never look at it.
+to another app before one runs out; hooks never look at it.
 """
 
 from __future__ import annotations
@@ -41,7 +44,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Callable, Dict, Optional
 
-from . import claude, codex
+from . import antigravity, claude, codex
 from .common import HOME, STATE_DIR, which
 
 STATE_FILE = Path(os.environ.get("CCX_CLAUDE_MONITOR_STATE", HOME / ".claude-monitor/state/latest.json"))
@@ -56,6 +59,8 @@ NEAR = 90.0               # percent of the 5-hour window: suggest switching
 FRESH = 15 * 60           # an older state file means the monitor isn't running
 CLI_EVERY = 5 * 60        # how often to ask a usage tool's CLI (each takes seconds)
 CODEX_EVERY = 2 * 60      # how often to ask Codex's app-server
+ANTIGRAVITY_EVERY = 2 * 60  # … and Antigravity's local service
+APPS = ("claude", "codex", "antigravity")
 
 
 def _epoch(value) -> Optional[float]:
@@ -136,6 +141,47 @@ def codex_app(now: float) -> Dict[str, dict]:
     if five.get("usedPercent") is None:
         return {}
     return {"codex": _window(five["usedPercent"], five.get("resetsAt"), "codex", now)}
+
+
+def _last_good(name: str, value):
+    """value, remembered; or, when there is none now, the last one remembered."""
+    try:
+        cache = json.loads(CACHE.read_text())
+    except (OSError, ValueError):
+        cache = {}
+    if value:
+        cache[name] = value
+        try:
+            STATE_DIR.mkdir(parents=True, exist_ok=True)
+            CACHE.write_text(json.dumps(cache))
+        except OSError:
+            pass
+        return value
+    return cache.get(name)
+
+
+def antigravity_app(now: float) -> Dict[str, dict]:
+    """The Gemini models' limits (Antigravity's default models). Each group of
+    models shares a 5-hour and a weekly limit; a bucket at zero leaves out
+    remainingFraction, as protobuf JSON does with zeros."""
+    def read():
+        try:
+            return antigravity.rpc("RetrieveUserQuotaSummary", {}, timeout=10, launch=False).get("response")
+        except Exception:  # Antigravity closed, not installed, or signed out
+            return None
+    q = _last_good("antigravity-quota-last", _cached("antigravity-quota", ANTIGRAVITY_EVERY, now, read))
+    buckets = {}
+    for g in (q.get("groups") if isinstance(q, dict) else None) or []:
+        for b in (g.get("buckets") if isinstance(g, dict) else None) or []:
+            if isinstance(b, dict) and b.get("bucketId") in ("gemini-5h", "gemini-weekly"):
+                buckets[b["bucketId"]] = b
+    used = lambda b: round((1 - float(b.get("remainingFraction") or 0)) * 100, 1)
+    week, five = buckets.get("gemini-weekly"), buckets.get("gemini-5h")
+    if week and used(week) >= 100 and (_epoch(week.get("resetTime")) or 0) > now:
+        return {"antigravity": _window(100, week.get("resetTime"), "antigravity", now, weekly=True)}
+    if not five:
+        return {}
+    return {"antigravity": _window(used(five), five.get("resetTime"), "antigravity", now)}
 
 
 RESETS = re.compile(r"resets (.+?)(?: \(([^)]+)\))?\s*$")
@@ -364,26 +410,34 @@ def ccusage(now: float) -> Dict[str, dict]:
 
 # Most exact first. Built in for Claude only reports a hit limit, so the tools,
 # which can also see it coming, are asked when it hasn't been hit.
-SOURCES = (codex_app, claude_sessions, codexbar, abtop, claude_hud, claude_statusbar, agent_sessions, magpie, ccstatusline, ccometixline,
+SOURCES = (codex_app, antigravity_app, claude_sessions, codexbar, abtop, claude_hud, claude_statusbar, agent_sessions, magpie, ccstatusline, ccometixline,
            claude_monitor, ccusage)
 
 
 def _newest(app: str) -> Optional[dict]:
     try:
-        s = (claude.sessions() if app == "claude" else codex.threads(limit=1))[:1]
-    except Exception:  # Codex missing or busy: no shortcut, the notification still says enough
+        s = (claude.sessions() if app == "claude" else codex.threads(limit=1) if app == "codex"
+             else antigravity.sessions(limit=1))[:1]
+    except Exception:  # an app missing or busy: no shortcut, the notification still says enough
         return None
     return {"id": s[0].id, "title": s[0].title, "cwd": s[0].cwd} if s else None
+
+
+def _room(w: Optional[dict]):
+    """How good a place to move to: ok before unknown before near; least used first."""
+    lvl = (w or {}).get("level", "unknown")
+    pct = (w or {}).get("used_percentage")
+    return ({"ok": 0, "unknown": 1, "near": 2}.get(lvl, 3), 100 if pct is None else pct)
 
 
 def usage(now: Optional[float] = None) -> dict:
     """{"available": False} when nothing reports usage; otherwise each app's window
     from the most exact source that knows it and, when one is close to running out,
-    its newest session to continue in the other app."""
+    its newest session and the app with the most room left to continue it in."""
     now = time.time() if now is None else now
     found: Dict[str, dict] = {}
     for source in SOURCES:
-        if all(found.get(a, {}).get("level", "unknown") != "unknown" for a in ("claude", "codex")):
+        if all(found.get(a, {}).get("level", "unknown") != "unknown" for a in APPS):
             break
         for app, w in source(now).items():
             if found.get(app, {}).get("level", "unknown") == "unknown":
@@ -391,13 +445,16 @@ def usage(now: Optional[float] = None) -> dict:
     if not found:
         return {"available": False}
     out = {"available": True, **found}
-    # The one to act on: a used-up window first, then Claude.
-    other = {"claude": "codex", "codex": "claude"}
-    for app in sorted((a for a in found if found[a]["level"] in ("near", "limit")
-                       and found.get(other[a], {}).get("level") != "limit"),  # no use moving to a side that's out too
-                      key=lambda a: (found[a]["level"] != "limit", a != "claude")):
-        s = _newest(app)
+    # The one to act on: a used-up window first, then Claude, Codex, Antigravity.
+    for app in sorted((a for a in found if found[a]["level"] in ("near", "limit")),
+                      key=lambda a: (found[a]["level"] != "limit", APPS.index(a))):
+        targets = sorted((t for t in APPS if t != app and _room(found.get(t))[0] < 3
+                          and (t in found or t != "antigravity" or antigravity.installed())),  # no reading: only if it's there
+                         key=lambda t: (_room(found.get(t)), APPS.index(t)))
+        if found[app]["level"] == "near":  # only near: move only to a side with more room
+            targets = [t for t in targets if found.get(t, {}).get("level") != "near"]
+        s = _newest(app) if targets else None  # no use moving to a side that's out too
         if s:
-            out["switch"] = {"from": app, "session": s}
+            out["switch"] = {"from": app, "to": targets[0], "session": s}
             break
     return out

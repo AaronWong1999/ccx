@@ -934,6 +934,7 @@ class Usage(Base):
         self.bins = {}
         self.codex_limits = None  # Codex's account/rateLimits/read; None: Codex unavailable
         self.limit_hit = None     # claude.last_limit_hit()
+        self.ag_quota = None      # Antigravity's RetrieveUserQuotaSummary; None: Antigravity closed
         self.real_last_limit_hit = usage.claude.last_limit_hit
         for obj, k, v in ((usage, "STATE_FILE", self.dir / "latest.json"), (usage, "CACHE", self.dir / "cache.json"),
                           (usage, "CLAUDE_HUD_CONFIG", self.dir / "hud/config.json"),
@@ -944,10 +945,28 @@ class Usage(Base):
                           (usage, "AGENT_SESSIONS_SNAPSHOT", self.dir / "agent-sessions/claude_usage_latest.json"),
                           (usage, "which", lambda name: self.bins.get(name)),
                           (usage.codex, "rate_limits", self.fake_rate_limits),
+                          (usage.antigravity, "rpc", self.fake_ag_rpc),
                           (usage.claude, "last_limit_hit", lambda: self.limit_hit)):
             p = mock.patch.object(obj, k, v)
             p.start()
             self.addCleanup(p.stop)
+
+    def fake_ag_rpc(self, method, body, timeout=60, launch=True):
+        assert method == "RetrieveUserQuotaSummary" and not launch  # never opens Antigravity
+        if self.ag_quota is None:
+            raise usage_antigravity().Unavailable("Antigravity isn't running")
+        return {"response": self.ag_quota}
+
+    def ag_window(self, five_left, week_left=1.0):
+        """Antigravity's quota summary; a fraction of 0 is left out, as Antigravity does."""
+        reset = self.iso(time.time() + 3600).replace("+00:00", "Z")
+        b = lambda bid, f, r: {"bucketId": bid, "window": bid.split("-")[-1], "resetTime": r,
+                               **({"remainingFraction": f} if f else {})}
+        self.ag_quota = {"groups": [
+            {"displayName": "Gemini Models", "buckets": [b("gemini-weekly", week_left, self.iso(time.time() + 86400).replace("+00:00", "Z")),
+                                                         b("gemini-5h", five_left, reset)]},
+            {"displayName": "Claude and GPT models", "buckets": [b("3p-5h", 0, reset)]}]}
+        self.u.CACHE.unlink(missing_ok=True)
 
     def fake_rate_limits(self):
         if self.codex_limits is None:
@@ -998,7 +1017,7 @@ class Usage(Base):
                              ("claude-monitor", lvl, pct))
             self.assertNotIn("codex", u)
             self.assertEqual("switch" in u, lvl != "ok")
-        self.assertEqual(u["switch"], {"from": "claude", "session": {
+        self.assertEqual(u["switch"], {"from": "claude", "to": "codex", "session": {
             "id": claude.sessions()[0].id, "title": claude.sessions()[0].title, "cwd": claude.sessions()[0].cwd}})
 
     def test_old_or_finished_windows_never_alert(self):
@@ -1250,6 +1269,57 @@ class Usage(Base):
         self.codex_window(95)
         self.assertEqual(self.u.usage()["switch"]["from"], "claude")
 
+    def test_antigravity_quota_from_its_own_service(self):
+        self.ag_window(0.08)  # 92 % of the Gemini models' 5-hour limit used
+        a = self.u.usage()["antigravity"]
+        self.assertEqual((a["level"], a["used_percentage"], a["source"]), ("near", 92.0, "antigravity"))
+        self.ag_window(0)     # used up: Antigravity leaves the fraction out
+        self.assertEqual(self.u.usage()["antigravity"]["level"], "limit")
+        self.ag_window(0.5, week_left=0)  # out for the week: that is the reset that matters
+        a = self.u.usage()["antigravity"]
+        self.assertEqual((a["level"], a.get("window")), ("limit", "weekly"))
+
+    def test_antigravity_closed_keeps_its_last_reading(self):
+        self.ag_window(0.4)
+        self.assertEqual(self.u.usage()["antigravity"]["used_percentage"], 60.0)
+        self.ag_quota = None
+        self.u.CACHE.write_text(json.dumps({**json.loads(self.u.CACHE.read_text()), "antigravity-quota": {"taken": 0}}))
+        self.assertEqual(self.u.usage()["antigravity"]["used_percentage"], 60.0)
+
+    def test_switch_goes_to_the_app_with_most_room(self):
+        claude_file(PROJ_A, "c-tri-usage", [user("hi")], title="three")
+        self.limit_hit = (time.time() - 60, "You've hit your session limit · resets 9am (UTC)")
+        self.codex_window(70)
+        self.ag_window(0.9)   # 10 % used
+        sw = self.u.usage()["switch"]
+        self.assertEqual((sw["from"], sw["to"], sw["session"]["id"]), ("claude", "antigravity", "c-tri-usage"))
+        self.codex_window(100)
+        self.ag_window(0)     # all three out: nowhere to go
+        self.assertNotIn("switch", self.u.usage())
+        self.ag_window(0.05)  # Antigravity close too, Claude out: still better than waiting
+        self.assertEqual(self.u.usage()["switch"]["to"], "antigravity")
+
+    def test_near_moves_only_to_more_room(self):
+        claude_file(PROJ_A, "c-near", [user("hi")], title="near")
+        self.u.STATE_FILE.write_text(json.dumps(self.monitor_snap(92)))
+        self.codex_window(95)
+        self.ag_window(0.06)
+        self.assertNotIn("switch", self.u.usage())  # everyone is close: moving gains nothing
+
+    def test_ack_model_falls_back_when_agentapi_lacks_it(self):
+        from ccx import antigravity
+        calls = []
+
+        def run(args, project=None):
+            calls.append(args)
+            if any(a.startswith("--model=") for a in args):
+                raise RuntimeError("unknown flag: --model")
+            return {"newConversation": {"conversationId": "x1"}}
+        with mock.patch.object(antigravity, "_run_agentapi", run), mock.patch.object(antigravity, "ensure_project", lambda cwd: "p1"):
+            self.assertEqual(antigravity.new_conversation("/tmp", "t", "hello", model="flash_lite"), "x1")
+        self.assertEqual(calls, [["new-conversation", "--title=t", "--model=flash_lite", "hello"],
+                                 ["new-conversation", "--title=t", "hello"]])
+
     def test_hooks_never_read_usage(self):
         src = (Path(__file__).resolve().parents[1] / "plugins/ccx/lib/ccx/hook.py").read_text()
         self.assertNotIn("usage", src)
@@ -1475,12 +1545,18 @@ class CloudSessions(Base):
             sync.transfer("claude", "session_A", open_app=False)
 
 
+def usage_antigravity():
+    from ccx import antigravity
+    return antigravity
+
+
 class FakeAntigravity:
     """Stands in for the Antigravity desktop app: conversations as lists of steps."""
 
     def __init__(self):
         self.convs = {}
         self.created = []
+        self.models = []
 
     def add(self, cid, cwd, title, steps):
         self.convs[cid] = {"cwd": cwd, "title": title, "steps": list(steps)}
@@ -1503,8 +1579,9 @@ class FakeAntigravity:
     def steps(self, cid, launch=True):
         return list(self.convs[cid]["steps"])
 
-    def new_conversation(self, cwd, title, prompt):
+    def new_conversation(self, cwd, title, prompt, model=None):
         cid = f"a-new-{len(self.created)}"
+        self.models.append(model)
         self.add(cid, cwd, title, [ag_user(prompt), ag_reply("I have the context and am ready.")])
         self.created.append(cid)
         return cid
@@ -1576,6 +1653,7 @@ class ThreeApps(Base):
     def test_claude_to_antigravity_imports_once_then_syncs_both_ways(self):
         first = sync.transfer("claude", "c-tri", open_app=False, dst="antigravity")
         self.assertEqual(first["action"], "created")
+        self.assertEqual(self.ag.models, ["flash_lite"])  # the light model only acknowledges the import
         cid = first["target"]["id"]
         prompt = self.ag.convs[cid]["steps"][0]["userInput"]["userResponse"]
         self.assertIn("parser built", prompt)

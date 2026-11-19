@@ -373,9 +373,19 @@ def _run_agentapi(args: List[str], project: Optional[str] = None) -> dict:
     return d.get("response") or {}
 
 
-def new_conversation(cwd: str, title: str, prompt: str) -> str:
-    """Start a conversation in this folder's project with `prompt`; returns its id."""
-    res = _run_agentapi(["new-conversation", f"--title={title}", prompt], ensure_project(cwd))
+def new_conversation(cwd: str, title: str, prompt: str, model: Optional[str] = None) -> str:
+    """Start a conversation in this folder's project with `prompt`; returns its id.
+
+    `model` (flash_lite, flash, pro or a model id) answers only this first turn:
+    the conversation's next message goes to whatever model the user has picked in
+    Antigravity. An agentapi that doesn't know the flag gets the default model."""
+    project = ensure_project(cwd)
+    try:
+        res = _run_agentapi(["new-conversation", f"--title={title}", *([f"--model={model}"] if model else []), prompt], project)
+    except RuntimeError:
+        if not model:
+            raise
+        res = _run_agentapi(["new-conversation", f"--title={title}", prompt], project)
     cid = (res.get("newConversation") or {}).get("conversationId")
     if not cid:
         raise RuntimeError("Antigravity didn't return the new conversation's id")
