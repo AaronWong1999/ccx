@@ -279,7 +279,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// most room left, as `ccx usage` picked it.
     func switchTarget(_ sw: Usage.Switch) -> String { sw.to ?? (sw.from == "claude" ? "codex" : "claude") }
 
-    /// "5-hour quota left: Claude 97% · Codex 100% · Antigravity used up (back 17:00)":
+    /// "5-hour left" over "Claude 97% · Codex 100% · Antigravity used up (back 17:00)":
     /// all three at a glance, always as what is left, so the number can't be misread.
     func usageSummary(_ u: Usage) -> NSMenuItem? {
         let none = Usage.Window(level: "unknown", used_percentage: nil, resets_at_epoch: nil, window: nil)
@@ -299,7 +299,8 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
             return "\(appName(app)) \(v)"
         }
-        return caption(L("5-hour quota left: ", "5 小时额度剩余：") + parts.joined(separator: " · "))
+        // The label on its own line keeps the menu as narrow as the rows below it.
+        return caption(L("5-hour left", "5 小时剩余") + "\n" + parts.joined(separator: " · "))
     }
 
     /// Notify once when an app's 5-hour window is nearly used up and once when it is
