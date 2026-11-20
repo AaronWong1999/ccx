@@ -123,7 +123,12 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     /// Claude and Codex, plus Antigravity once its desktop app is used on this Mac.
-    var apps: [String] { data?.apps ?? ["claude", "codex"] }
+    /// Before the first `ccx` reading (an update notice at launch), Antigravity counts
+    /// when its conversation store is there, as ccx itself decides.
+    var apps: [String] {
+        data?.apps ?? (FileManager.default.fileExists(atPath: NSHomeDirectory() + "/.gemini/antigravity/conversation_summaries.db")
+                       ? ["claude", "codex", "antigravity"] : ["claude", "codex"])
+    }
     var threeWay: Bool { apps.count > 2 }
     var allApps: String {
         let n = apps.map(appName)
@@ -279,7 +284,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// most room left, as `ccx usage` picked it.
     func switchTarget(_ sw: Usage.Switch) -> String { sw.to ?? (sw.from == "claude" ? "codex" : "claude") }
 
-    /// "5-hour left" over "Claude 97% · Codex 100% · Antigravity used up (back 17:00)":
+    /// "5-hour quota left" over "Claude 97% · Codex 100% · Antigravity used up (back 17:00)":
     /// all three at a glance, always as what is left, so the number can't be misread.
     func usageSummary(_ u: Usage) -> NSMenuItem? {
         let none = Usage.Window(level: "unknown", used_percentage: nil, resets_at_epoch: nil, window: nil)
@@ -299,8 +304,8 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
             return "\(appName(app)) \(v)"
         }
-        // The label on its own line keeps the menu as narrow as the rows below it.
-        return caption(L("5-hour left", "5 小时剩余") + "\n" + parts.joined(separator: " · "))
+        // The label on its own line keeps the row narrow.
+        return caption(L("5-hour quota left", "5 小时剩余额度") + "\n" + parts.joined(separator: " · "))
     }
 
     /// Notify once when an app's 5-hour window is nearly used up and once when it is
@@ -444,7 +449,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
             .font: NSFont.systemFont(ofSize: 11), .foregroundColor: NSColor.secondaryLabelColor]))
         title.append(NSAttributedString(string: "@aaron0x10", attributes: [
             .font: NSFont.systemFont(ofSize: 11), .foregroundColor: NSColor.linkColor]))
-        title.append(NSAttributedString(string: "\n" + L("Sync task context between \(allApps).", "在 \(allApps) 之间同步任务上下文。"),
+        title.append(NSAttributedString(string: "\n" + L("Sync context between \(allApps).", "在 \(allApps) 之间同步上下文。"),
                                         attributes: [.font: NSFont.systemFont(ofSize: NSFont.smallSystemFontSize),
                                                      .foregroundColor: NSColor.secondaryLabelColor]))
         head.attributedTitle = title

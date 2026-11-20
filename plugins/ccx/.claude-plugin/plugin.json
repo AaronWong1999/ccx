@@ -1,6 +1,6 @@
 {
   "name": "ccx",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "ccx - claudecodex: sync task context between Claude, Codex and Antigravity. Import a Codex thread or Antigravity conversation into this conversation, keep them in sync, or hand this conversation over. Menu bar ⇄ and the other apps' side: github.com/aaronwong1999/ccx",
   "author": {
     "name": "Aaron Wong",
