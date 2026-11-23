@@ -333,6 +333,30 @@ def _import_to_antigravity(src: Session) -> str:
     return cid
 
 
+ANTIGRAVITY_NOTE = (
+    "[ccx] New progress on this task from {app}, where the user worked on it since. This message only carries "
+    "it: do not start working and do not call any tools. Reply with one short line saying you have the update, "
+    "then wait for the user's next message.")
+
+
+def _push_to_antigravity(cid: str) -> bool:
+    """Post the linked Antigravity conversation's pending progress into it now, so
+    it is there (and the agent knows it) when the user opens the conversation.
+    False, with nothing consumed, when the agent is busy or the app refuses: then
+    it comes along with the user's next message there, as before."""
+    try:
+        if antigravity.busy(cid):
+            return False
+
+        def send(res):
+            apps = " + ".join(dict.fromkeys(NAME[t] for t in res["sources"]))
+            antigravity.send_note(cid, L(f"⇄ Progress from {apps}", f"⇄ 来自 {apps} 的进展"),
+                                  res["context"] + "\n\n" + ANTIGRAVITY_NOTE.format(app=apps))
+        return bool(pairs.push("antigravity", cid, send))
+    except RuntimeError:
+        return False
+
+
 IMPORT_OVERHEAD = 1.8  # native imports keep tool output ccx clips: measured ~215k vs ~118k rendered
 
 
@@ -420,6 +444,8 @@ def transfer(tool: str, session_id: str, open_app: bool = True, dst: Optional[st
         pending = pairs.pending(tool, src.id, dst)
         if not pending[0]:
             action = "in_sync"
+        elif dst == "antigravity" and _push_to_antigravity(target):
+            action = "pushed"
     else:
         # Capture the source cursor BEFORE the import. A running turn may finish
         # while the other app imports; those late records still need delivery.
@@ -532,6 +558,12 @@ def _message(action: str, tool: str, title: str, pending=(0, 0), dst: Optional[s
         return L(f"\u201c{title}\u201d is already in sync with {NAME[dst]}: nothing new to bring over, nothing was added. "
                  f"Opened the {NAME[dst]} conversation.",
                  f"「{title}」已经和 {NAME[dst]} 同步过了，没有新内容，这次没有追加任何数据。已为你打开 {NAME[dst]} 的会话。")
+    if action == "pushed":
+        return L(f"\u201c{title}\u201d is linked; brought {n} new updates (about {_k(tokens)} tokens, condensed) into the "
+                 f"{NAME[dst]} conversation, where they show as a \u201c\u21c4 Progress\u201d card, and opened {NAME[dst]}. "
+                 f"Just keep going there.",
+                 f"\u300c{title}\u300d\u5df2\u5173\u8054\uff1a{n} \u6761\u65b0\u8fdb\u5c55\uff08\u538b\u7f29\u540e\u7ea6 {_k(tokens)} token\uff09\u5df2\u7ecf\u63a8\u9001\u5230 {NAME[dst]} \u7684\u5bf9\u8bdd\u91cc\uff0c"
+                 f"\u663e\u793a\u4e3a\u4e00\u5f20\u300c\u21c4 \u8fdb\u5c55\u300d\u5361\u7247\uff0c\u5e76\u5df2\u6253\u5f00 {NAME[dst]}\u3002\u76f4\u63a5\u5728\u90a3\u8fb9\u63a5\u7740\u8bf4\u5c31\u884c\u3002")
     if n:
         return L(f"\u201c{title}\u201d is linked; opened it in {NAME[dst]}. {n} new updates (about {_k(tokens)} tokens, condensed) "
                  f"come along with your next message there, once. Nothing is re-sent.",

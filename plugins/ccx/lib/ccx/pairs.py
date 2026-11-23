@@ -239,7 +239,18 @@ def pull(here_tool: str, here_id: str, budget: int = HOOK_BUDGET) -> Optional[di
         return _pull(here_tool, here_id, budget)
 
 
-def _pull(here_tool: str, here_id: str, budget: int) -> Optional[dict]:
+def push(here_tool: str, here_id: str, send, budget: int = HOOK_BUDGET) -> Optional[dict]:
+    """Like pull, but hands the progress to `send(result)` right away (instead of
+    waiting for the next prompt) and moves the cursors on only if it succeeds.
+    If `send` raises, nothing is consumed: the next prompt's hook delivers it."""
+    import fcntl
+    STATE_DIR.mkdir(parents=True, exist_ok=True)
+    with open(STATE_DIR / "sync.lock", "w") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        return _pull(here_tool, here_id, budget, send)
+
+
+def _pull(here_tool: str, here_id: str, budget: int, send=None) -> Optional[dict]:
     got, updates = [], []
     for pair in find_all(here_tool, here_id):
         try:
@@ -248,14 +259,15 @@ def _pull(here_tool: str, here_id: str, budget: int) -> Optional[dict]:
             continue  # Antigravity is closed: its progress comes with a later prompt
         if d:
             got.append(d)
+    res = {"from": got[0]["from"], "sources": [d["from"] for d in got], "session": got[0]["session"],
+           "count": sum(d["count"] for d in got), "context": "\n\n".join(d["context"] for d in got)} if got else None
+    if send and res:
+        send(res)  # raises: commit nothing
     # Commit only after every source rendered successfully. A failure in source
     # two must not consume source one before the hook can deliver its context.
     for pair, other, fields in updates:
         _update(pair, other, **fields)
-    if not got:
-        return None
-    return {"from": got[0]["from"], "sources": [d["from"] for d in got], "session": got[0]["session"],
-            "count": sum(d["count"] for d in got), "context": "\n\n".join(d["context"] for d in got)}
+    return res
 
 
 def _delta(pair: dict, here_tool: str, budget: int, updates: list) -> Optional[dict]:

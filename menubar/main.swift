@@ -792,6 +792,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 switch d["action"] as? String ?? "" {
                 case "created": heading = L("Imported and linked", "已导入并关联")
                 case "in_sync": heading = L("Already in sync, nothing new", "已同步，没有新内容")
+                case "pushed": heading = L("Linked: \(n) new updates brought over", "已关联：\(n) 条新进展已带过去")
                 default: heading = L("Linked: \(n) new updates to bring over", "已关联：有 \(n) 条新进展待带入")
                 }
             }

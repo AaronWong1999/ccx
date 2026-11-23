@@ -1612,9 +1612,17 @@ class FakeAntigravity:
         self.created.append(cid)
         return cid
 
+    def send_note(self, cid, title, content):
+        if self.refuse:
+            raise RuntimeError("Antigravity refused SendAgentMessage: unimplemented")
+        self.notes.append((cid, title, content))
+        self.append(cid, ag_note(content), ag_reply("Got the update."))
+
     def patch(self, test):
+        self.notes, self.refuse = [], False
         for name, fn in (("installed", lambda: True), ("find", self.find), ("sessions", self.sessions),
                          ("steps", self.steps), ("new_conversation", self.new_conversation),
+                         ("send_note", self.send_note),
                          ("wait_idle", lambda cid, timeout=90: len(self.convs[cid]["steps"])),
                          ("project_for", lambda cwd: {"id": "p1", "name": "proj", "folders": [cwd]}),
                          ("open_app", lambda: True)):
@@ -1625,6 +1633,11 @@ class FakeAntigravity:
 
 def ag_user(t):
     return {"type": "CORTEX_STEP_TYPE_USER_INPUT", "status": "CORTEX_STEP_STATUS_DONE", "userInput": {"userResponse": t}}
+
+
+def ag_note(t, sender="ccx"):
+    return {"type": "CORTEX_STEP_TYPE_SYSTEM_MESSAGE", "status": "CORTEX_STEP_STATUS_DONE",
+            "systemMessage": {"message": t, "agentMessage": {"sender": sender, "content": t}}}
 
 
 def ag_reply(t, calls=None):
@@ -1716,6 +1729,46 @@ class ThreeApps(Base):
         self.assertIn("shipped", res["context"])
         self.assertNotIn("am ready", res["context"])
         self.assertIsNone(pairs.pull("claude", "c-tri"))
+
+    def test_handing_over_again_posts_the_progress_into_antigravity(self):
+        cid = sync.transfer("claude", "c-tri", open_app=False, dst="antigravity")["target"]["id"]
+        claude_file(PROJ_A, "c-tri", [user("build the parser"), assistant(text("parser built")),
+                                      user("now the lexer"), assistant(text("lexer done"))], title="Parser")
+        res = sync.transfer("claude", "c-tri", open_app=False, dst="antigravity")
+        self.assertEqual((res["action"], res["pending"]), ("pushed", 2))
+        (to, title, content), = self.ag.notes
+        self.assertEqual((to, title), (cid, "⇄ Progress from Claude"))
+        self.assertIn("lexer done", content)
+        self.assertIn("do not start working", content)
+        self.assertIn("card", res["message"])
+        # Delivered once: the hook on the next message there has nothing left to add,
+        self.assertIsNone(pairs.pull("antigravity", cid))
+        self.assertEqual(sync.transfer("claude", "c-tri", open_app=False, dst="antigravity")["action"], "in_sync")
+        # and the note and its one-line reply are never sent back to Claude.
+        self.assertEqual(pairs.links(claude.find("c-tri"))["antigravity"]["status"], "linked")
+        self.ag.append(cid, ag_user("ship it"), ag_reply("shipped"))
+        res = pairs.pull("claude", "c-tri")
+        self.assertEqual(res["count"], 2)
+        self.assertNotIn("Got the update", res["context"])
+
+    def test_a_note_antigravity_cannot_take_waits_for_the_next_message(self):
+        cid = sync.transfer("claude", "c-tri", open_app=False, dst="antigravity")["target"]["id"]
+        claude_file(PROJ_A, "c-tri", [user("build the parser"), assistant(text("parser built")),
+                                      user("now the lexer"), assistant(text("lexer done"))], title="Parser")
+        self.ag.refuse = True  # an older Antigravity
+        self.assertEqual(sync.transfer("claude", "c-tri", open_app=False, dst="antigravity")["action"], "linked")
+        self.ag.refuse = False
+        self.ag.append(cid, ag_user("go on"), ag_reply("", [{"name": "run_command"}]))  # busy: mid-turn
+        with mock.patch.object(antigravity, "busy", lambda c: True):
+            self.assertEqual(sync.transfer("claude", "c-tri", open_app=False, dst="antigravity")["action"], "linked")
+        self.assertEqual(self.ag.notes, [])
+        self.assertIn("lexer done", pairs.pull("antigravity", cid)["context"])  # nothing was consumed
+
+    def test_units_keep_real_work_after_a_note(self):
+        steps = [ag_user("hi"), ag_reply("hello"), ag_note("progress"), ag_reply("Got it."),
+                 ag_note("from a teammate", sender="other-conv"), ag_reply("on it", [{"name": "grep_search", "argumentsJson": "{}"}])]
+        self.assertEqual(antigravity.units(steps), [("user", "hi"), ("assistant", "hello"), None, None, None,
+                                                    ("assistant", "on it\n[tool grep_search] {}")])
 
     def test_antigravity_to_claude_and_codex(self):
         self.ag.add("a-own", PROJ_A, "Billing", [ag_user("fix billing"), ag_reply("billing fixed")])

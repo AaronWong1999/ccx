@@ -37,6 +37,8 @@ SERVICE = "exa.language_server_pb.LanguageServerService"
 OUTSIDE = "outside-of-project"
 # Shown in Antigravity's sidebar, so an imported conversation is easy to spot.
 MARK = "⇄ "
+# The sender of progress notes ccx posts into a linked conversation.
+SENDER = "ccx"
 
 
 class Unavailable(RuntimeError):
@@ -200,13 +202,25 @@ def units(sts: List[dict], include_imported: bool = False) -> List[Unit]:
     import too, for a full 'continue from' and for reading history."""
     out: List[Unit] = []
     ack = False  # the turn answering our own import prompt ("ready to continue") isn't progress
+    noted = False  # nor the one-line reply to a progress note ccx sent in
     for st in sts:
-        if st.get("type", "").endswith("USER_INPUT"):
-            ack = _is_import(st)
+        t = st.get("type", "")
+        if t.endswith("USER_INPUT"):
+            ack, noted = _is_import(st), False
             out.append(_render(st, include_imported))
+        elif t.endswith("SYSTEM_MESSAGE") and _is_note(st):
+            noted = True
+            out.append(None)
+        elif noted and t.endswith("PLANNER_RESPONSE") and not (st.get("plannerResponse") or {}).get("toolCalls"):
+            noted = False
+            out.append(None)
         else:
             out.append(None if ack else _render(st, include_imported))
     return out
+
+
+def _is_note(st: dict) -> bool:
+    return ((st.get("systemMessage") or {}).get("agentMessage") or {}).get("sender") == SENDER
 
 
 def _is_import(st: dict) -> bool:
@@ -392,9 +406,37 @@ def new_conversation(cwd: str, title: str, prompt: str, model: Optional[str] = N
     return cid
 
 
+def _settled(sts: List[dict]) -> bool:
+    return bool(sts) and all(s.get("status", "").endswith(("DONE", "ERROR", "CANCELED")) for s in sts) \
+        and sts[-1].get("type", "").endswith(("PLANNER_RESPONSE", "ERROR_MESSAGE")) \
+        and not (sts[-1].get("plannerResponse") or {}).get("toolCalls")
+
+
+def busy(cid: str) -> bool:
+    """The agent is mid-turn (or waiting on the user to approve something)."""
+    return not _settled(steps(cid))
+
+
+def send_note(cid: str, title: str, content: str):
+    """Post a note into the conversation: shown as a card titled `title`. The app
+    wakes the agent for it (there is no quiet delivery), so `content` should ask
+    for a one-line reply; units() leaves that reply out of the sync."""
+    rpc("SendAgentMessage", {"recipient": cid, "senderId": SENDER, "displayTitle": title, "content": content})
+
+
 def wait_idle(cid: str, timeout: float = 90) -> int:
-    """Wait for the conversation's first reply to finish; returns its step count."""
-    end, n = time.time() + timeout, 0
+    """Wait for the conversation's reply to finish; returns its step count."""
+    t0 = time.time()
+    try:
+        # The app's own wait (Antigravity 2.34+): returns once the conversation settles.
+        rpc("WaitForConversationFullyIdle", {"conversationId": cid, "inactivityTimeoutSeconds": int(timeout),
+                                             "stabilizationDurationSeconds": 1}, timeout=timeout + 10, launch=False)
+        sts = steps(cid, launch=False)
+        if len(sts) >= 2 and _settled(sts):
+            return len(sts)
+    except RuntimeError:
+        pass  # an older app: poll instead
+    end, n = t0 + timeout, 0
     while time.time() < end:
         try:
             t = rpc("GetCascadeTrajectory", {"cascadeId": cid}, launch=False).get("trajectory") or {}
@@ -402,10 +444,7 @@ def wait_idle(cid: str, timeout: float = 90) -> int:
             t = {}
         sts = t.get("steps") or []
         n = len(sts)
-        done = n >= 2 and all(s.get("status", "").endswith(("DONE", "ERROR", "CANCELED")) for s in sts) \
-            and sts[-1].get("type", "").endswith(("PLANNER_RESPONSE", "ERROR_MESSAGE")) \
-            and not (sts[-1].get("plannerResponse") or {}).get("toolCalls")
-        if done:
+        if n >= 2 and _settled(sts):
             break
         time.sleep(1)
     return n
