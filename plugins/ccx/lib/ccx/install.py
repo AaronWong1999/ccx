@@ -114,7 +114,7 @@ def needs_setup() -> List[str]:
         pass
     if antigravity.installed() and antigravity_plugin_version() != repo_version():
         out.append("antigravity")
-    if zcode.installed() and not ZCODE_STAMP.exists():
+    if zcode.installed() and _zcode_stamp() != repo_version() and not zcode.running():
         out.append("zcode")  # (the plugin list is slow to read: a stamp says ccx set it up)
     return out
 
@@ -232,6 +232,13 @@ def setup_antigravity(quiet: bool = False) -> bool:
 ZCODE_STAMP = STATE_DIR / "zcode-plugin.version"
 
 
+def _zcode_stamp() -> str:
+    try:
+        return ZCODE_STAMP.read_text().strip()
+    except OSError:
+        return ""
+
+
 def setup_zcode(source: str, quiet: bool = False) -> bool:
     """ZCode installs Claude Code-style plugins with its own `zcode plugins`
     command; ccx's plugin has a ZCode manifest (.zcode-plugin) that ZCode reads
@@ -239,6 +246,14 @@ def setup_zcode(source: str, quiet: bool = False) -> bool:
     if not zcode.installed():
         say(False, "ZCode: desktop app not installed or never opened (https://zcode.z.ai); skipping", quiet)
         return False
+    if zcode.running():
+        # Changing plugins makes a running ZCode restart its built-in tool servers,
+        # and those come back as unresponsive "exec" icons in the Dock. The menu bar
+        # installs it once ZCode is closed (needs_setup lists it then).
+        if _zcode_stamp() == repo_version():
+            return True
+        say(True, "ZCode plugin: installs the next time ZCode is closed", quiet)
+        return True
     code, out = zcode.run_cli(["plugins", "marketplace", "list", "--json"], 60)
     if source not in out:
         if '"ccx"' in out:

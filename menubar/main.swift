@@ -372,12 +372,17 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
         return i
     }
 
-    /// Claude or Codex installed after ccx: set ccx up there too, once per launch.
-    var setupTried = Set<String>()
+    /// An app installed after ccx: set ccx up there too, once per launch. ZCode
+    /// is listed only while it is closed (ccx leaves a running ZCode's plugins
+    /// alone), so it may be tried again, at most every half hour.
+    var setupTried = [String: Date]()
     func finishSetup(_ apps: [String]) {
-        let todo = apps.filter { !setupTried.contains($0) }
+        let todo = apps.filter { app in
+            guard let t = setupTried[app] else { return true }
+            return app == "zcode" && Date().timeIntervalSince(t) > 1800
+        }
         if todo.isEmpty || clickTest { return }
-        setupTried.formUnion(todo)
+        for app in todo { setupTried[app] = Date() }
         run(["_refresh", "--quiet"]) { code, _, _ in
             if code == 0 {
                 let names = todo.map(appName).joined(separator: " & ")

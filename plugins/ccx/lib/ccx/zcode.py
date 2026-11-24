@@ -45,6 +45,7 @@ BUNDLE_ID = "dev.zcode.app"
 PROCESS = "ZCode"
 # Tools of ccx itself (its MCP server inside ZCode): never synced.
 SELF = ("ccx", "claudecodex")
+QUIET = str(Path(__file__).with_name("zcode_quiet.cjs"))  # no Dock icon per run
 
 
 def app_path() -> Optional[str]:
@@ -216,7 +217,7 @@ def _cli() -> List[str]:
     js = os.path.join(app, "Contents/Resources/glm/zcode.cjs")
     if not (os.access(exe, os.X_OK) and os.path.exists(js)):
         raise RuntimeError("this ZCode version has no command-line agent ccx can use; update ZCode")
-    return [exe, js]
+    return [exe, "--require", QUIET, js]
 
 
 def _env() -> dict:

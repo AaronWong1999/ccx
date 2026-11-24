@@ -2054,6 +2054,41 @@ class ZCodeApp(Base):
         self.assertEqual(zcode.show("sess_s", PROJ_A), "listed")
         self.assertEqual(self.zc.calls, ["open"])
 
+    def test_zcode_runs_stay_out_of_the_dock(self):
+        # ZCode's agent renames its process, which on macOS checks it in as a
+        # foreground app (a Dock icon per run) unless the rename is kept out.
+        with mock.patch.object(zcode.os, "access", return_value=True), \
+             mock.patch.object(zcode.os.path, "exists", return_value=True):
+            cli = zcode._cli()
+        self.assertEqual(cli[1:3], ["--require", zcode.QUIET])
+        self.assertTrue(cli[3].endswith("zcode.cjs"))
+        self.assertTrue(os.path.exists(zcode.QUIET))
+        self.assertIn("set() {}", Path(zcode.QUIET).read_text())
+
+    def test_a_running_zcode_keeps_its_plugins_until_it_is_closed(self):
+        # Changing plugins makes a running ZCode restart its tool servers as
+        # unresponsive Dock icons: ccx waits until ZCode is closed.
+        from ccx import install
+        install.ZCODE_STAMP.unlink(missing_ok=True)
+        self.addCleanup(install.ZCODE_STAMP.unlink, missing_ok=True)
+        with mock.patch.object(zcode, "run_cli") as cli, \
+             mock.patch.object(install, "repo_version", return_value="9.9.9"), \
+             mock.patch.object(install, "claude") as cl, mock.patch.object(install, "codex") as cx, \
+             mock.patch.object(install.antigravity, "installed", return_value=False):
+            cl.desktop_cli.return_value = None
+            cx.codex_bin.side_effect = RuntimeError
+            self.zc.running = True
+            self.assertTrue(install.setup_zcode("/src", quiet=True))
+            cli.assert_not_called()
+            self.assertEqual(install.needs_setup(), [])
+            self.zc.running = False
+            self.assertEqual(install.needs_setup(), ["zcode"])
+            install.ZCODE_STAMP.parent.mkdir(parents=True, exist_ok=True)
+            install.ZCODE_STAMP.write_text("9.9.9")
+            self.assertEqual(install.needs_setup(), [])
+            install.ZCODE_STAMP.write_text("9.9.8")  # an update is pending too
+            self.assertEqual(install.needs_setup(), ["zcode"])
+
     def test_the_settings_file_is_left_alone_while_zcode_runs(self):
         self.zc.running = True
         before = zcode.SETTINGS.read_text()
