@@ -328,10 +328,18 @@ def new_session(cwd: str, title: str, turns: List[Tuple[str, str]]) -> str:
               "titleGenerationEnabled": False,
               "importedHistory": {"source": "claudeCode", "title": title, "messages": msgs}}
     model = last_model()
-    if model:
-        params["model"] = model
     srv = AppServer(cwd)
     try:
+        res = srv.request("session/create", dict(params, model=model) if model else params)
+    except RuntimeError as e:
+        if not model or str(e) != (
+            "ZCode refused session/create: Provider Registry 中不存在 Model: "
+            f"{model['providerId']}/{model['modelId']}"
+        ):
+            raise
+        # The CLI can lack a model from the desktop's account registry.
+        # ZCode rejected it before saving anything. Its native importer
+        # creates history without a model override, so retry the same way.
         res = srv.request("session/create", params)
     finally:
         srv.close()

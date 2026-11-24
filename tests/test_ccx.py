@@ -1950,6 +1950,35 @@ def zt(t, **kw):
     return {"type": "text", "text": t, **kw}
 
 
+class ZCodeImportModel(Base):
+    def test_create_retries_without_model_only_when_registry_rejects_it(self):
+        model = {"providerId": "account:bigmodel-start-plan", "modelId": "GLM-5.3-Flash"}
+        missing = RuntimeError("ZCode refused session/create: Provider Registry 中不存在 Model: "
+                               "account:bigmodel-start-plan/GLM-5.3-Flash")
+        timeout = RuntimeError("ZCode didn't answer session/create in time")
+        created = {"sessionId": "sess_imported"}
+        turns = [("user", "question"), ("assistant", "answer")]
+        for replies, calls in (([missing, created], 2), ([created], 1), ([timeout], 1)):
+            with self.subTest(replies=replies), mock.patch.object(zcode, "last_model", return_value=model), \
+                 mock.patch.object(zcode, "AppServer") as server:
+                srv = server.return_value
+                srv.request.side_effect = replies
+                if replies == [timeout]:
+                    with self.assertRaisesRegex(RuntimeError, "didn't answer"):
+                        zcode.new_session(PROJ_A, "Imported", turns)
+                else:
+                    self.assertEqual(zcode.new_session(PROJ_A, "Imported", turns), "sess_imported")
+                self.assertEqual(srv.request.call_count, calls)
+                first = srv.request.call_args_list[0].args[1]
+                self.assertEqual(first["model"], model)
+                if calls == 2:
+                    method, fallback = srv.request.call_args_list[1].args
+                    self.assertEqual(method, "session/create")
+                    self.assertNotIn("model", fallback)
+                    self.assertEqual(dict(fallback, model=model), first)
+                srv.close.assert_called_once_with()
+
+
 class ZCodeApp(Base):
     """ZCode as the fourth app."""
 
