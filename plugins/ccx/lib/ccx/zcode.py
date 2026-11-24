@@ -381,12 +381,39 @@ def busy() -> bool:
 
 
 def project_for(cwd: str) -> Optional[dict]:
-    """The desktop app's project that has this folder, if it has one."""
-    for r in _query("select p.project_id, p.name, r.root_path from projects p join project_roots r using(project_id) "
-                    "where p.deleted = 0", path=TASKS):
-        if same_dir(r["root_path"], cwd):
-            return {"id": r["project_id"], "name": r["name"]}
-    return None
+    """Match ZCode's project assignment, which requires a unique local root."""
+    rows = _query("select p.project_id as id, p.name from projects p join project_roots r using(project_id) "
+                  "where p.host_id = 'local' and p.deleted = 0 and r.root_path = ?", (real(cwd),), path=TASKS)
+    return dict(rows[0]) if len(rows) == 1 else None
+
+
+def task_project(sid: str) -> Optional[dict]:
+    """The task's actual sidebar project. The task's directory alone can't tell us."""
+    rows = _query("select p.project_id as id, p.name from tasks t join projects p using(project_id) "
+                  "where t.task_id = ? and t.host_id = 'local' and p.host_id = t.host_id "
+                  "and t.deleted = 0 and p.deleted = 0", (sid,), path=TASKS)
+    return dict(rows[0]) if len(rows) == 1 else None
+
+
+def register_project(cwd: str, timeout: float = 30) -> bool:
+    """Ask ZCode to open the folder as a project using its own confirmation dialog."""
+    if project_for(cwd):
+        return True
+    if not os.path.isdir(cwd):
+        return False
+    try:
+        result = subprocess.run(["open", "zcode://workspace/open?path=" + quote(real(cwd), safe="")],
+                                capture_output=True, timeout=15)
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    if result.returncode:
+        return False
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if project_for(cwd):
+            return True
+        time.sleep(0.25)
+    return bool(project_for(cwd))
 
 
 def listed(sid: str) -> bool:

@@ -1886,8 +1886,8 @@ class FakeZCode:
     create table session_input (id text primary key, session_id text, status text);
     """
     TASKS = """
-    create table tasks (task_id text, deleted integer default 0);
-    create table projects (project_id text, name text, deleted integer default 0);
+    create table tasks (task_id text, deleted integer default 0, project_id text, host_id text default 'local');
+    create table projects (project_id text, name text, deleted integer default 0, host_id text default 'local');
     create table project_roots (project_id text, root_path text);
     """
 
@@ -1902,6 +1902,8 @@ class FakeZCode:
             db.commit()
             db.close()
         zcode.SETTINGS.write_text(json.dumps({"lastActiveWorkspace": None, "lastWorkspaceSession": []}))
+        self.project(PROJ_A, "Project A")
+        self.project(PROJ_B, "Project B")
         self.calls = []
         test.addCleanup(lambda: [f.unlink(missing_ok=True) for f in (zcode.DB, zcode.TASKS, zcode.SETTINGS)])
         for name, fn in (("app_path", lambda: "/Applications/ZCode.app"),
@@ -1918,6 +1920,10 @@ class FakeZCode:
         db.execute(q, args)
         db.commit()
         db.close()
+
+    def project(self, cwd, name):
+        self.sql("insert into projects(project_id, name) values (?, ?)", (name, name), path=zcode.TASKS)
+        self.sql("insert into project_roots values (?, ?)", (name, os.path.realpath(cwd)), path=zcode.TASKS)
 
     def add(self, sid, cwd, title):
         self.sql("insert into session values (?,?,?,?,?,null,null,null,'interactive')",
@@ -1986,6 +1992,37 @@ class ZCodeApp(Base):
         super().setUp()
         self.zc = FakeZCode(self)
         claude_file(PROJ_A, "c-zc", [user("build the parser"), assistant(text("parser built"))], title="Parser")
+
+    def test_waits_for_a_project_before_importing_into_zcode(self):
+        self.zc.sql("delete from projects where name = 'Project A'", path=zcode.TASKS)
+        self.zc.sql("delete from project_roots where project_id = 'Project A'", path=zcode.TASKS)
+        with mock.patch.object(zcode, "register_project", return_value=False) as register:
+            with self.assertRaises(RuntimeError):
+                sync.transfer("claude", "c-zc", dst="zcode", open_app=False)
+            register.assert_not_called()
+            with self.assertRaises(RuntimeError):
+                sync.transfer("claude", "c-zc", dst="zcode")
+            register.assert_called_once_with(PROJ_A)
+        self.assertEqual(self.zc.created, [])
+        self.assertIsNone(pairs.find("claude", "c-zc", "zcode"))
+
+        def register(cwd):
+            self.zc.project(cwd, "Project A")
+            return True
+
+        with mock.patch.object(zcode, "register_project", side_effect=register) as confirm:
+            first = sync.transfer("claude", "c-zc", dst="zcode")
+            again = sync.transfer("claude", "c-zc", dst="zcode")
+            confirm.assert_called_once()
+        self.assertEqual(first["target"]["id"], again["target"]["id"])
+        self.assertEqual(len(self.zc.created), 1)
+
+    def test_zcode_location_uses_task_membership_instead_of_folder(self):
+        self.zc.add("sess_s", PROJ_A, "Parser")
+        self.zc.sql("insert into tasks(task_id) values ('sess_s')", path=zcode.TASKS)
+        self.assertNotIn("Project A", sync._where_in_zcode("sess_s", "listed"))
+        self.zc.sql("update tasks set project_id = 'Project A' where task_id = 'sess_s'", path=zcode.TASKS)
+        self.assertIn("Project A", sync._where_in_zcode("sess_s", "listed"))
 
     def test_units_skip_imports_injections_and_half_written_replies(self):
         self.zc.add("sess_u", PROJ_A, "Units")
@@ -2079,7 +2116,7 @@ class ZCodeApp(Base):
         self.assertEqual(zcode.show("sess_s", PROJ_A), "busy")
         self.assertEqual(self.zc.calls, [])
         # already in its list: just brought forward
-        self.zc.sql("insert into tasks values ('sess_s', 0)", path=zcode.TASKS)
+        self.zc.sql("insert into tasks(task_id) values ('sess_s')", path=zcode.TASKS)
         self.assertEqual(zcode.show("sess_s", PROJ_A), "listed")
         self.assertEqual(self.zc.calls, ["open"])
 

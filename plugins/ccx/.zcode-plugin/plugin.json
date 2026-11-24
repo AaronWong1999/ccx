@@ -1,6 +1,6 @@
 {
   "name": "ccx",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "ccx - claudecodex: sync task context between ZCode, Claude, Codex and Antigravity. Import a Claude Code session, Codex thread or Antigravity conversation into this conversation, keep them in sync, or hand this conversation over. Menu bar ⇄ and the other apps' side: github.com/aaronwong1999/ccx",
   "author": {
     "name": "Aaron Wong",

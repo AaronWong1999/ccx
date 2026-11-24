@@ -474,6 +474,11 @@ def transfer(tool: str, session_id: str, open_app: bool = True, dst: Optional[st
         elif dst == "antigravity" and _push_to_antigravity(target):
             action = "pushed"
     else:
+        if dst == "zcode" and not zcode.project_for(src.cwd):
+            if not open_app or not zcode.register_project(src.cwd):
+                raise RuntimeError(L(
+                    f"Import paused. Open {src.cwd} as a project in ZCode, confirm the folder there, and retry.",
+                    f"导入已暂停。请在 ZCode 中把 {src.cwd} 打开为项目，确认目录后再试。"))
         # Capture the source cursor BEFORE the import. A running turn may finish
         # while the other app imports; those late records still need delivery.
         source_side = pairs.side(tool, src.id)
@@ -493,7 +498,7 @@ def transfer(tool: str, session_id: str, open_app: bool = True, dst: Optional[st
         res["message"] += _where_in_antigravity(target, src.cwd)
     if dst == "zcode" and open_app:
         res["zcode"] = zcode.show(target, src.cwd)
-        res["message"] += _where_in_zcode(target, src.cwd, res["zcode"])
+        res["message"] += _where_in_zcode(target, res["zcode"])
         if res["zcode"] == "busy" and zcode.ask_restart_when_idle(setting("language") == "zh"):
             zcode.spawn_restart_when_idle(src.cwd)
             res["message"] += L(" ccx restarts ZCode once its running task is done.",
@@ -535,17 +540,21 @@ def transfer(tool: str, session_id: str, open_app: bool = True, dst: Optional[st
     return res
 
 
-def _where_in_zcode(sid: str, cwd: str, how: str) -> str:
+def _where_in_zcode(sid: str, how: str) -> str:
     """ZCode has no link that opens one conversation: say where it is, and what
     ccx did to make ZCode list it."""
     z = zcode.find(sid)
-    p = zcode.project_for(cwd)
-    title, project = (z.title if z else ""), (p["name"] if p else os.path.basename(real(cwd)))
-    where = L(f"\n\nIn ZCode it is under the project “{project}”" + (f": “{title}”." if title else "."),
-              f"\n\n在 ZCode 里，它在项目「{project}」下" + (f"：「{title}」。" if title else "。"))
-    if not p:
-        where = L(f"\n\nIn ZCode it is in the task list" + (f": “{title}”." if title else "."),
-                  f"\n\n在 ZCode 的任务列表里" + (f"：「{title}」。" if title else "。"))
+    p = zcode.task_project(sid)
+    title = z.title if z else ""
+    if p:
+        where = L(f"\n\nIn ZCode it is under the project “{p['name']}”" + (f": “{title}”." if title else "."),
+                  f"\n\n在 ZCode 里，它在项目「{p['name']}」下" + (f"：「{title}」。" if title else "。"))
+    elif zcode.listed(sid):
+        where = L(f"\n\nFind “{title}” in ZCode's standalone Tasks section.",
+                  f"\n\n在 ZCode 的独立「任务」区找到「{title}」。")
+    else:
+        where = L(f"\n\nLook for “{title}” after ZCode refreshes its task list.",
+                  f"\n\nZCode 刷新任务列表后，查找「{title}」。")
     return where + {
         "restarted": L(" ZCode was idle, so ccx restarted it on this folder to list the conversation.",
                        "ZCode 当时空闲，ccx 已在这个文件夹上重启 ZCode，让它显示这个对话。"),
