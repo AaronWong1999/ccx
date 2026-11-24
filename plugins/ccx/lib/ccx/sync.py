@@ -12,16 +12,16 @@ from datetime import datetime
 from typing import Dict, List, Optional
 from urllib.parse import quote, urlencode
 
-from . import antigravity, claude, cloud, codex, pairs, repairs
+from . import antigravity, claude, cloud, codex, pairs, repairs, zcode
 from .common import (HOME, TOOLS, copy_to_clipboard, est_tokens, L, NAME, OTHER, Session, git_snapshot,
-                     real, same_dir)
+                     real, same_dir, setting)
 
 STATUS = {"new": "not linked", "linked": "linked", "updated": "has new progress", "mirror": "imported copy"}
 
 
 def deep_link(tool: str, sid: str) -> str:
-    """The app's own link to a conversation ('' for Antigravity, which has none)."""
-    if tool == "antigravity":
+    """The app's own link to a conversation ('' for Antigravity and ZCode, which have none)."""
+    if tool in ("antigravity", "zcode"):
         return ""
     return f"codex://threads/{sid}" if tool == "codex" else f"claude://resume?session={sid}"
 
@@ -29,6 +29,8 @@ def deep_link(tool: str, sid: str) -> str:
 def open_in_app(tool: str, sid: str) -> bool:
     if tool == "antigravity":
         return antigravity.open_app()
+    if tool == "zcode":
+        return zcode.open_app()
     return subprocess.run(["open", deep_link(tool, sid)], capture_output=True).returncode == 0
 
 
@@ -54,8 +56,12 @@ def new_conversation(dst: str, sid: str) -> str:
         url = "claude://code/new?" + urlencode({"folder": real(src.cwd), "q": prompt}, quote_via=quote)
     elif dst == "codex":
         url = "codex://new?" + urlencode({"path": real(src.cwd), "prompt": prompt}, quote_via=quote)
-    else:
+    elif dst == "antigravity":
         url = antigravity.new_conversation_link(real(src.cwd), prompt)
+    else:
+        raise RuntimeError(L("ZCode has no link that opens a new conversation with a prompt filled in: "
+                             "move the conversation to ZCode instead.",
+                             "ZCode 没有能打开新对话并填好指令的链接：请直接把对话转到 ZCode。"))
     return _open_new_conversation(url, NAME[dst])
 
 
@@ -79,6 +85,8 @@ def sessions(tool: str, cwd: Optional[str] = None, query: Optional[str] = None, 
         return claude.sessions(cwd, query)[:limit]
     if tool == "antigravity":
         return antigravity.sessions(cwd, query, limit)
+    if tool == "zcode":
+        return zcode.sessions(cwd, query, limit)
     return codex.threads(cwd, query, limit)
 
 
@@ -167,12 +175,15 @@ def _all_sessions() -> List[Session]:
         pass  # Codex isn't installed
     if antigravity.installed():
         out += antigravity.sessions(limit=300)
+    if zcode.installed():
+        out += zcode.sessions(limit=300)
     return out
 
 
 def apps() -> List[str]:
     """The apps ccx moves conversations between on this Mac, in menu order."""
-    return ["claude", "codex"] + (["antigravity"] if antigravity.installed() else [])
+    return ["claude", "codex"] + (["antigravity"] if antigravity.installed() else []) \
+        + (["zcode"] if zcode.installed() else [])
 
 
 def cloud_cwd(item: Optional[dict]) -> str:
@@ -193,7 +204,7 @@ def menu_data(projects: int = 8, per_side: int = 6) -> dict:
         for s in _all_sessions():
             if not s.cwd:
                 continue
-            p = by_cwd.setdefault(real(s.cwd), {"claude": [], "codex": [], "antigravity": [], "mtime": 0.0})
+            p = by_cwd.setdefault(real(s.cwd), {"claude": [], "codex": [], "antigravity": [], "zcode": [], "mtime": 0.0})
             p[s.tool].append(s)
             p["mtime"] = max(p["mtime"], s.mtime)
         (claude_cloud, claude_reason), codex_cloud = claude_cloud.result(), codex_cloud.result()[0]
@@ -213,7 +224,8 @@ def menu_data(projects: int = 8, per_side: int = 6) -> dict:
                     + cloud_rows("codex", placed["codex"][0].get(cwd, [])[:4], cwd),
                     "claude": rows("claude", newest(p["claude"]))
                     + cloud_rows("claude", placed["claude"][0].get(cwd, [])[:4], cwd),
-                    "antigravity": rows("antigravity", newest(p["antigravity"]))})
+                    "antigravity": rows("antigravity", newest(p["antigravity"])),
+                    "zcode": rows("zcode", newest(p["zcode"]))})
         if len(out) >= projects:
             break
     return {"projects": out, "apps": apps(), "pending_history_repairs": len(repairs.retry_pending()),
@@ -239,7 +251,8 @@ def _turns(us: list) -> list:
     return [(r, "\n\n".join(c)) for r, c in turns]
 
 
-KIND = {"claude": "Claude session", "codex": "Codex thread", "antigravity": "Antigravity conversation"}
+KIND = {"claude": "Claude session", "codex": "Codex thread", "antigravity": "Antigravity conversation",
+        "zcode": "ZCode conversation"}
 
 
 def _marked(src: Session) -> str:
@@ -304,6 +317,12 @@ def _claude_turns(src: Session) -> list:
 
 def _import_to_claude(src: Session) -> str:
     return claude.write_session(src.cwd, _claude_turns(src), _marked(src)).id
+
+
+def _import_to_zcode(src: Session) -> str:
+    """ZCode's own import (what its "import from Claude Code" does): the conversation
+    becomes the new ZCode conversation's real history."""
+    return zcode.new_session(src.cwd, _marked(src), _claude_turns(src))
 
 
 # Antigravity has no way to add history to a conversation: a new one starts with
@@ -383,18 +402,21 @@ def default_target(tool: str, session_id: str) -> str:
 
 
 def _adopt(tool: str, sid: str, dst: str) -> Optional[dict]:
-    """`tool`'s session has no partner in `dst`, but the conversation it is linked
-    to in the third app has one: that is this task's `dst` conversation, so link
-    to it instead of importing a second copy."""
-    third = next(t for t in TOOLS if t not in (tool, dst))
-    pa = pairs.find(tool, sid, third)
-    pb = pairs.find(third, pa[third]["id"], dst) if pa else None
-    if not pb or _is_cloud(pa[third]["id"]) or _is_cloud(pb[dst]["id"]) or pairs.find(dst, pb[dst]["id"], tool):
-        return None
-    if not pairs.lookup(dst, pb[dst]["id"]):
-        return None
-    # Each side owes the other what it still owed (or had sent) through the third app.
-    return pairs.link(dict(pa[tool]), dict(pb[dst]), tools=(tool, dst))
+    """`tool`'s session has no partner in `dst`, but a conversation it is linked to
+    in another app has one: that is this task's `dst` conversation, so link to it
+    instead of importing a second copy."""
+    for third in TOOLS:
+        if third in (tool, dst):
+            continue
+        pa = pairs.find(tool, sid, third)
+        pb = pairs.find(third, pa[third]["id"], dst) if pa else None
+        if not pb or _is_cloud(pa[third]["id"]) or _is_cloud(pb[dst]["id"]) or pairs.find(dst, pb[dst]["id"], tool):
+            continue
+        if not pairs.lookup(dst, pb[dst]["id"]):
+            continue
+        # Each side owes the other what it still owed (or had sent) through the third app.
+        return pairs.link(dict(pa[tool]), dict(pb[dst]), tools=(tool, dst))
+    return None
 
 
 def transfer(tool: str, session_id: str, open_app: bool = True, dst: Optional[str] = None) -> dict:
@@ -406,6 +428,9 @@ def transfer(tool: str, session_id: str, open_app: bool = True, dst: Optional[st
     if dst == "antigravity" and not antigravity.installed():
         raise RuntimeError(L("The Antigravity desktop app isn't set up on this Mac: open it once, then try again.",
                              "这台 Mac 上还没有用过 Antigravity 桌面版：先打开它一次，再试。"))
+    if dst == "zcode" and not zcode.installed():
+        raise RuntimeError(L("The ZCode desktop app isn't set up on this Mac: open it once, then try again.",
+                             "这台 Mac 上还没有用过 ZCode 桌面版：先打开它一次，再试。"))
     if tool == "codex" and cloud.is_codex(session_id):
         if dst != "claude":
             raise RuntimeError(L("A Codex Cloud task comes down into Claude only. Bring it into Claude first, then "
@@ -438,6 +463,8 @@ def transfer(tool: str, session_id: str, open_app: bool = True, dst: Optional[st
         pair = None
     if pair and dst == "antigravity" and not antigravity.find(pair[dst]["id"]):
         pair = None  # that Antigravity conversation was deleted: import afresh
+    if pair and dst == "zcode" and not zcode.find(pair[dst]["id"]):
+        pair = None  # that ZCode conversation was deleted: import afresh
     pair = pair or _adopt(tool, src.id, dst)
     if pair:
         target, action = pair[dst]["id"], "linked"
@@ -464,6 +491,13 @@ def transfer(tool: str, session_id: str, open_app: bool = True, dst: Optional[st
            "target": {"tool": dst, "id": target, "deep_link": deep_link(dst, target)}, "cwd": src.cwd}
     if dst == "antigravity":
         res["message"] += _where_in_antigravity(target, src.cwd)
+    if dst == "zcode" and open_app:
+        res["zcode"] = zcode.show(target, src.cwd)
+        res["message"] += _where_in_zcode(target, src.cwd, res["zcode"])
+        if res["zcode"] == "busy" and zcode.ask_restart_when_idle(setting("language") == "zh"):
+            zcode.spawn_restart_when_idle(src.cwd)
+            res["message"] += L(" ccx restarts ZCode once its running task is done.",
+                                "ccx 会在那个任务完成后自动重启 ZCode。")
     if dst == "codex":
         # Save the pair before grouping: if grouping fails, retry repairs this
         # thread instead of importing another copy. Also repairs pre-0.0.9 pairs.
@@ -494,9 +528,31 @@ def transfer(tool: str, session_id: str, open_app: bool = True, dst: Optional[st
                                 f"要在 {NAME[dst]} 里继续这个目标，粘贴剪贴板里的 /goal 指令即可。")
             if open_app:
                 copy_to_clipboard(f"/goal {g['objective']}")
-    if open_app:
+    if open_app and dst != "zcode":
         res["opened"] = open_in_app(dst, target)
+    elif open_app:
+        res["opened"] = res["zcode"] != "busy"
     return res
+
+
+def _where_in_zcode(sid: str, cwd: str, how: str) -> str:
+    """ZCode has no link that opens one conversation: say where it is, and what
+    ccx did to make ZCode list it."""
+    z = zcode.find(sid)
+    p = zcode.project_for(cwd)
+    title, project = (z.title if z else ""), (p["name"] if p else os.path.basename(real(cwd)))
+    where = L(f"\n\nIn ZCode it is under the project “{project}”" + (f": “{title}”." if title else "."),
+              f"\n\n在 ZCode 里，它在项目「{project}」下" + (f"：「{title}」。" if title else "。"))
+    if not p:
+        where = L(f"\n\nIn ZCode it is in the task list" + (f": “{title}”." if title else "."),
+                  f"\n\n在 ZCode 的任务列表里" + (f"：「{title}」。" if title else "。"))
+    return where + {
+        "restarted": L(" ZCode was idle, so ccx restarted it on this folder to list the conversation.",
+                       "ZCode 当时空闲，ccx 已在这个文件夹上重启 ZCode，让它显示这个对话。"),
+        "busy": L(" A ZCode task is running, so ZCode wasn't restarted: the conversation shows in its list "
+                  "after ZCode restarts.",
+                  "ZCode 里有任务在运行，所以没有重启它：ZCode 重启后，任务列表里就会出现这个对话。"),
+    }.get(how, "")
 
 
 def _where_in_antigravity(cid: str, cwd: str) -> str:

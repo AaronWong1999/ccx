@@ -1,4 +1,4 @@
-"""Small helpers shared by the Claude, Codex and Antigravity sides."""
+"""Small helpers shared by the Claude, Codex, Antigravity and ZCode sides."""
 
 from __future__ import annotations
 
@@ -13,22 +13,34 @@ from typing import Optional
 
 HOME = Path.home()
 STATE_DIR = Path(os.environ.get("CCX_HOME", HOME / ".ccx"))
-NAME = {"claude": "Claude", "codex": "Codex", "antigravity": "Antigravity"}
-TOOLS = ("claude", "codex", "antigravity")
+NAME = {"claude": "Claude", "codex": "Codex", "antigravity": "Antigravity", "zcode": "ZCode"}
+TOOLS = ("claude", "codex", "antigravity", "zcode")
 # Where a session goes when nobody says: Claude and Codex to each other.
-OTHER = {"claude": "codex", "codex": "claude", "antigravity": "claude"}
+OTHER = {"claude": "codex", "codex": "claude", "antigravity": "claude", "zcode": "claude"}
+# Apps that only count once their desktop app has been used on this Mac.
+OPTIONAL = ("antigravity", "zcode")
+
+
+def present(tool: str) -> bool:
+    """The app is set up on this Mac (Claude and Codex always count)."""
+    if tool == "antigravity":
+        from . import antigravity
+        return antigravity.installed()
+    if tool == "zcode":
+        from . import zcode
+        return zcode.installed()
+    return True
 
 
 def others(tool: str) -> list:
-    """The other apps a `tool` session can go to. Antigravity only counts once
-    its desktop app has been used on this Mac, so without it ccx is the same
-    two-app tool it always was."""
-    from . import antigravity
-    return [t for t in TOOLS if t != tool and (t != "antigravity" or antigravity.installed())]
+    """The other apps a `tool` session can go to. Antigravity and ZCode only count
+    once their desktop app has been used on this Mac, so without them ccx is the
+    same two-app tool it always was."""
+    return [t for t in TOOLS if t != tool and present(t)]
 
 
 def names(tools) -> str:
-    """'Codex', 'Codex and Antigravity', 'Claude, Codex and Antigravity'."""
+    """'Codex', 'Codex and Antigravity', 'Claude, Codex, Antigravity and ZCode'."""
     ns = [NAME[t] for t in tools]
     return ns[0] if len(ns) == 1 else ", ".join(ns[:-1]) + " and " + ns[-1] if ns else ""
 
@@ -67,7 +79,7 @@ TAG = "ccx-sync"
 
 @dataclass
 class Session:
-    tool: str  # "claude" | "codex" | "antigravity"
+    tool: str  # "claude" | "codex" | "antigravity" | "zcode"
     id: str
     cwd: str
     mtime: float

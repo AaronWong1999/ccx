@@ -1,9 +1,9 @@
 """Paired sessions and incremental sync.
 
 A pair links two conversations of the same task in two different apps (Claude,
-Codex, Antigravity). A conversation can be in one pair per other app, so a task
-that lives in all three is three pairs: every app's progress reaches the other
-two, each exactly once.
+Codex, Antigravity, ZCode). A conversation can be in one pair per other app, so a
+task that lives in all four is six pairs: every app's progress reaches the other
+three, each exactly once.
 
 Each side of a pair has a cursor: how many of that side's units have already
 been delivered to the other side. Syncing never edits a live session; the
@@ -20,7 +20,7 @@ import subprocess
 import time
 from typing import List, Optional, Tuple
 
-from . import antigravity, claude, cloud, codex
+from . import antigravity, claude, cloud, codex, zcode
 from .common import NAME, OTHER, PLAN, STATE_DIR, TAG, TOOLS, Session, clip, est_tokens, folder_note, git_snapshot
 
 PAIRS = STATE_DIR / "pairs.json"
@@ -103,6 +103,8 @@ def lookup(tool: str, sid: str) -> Optional[Session]:
             return claude.find(sid)
         if tool == "codex":
             return codex.find(sid)
+        if tool == "zcode":
+            return zcode.find(sid) if zcode.installed() else None
         return antigravity.find(sid) if antigravity.installed() else None
     except RuntimeError:
         return None  # that app isn't installed
@@ -118,20 +120,22 @@ def locate(sid: str, among=TOOLS) -> Optional[Session]:
 
 
 def close_triangle(a_tool: str, a_id: str, b_tool: str, b_id: str):
-    """`a` and `b` were just linked. When `a` is also linked to a conversation in
-    the third app, link that one to `b` too, so all three stay in sync. It owes
-    `b` exactly the progress it still owes `a`."""
-    third = next((t for t in TOOLS if t not in (a_tool, b_tool)), None)
-    pa = find(a_tool, a_id, third) if third else None
-    if not pa or cloud.is_claude(pa[third]["id"]) or cloud.is_codex(pa[third]["id"]):
-        return
-    if find(third, pa[third]["id"], b_tool) or find(b_tool, b_id, third):
-        return
-    try:
-        b_side = side(b_tool, b_id)
-    except RuntimeError:
-        return
-    link(dict(pa[third]), b_side, tools=(third, b_tool))
+    """`a` and `b` were just linked. Every conversation `a` is also linked to in
+    another app gets linked to `b` too, so all of the task's conversations stay in
+    sync. Each owes `b` exactly the progress it still owes `a`."""
+    for third in TOOLS:
+        if third in (a_tool, b_tool):
+            continue
+        pa = find(a_tool, a_id, third)
+        if not pa or cloud.is_claude(pa[third]["id"]) or cloud.is_codex(pa[third]["id"]):
+            continue
+        if find(third, pa[third]["id"], b_tool) or find(b_tool, b_id, third):
+            continue
+        try:
+            b_side = side(b_tool, b_id)
+        except RuntimeError:
+            return
+        link(dict(pa[third]), b_side, tools=(third, b_tool))
 
 
 # --------------------------------------------------------------------- goal
@@ -140,7 +144,7 @@ def goal(tool: str, sid: str) -> Optional[dict]:
     """A session's /goal, read from the app itself (never set by ccx)."""
     if tool == "codex":
         return codex.goal(sid)
-    if tool == "antigravity":
+    if tool in ("antigravity", "zcode"):
         return None
     s = claude.find(sid)
     return claude.goal(s.path) if s and s.path else None
@@ -167,6 +171,9 @@ def session_units(tool: str, sid: str, include_imported: bool = False) -> Tuple[
     if tool == "antigravity":
         s = antigravity.find(sid)
         return s, (antigravity.units(antigravity.steps(s.id), include_imported) if s else [])
+    if tool == "zcode":
+        s = zcode.find(sid)
+        return s, (zcode.units(s.id, include_imported) if s else [])
     s = codex.find(sid)
     return s, (codex.units(codex.items(sid)) if s else [])
 
@@ -179,6 +186,8 @@ def side(tool: str, sid: str) -> dict:
     d = {"id": s.id, "cwd": s.cwd, "cursor": len(us)}
     if tool == "codex":
         d["size"], d["updated_at"] = codex.size_of(s), s.mtime
+    if tool == "zcode":
+        d["updated_at"] = s.mtime
     return d
 
 
@@ -291,6 +300,11 @@ def _delta(pair: dict, here_tool: str, budget: int, updates: list) -> Optional[d
         if not s or s.steps <= o["cursor"]:
             return None  # read from Antigravity's summary table: no need for the app to run
         us = antigravity.units(antigravity.steps(s.id))
+    elif other == "zcode":
+        s = zcode.find(o["id"])
+        if not s or o.get("updated_at") == s.mtime:
+            return None  # ZCode stamps a conversation whenever it changes
+        us = zcode.units(s.id)
     else:
         s, us = session_units(other, o["id"])
         if not s:
@@ -303,7 +317,7 @@ def _delta(pair: dict, here_tool: str, budget: int, updates: list) -> Optional[d
     result = {"from": other, "session": s.id, "count": len(new),
               "context": wrap(note + render(new, other, budget), s, pair[here_tool]["cwd"], first=False)} if new else None
     updates.append((pair, other, dict(cursor=len(us), size=codex.size_of(s) if other == "codex" else None,
-                   updated_at=s.mtime if other == "codex" else None, goal_sent=_goal_key(g) if new else None)))
+                   updated_at=s.mtime if other in ("codex", "zcode") else None, goal_sent=_goal_key(g) if new else None)))
     return result
 
 
@@ -348,6 +362,8 @@ def continue_from(here_tool: str, here_id: str, here_cwd: str, other_id: str, ot
     there = {"id": s.id, "cwd": s.cwd, "cursor": len(us), "goal_sent": _goal_key(g)}
     if other == "codex":
         there["size"], there["updated_at"] = codex.size_of(s), s.mtime
+    if other == "zcode":
+        there["updated_at"] = s.mtime
     context = wrap(goal_note(g, other) + render([u for u in shown if u], other, FULL_BUDGET), s, here["cwd"], first=True)
     link(here, there, tools=(here_tool, other))
     close_triangle(other, s.id, here_tool, here_id)
@@ -370,6 +386,10 @@ def pending(tool: str, sid: str, other: Optional[str] = None) -> Tuple[int, int]
         a = antigravity.find(sid)
         if not a or a.steps <= pair[tool]["cursor"]:
             return 0, 0
+    if tool == "zcode":
+        z = zcode.find(sid)
+        if not z or pair[tool].get("updated_at") == z.mtime:
+            return 0, 0
     s, us = session_units(tool, sid)
     new = [u for u in us[pair[tool]["cursor"]:] if u] if s else []
     return len(new), (est_tokens(render(new, tool, HOOK_BUDGET)) + 500 if new else 0)
@@ -386,9 +406,12 @@ def links(s: Session) -> dict:
             st = "updated" if getattr(s, "steps", 0) > mine["cursor"] else "linked"
         elif s.tool == "codex" and mine.get("updated_at") == s.mtime and time.time() - s.mtime > 5:
             st = "linked"
+        elif s.tool == "zcode" and mine.get("updated_at") == s.mtime:
+            st = "linked"
         else:
             if us is None:
-                us = codex.units(codex.items(s.id)) if s.tool == "codex" else (claude.units(s.path) if s.path else [])
+                us = codex.units(codex.items(s.id)) if s.tool == "codex" else zcode.units(s.id) if s.tool == "zcode" \
+                    else (claude.units(s.path) if s.path else [])
             st = "updated" if any(us[mine["cursor"]:]) else "linked"
         out[other] = {"id": pair[other]["id"], "status": st}
     return out

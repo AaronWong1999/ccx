@@ -1,14 +1,14 @@
 <h1 align="center">ccx - claudecodex</h1>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/NEW-Antigravity_support-14b8a6?style=for-the-badge" alt="NEW: Antigravity support"><br>
-  <b>Now with Antigravity: switch between Claude Code, Codex and Antigravity, in any direction.</b><br>
-  <b>新增 Antigravity 支持：Claude Code、Codex、Antigravity 三个现在可以互相切换。</b>
+  <img src="https://img.shields.io/badge/NEW-ZCode_support-14b8a6?style=for-the-badge" alt="NEW: ZCode support"><br>
+  <b>Now with ZCode: switch between Claude Code, Codex, Antigravity and ZCode, in any direction.</b><br>
+  <b>新增 ZCode 支持：Claude Code、Codex、Antigravity、ZCode 四个现在可以任意互相切换。</b>
 </p>
 
 <p align="center">
-  <b>Hit a limit in Claude Code, Codex or Antigravity? Hand the task to another agent with its context, then switch back.</b><br>
-  Claude Code、Codex 或 Antigravity 额度用完了？带着上下文换一个 agent 接着干，随时再切回来。
+  <b>Hit a limit in Claude Code, Codex, Antigravity or ZCode? Hand the task to another agent with its context, then switch back.</b><br>
+  Claude Code、Codex、Antigravity 或 ZCode 额度用完了？带着上下文换一个 agent 接着干，随时再切回来。
 </p>
 
 <p align="center">
@@ -30,35 +30,47 @@
 
 | | Without ccx · 没有 ccx | With ccx · 有了 ccx |
 |---|---|---|
-| Usage limit hit<br>额度用完 | Wait for usage to reset<br>干等额度恢复 | Continue in either of the other two apps<br>切到另外两个 app 中的任一个继续干 |
+| Usage limit hit<br>额度用完 | Wait for usage to reset<br>干等额度恢复 | Continue in any of the other apps<br>切到其他任一个 app 继续干 |
 | Stuck on a problem<br>卡在某个问题上 | Keep retrying the same agent, or paste everything over by hand<br>在同一个 agent 上反复重试，或手动把来龙去脉贴过去 | Let the other agent take a shot, already up to speed<br>换另一个 agent 试试，它已经了解来龙去脉 |
 | Try Gemini in Antigravity<br>想让 Antigravity 里的 Gemini 试试 | Start over or paste the whole task history<br>从头解释，或手动复制整个任务记录 | Bring the task from Claude or Codex, ready to continue<br>把 Claude 或 Codex 的任务带过去，接着干 |
 | Switching apps<br>换 app | Re-explain all context<br>重新解释全部上下文 | The next agent already has the context<br>下一个 agent 已经了解进展 |
 | Coming back<br>切回来 | Start a new chat<br>新开对话 | Same conversation, same progress<br>原来的对话，同样的进展 |
 
-ccx connects **Claude Code, Codex and Antigravity** on your Mac. Move a task between their **desktop apps** with the ⇄ menu, keeping the conversation, plan and progress together. First time: import and link. Next time: continue the linked conversation with new progress. No ccx account, server or telemetry.<br>
-ccx 把 Mac 上的 **Claude Code、Codex 和 Antigravity** 连起来。通过菜单栏 ⇄ 在三个**桌面版**之间接力，对话、计划和进展一起带过去。第一次导入并关联，之后回到关联的对话就能带入新进展。不需要 ccx 账号、服务器，也不收集数据。
+ccx connects **Claude Code, Codex, Antigravity and ZCode** on your Mac. Move a task between their **desktop apps** with the ⇄ menu, keeping the conversation, plan and progress together. First time: import and link. Next time: continue the linked conversation with new progress. No ccx account, server or telemetry.<br>
+ccx 把 Mac 上的 **Claude Code、Codex、Antigravity 和 ZCode** 连起来。通过菜单栏 ⇄ 在这几个**桌面版**之间接力，对话、计划和进展一起带过去。第一次导入并关联，之后回到关联的对话就能带入新进展。不需要 ccx 账号、服务器，也不收集数据。
 
-### Claude, Codex and Antigravity · 三家接力
+### Claude, Codex, Antigravity and ZCode · 四家接力
 
 Gemini’s latest models make **[Antigravity](https://antigravity.google/docs/models)** another strong coding option alongside Claude Code and Codex. Want Gemini to tackle the bug, or has one app hit its limit? Hand over the task with its context instead of starting over. Claude → Codex → Antigravity → back again: use the agent and quota available to you, and keep the same task moving.<br>
 Gemini 的新模型让 **[Antigravity](https://antigravity.google/docs/models)** 成为 Claude Code 和 Codex 之外的又一个强力编程选择。想让 Gemini 换个思路解题，或者哪一家额度用完了？把任务连同上下文交过去，不必从头解释。Claude → Codex → Antigravity → 再切回来：哪边还有额度、哪边更适合，就让哪边接着干。
 
 ```
-        Claude Code
-         ⇄       ⇄
-     Codex   ⇄   Antigravity
+     Claude Code   ⇄   Codex
+          ⇅      ⤫      ⇅
+     Antigravity   ⇄   ZCode
 ```
 
-- **Nothing to turn on.** Once you have opened Antigravity on your Mac, ccx sets itself up there and the ⇄ menu shows three apps; without it, ccx is the same two-app tool as before.<br>**不用开任何开关。** 安装并打开过 Antigravity 后，ccx 会自己装进去，⇄ 菜单变成三个 app；没装，ccx 和以前的双 app 版本完全一样。
+**[ZCode](https://zcode.z.ai)**, Z.ai's desktop coding app with the GLM models, is the fourth. Every pair links the same way, and a task linked in all four stays one task.<br>
+Z.ai 的桌面编程 app **[ZCode](https://zcode.z.ai)**（GLM 模型）是第四家。任意两家都能关联，四家都关联的任务仍然是同一个任务。
+
+- **Nothing to turn on.** Once you have opened Antigravity or ZCode on your Mac, ccx sets itself up there and the ⇄ menu lists it; apps you don't have simply don't show up.<br>**不用开任何开关。** 安装并打开过 Antigravity 或 ZCode 后，ccx 会自己装进去，⇄ 菜单里就会出现它；没装的 app 不会出现。
 - **⇄ → project → session → “Continue in …”.** Each target shows its state: ○ first time (imports and links), ✓ linked and in sync, ↻ linked with new progress to bring.<br>**⇄ → 项目 → 会话 → “去 … 接着干”。** 每个去向都标着状态：○ 首次（导入并关联），✓ 已关联且已同步，↻ 已关联、有新进展待带入。
-- **In a conversation:** `/to-antigravity` · `/from-antigravity` in Claude, `$to-antigravity` · `$from-antigravity` in Codex, and “continue the ‹name› session from Claude / Codex” in Antigravity.<br>**在对话里：** Claude 里用 `/to-antigravity` · `/from-antigravity`，Codex 里用 `$to-antigravity` · `$from-antigravity`，Antigravity 里说“从 Claude / Codex 把 ‹名称› 那个会话导入，接着干”。
+- **In a conversation:** `/to-antigravity` · `/from-zcode` and the like in Claude, `$to-antigravity` · `$from-zcode` and the like in Codex, and “continue the ‹name› session from Claude / Codex” in Antigravity and ZCode.<br>**在对话里：** Claude 里用 `/to-antigravity` · `/from-zcode` 等，Codex 里用 `$to-antigravity` · `$from-zcode` 等，Antigravity 和 ZCode 里说“从 Claude / Codex 把 ‹名称› 那个会话导入，接着干”。
 
 <details>
 <summary><b>Antigravity handoff details · Antigravity 交接细节</b></summary>
 
 - **Two things Antigravity does differently.** It can't take history into a conversation, so a task sent there starts a new Antigravity conversation whose first message is the condensed conversation; Antigravity answers that once, with a single line. And it has no link that opens one conversation, so ccx opens the app and tells you which conversation it is (titled `⇄ …`, under the project).<br>**Antigravity 有两点不一样。** 它不能往对话里写入历史，所以传过去的任务会新开一个 Antigravity 对话，第一条消息是压缩后的对话内容，Antigravity 会回复一行确认。它也没有“打开某个对话”的链接，所以 ccx 打开 app 后会告诉你是哪一个（标题带 `⇄`，在对应项目下）。
 - **How it reads Antigravity.** Titles, folders and sync state come from Antigravity's own summary database and work with the app closed. A conversation's content is read through the app's local service, so ccx starts Antigravity in the background when it needs to read one.<br>**怎么读取 Antigravity。** 标题、目录和同步状态来自 Antigravity 自己的摘要数据库，app 关着也能读。对话内容通过 app 的本机服务读取，所以需要读某个对话而 Antigravity 没开时，ccx 会在后台把它启动。
+
+</details>
+
+<details>
+<summary><b>ZCode handoff details · ZCode 交接细节</b></summary>
+
+- **A native import.** A task sent to ZCode becomes a ZCode conversation with the whole history in it, through the same import ZCode uses for "Import from Claude Code", using the model you last picked in ZCode. Nothing is sent to the model until you write there.<br>**原生导入。** 传到 ZCode 的任务会成为一个带完整历史的 ZCode 对话，走的是 ZCode 自己“从 Claude Code 导入”用的同一个导入接口，模型用你在 ZCode 里最近选的那个。你在那边发消息之前，不会调用模型。
+- **ZCode lists a new conversation after a restart.** ZCode has no link to a conversation and no refresh, so when it is idle ccx quits it and opens it again on the project, and the conversation is at the top; no clicks. If a ZCode task is running, ccx asks first and can restart ZCode once that task is done. If ZCode was closed, it simply opens.<br>**ZCode 重启后才会列出新对话。** ZCode 没有打开某个对话的链接，也没有刷新，所以它空闲时 ccx 会把它退出再在对应项目上打开，新对话就在最上面，不用点任何东西。ZCode 有任务在跑时会先问你，可以等那个任务完成后再重启；ZCode 本来没开就直接打开。
+- **How it reads ZCode.** Titles and content come from ZCode's own conversation database, read only, so it works with the app closed. Later progress arrives through ZCode's plugin hook when you send your next message there.<br>**怎么读取 ZCode。** 标题和内容来自 ZCode 自己的对话数据库，只读，app 关着也能读。之后的新进展通过 ZCode 的插件 hook，在你下次在那边发消息时带进去。
 
 </details>
 
@@ -94,8 +106,8 @@ curl -fsSL https://raw.githubusercontent.com/aaronwong1999/ccx/main/install.sh |
 Before Claude Code 2.1.275: `/plugin marketplace add AaronWong1999/ccx`, then `/plugin install ccx@ccx`.<br>
 Claude Code 2.1.275 之前的版本：先 `/plugin marketplace add AaronWong1999/ccx`，再 `/plugin install ccx@ccx`。
 
-**You need** macOS 13+ and at least two of the desktop apps: [Claude](https://claude.com/download), [Codex](https://openai.com/codex), [Antigravity](https://antigravity.google). Pick any two, or use all three. Open each app and sign in first; in Claude, open **Code** once. If only one is installed, ccx sets it up and connects the others when you add them.<br>
-**需要：** macOS 13+，以及以下桌面版中至少两个：[Claude](https://claude.com/download)、[Codex](https://openai.com/codex)、[Antigravity](https://antigravity.google)。任意两个都能互通，三个也可以全用。先分别打开并登录；Claude 里需点开一次 **Code**。只装了一个也可以先安装 ccx，之后添加其他 app 时会自动补上。
+**You need** macOS 13+ and at least two of the desktop apps: [Claude](https://claude.com/download), [Codex](https://openai.com/codex), [Antigravity](https://antigravity.google), [ZCode](https://zcode.z.ai). Pick any two, or use them all. Open each app and sign in first; in Claude, open **Code** once. If only one is installed, ccx sets it up and connects the others when you add them.<br>
+**需要：** macOS 13+，以及以下桌面版中至少两个：[Claude](https://claude.com/download)、[Codex](https://openai.com/codex)、[Antigravity](https://antigravity.google)、[ZCode](https://zcode.z.ai)。任意两个都能互通，也可以全用。先分别打开并登录；Claude 里需点开一次 **Code**。只装了一个也可以先安装 ccx，之后添加其他 app 时会自动补上。
 
 <details>
 <summary><b>What you may be asked · 安装时可能出现的确认</b></summary>
@@ -118,7 +130,7 @@ Nothing else asks for passwords, admin rights or accessibility access.<br>
 
 1. Checks macOS, the desktop apps and Apple's Command Line Tools; with none of the three apps installed it stops and changes nothing.<br>检查系统版本、三个桌面版和苹果命令行工具；三个 app 都没装就停下，不做任何改动。
 2. Downloads the newest release of ccx to `~/Library/Application Support/ccx`.<br>把 ccx 的最新正式版下载到 `~/Library/Application Support/ccx`。
-3. Installs the ccx plugin into the apps you have: Claude, Codex and Antigravity. Their hooks bring linked conversations' new progress into the app you continue in.<br>用这份副本把 ccx 插件装进你已有的 Claude、Codex 和 Antigravity；各自的 hook 会在你继续对话时带入已关联会话的新进展。
+3. Installs the ccx plugin into the apps you have: Claude, Codex, Antigravity and ZCode. Their hooks bring linked conversations' new progress into the app you continue in.<br>用这份副本把 ccx 插件装进你已有的 Claude、Codex、Antigravity 和 ZCode；各自的 hook 会在你继续对话时带入已关联会话的新进展。
 4. Turns that hook on in Codex, which asks for every third-party hook to be approved; the installer approves ccx's own hook and only that one.<br>在 Codex 里启用这个 hook：Codex 要求手动批准第三方 hook，安装脚本只批准 ccx 自己的这一个。
 5. Builds the ⇄ menu bar icon on your Mac (nothing downloaded needs a signature) and starts it at login.<br>在本机编译菜单栏 ⇄ 图标（不下载任何需要签名的程序），并设为登录时启动。
 6. Adds a `ccx` command in `~/.local/bin`, and puts that folder on your PATH in `~/.zprofile` if needed.<br>在 `~/.local/bin` 加一个 `ccx` 命令，必要时把这个目录写进 `~/.zprofile` 的 PATH。
@@ -143,7 +155,7 @@ Nothing else asks for passwords, admin rights or accessibility access.<br>
 | Antigravity hit its limit; move back<br>Antigravity 也用完了，换回来 | Choose its session in ⇄ → **Continue in Claude / Codex**, or say “continue in Claude / Codex” inside Antigravity.<br>在 ⇄ 里选它的会话 → **去 Claude / Codex 接着干**；也可在 Antigravity 里说“转给 Claude / Codex 继续” |
 | Return to an app you used before<br>回到之前用过的 app | Open its **linked conversation** and send “continue”; the others’ new progress comes along.<br>打开它**已关联的对话**，发一句“继续”，另外两边的新进展会一起带进来 |
 | One agent is stuck; try another<br>一个 agent 卡住了，换个思路 | Make the same switch. Once solved, return to the original linked conversation; the solution comes back with it.<br>用同样的方法切换。解决后回到原来关联的对话，解决过程会一起带回来 |
-| Bring another app’s task into this conversation<br>把别处的任务带进当前对话 | Say **“continue the ‹name› session from Claude / Codex / Antigravity”**, or paste a screenshot of the session.<br>说 **“从 Claude / Codex / Antigravity 把 ‹名称› 那个会话导入，接着干”**，也可以贴会话截图 |
+| Bring another app’s task into this conversation<br>把别处的任务带进当前对话 | Say **“continue the ‹name› session from Claude / Codex / Antigravity / ZCode”**, or paste a screenshot of the session.<br>说 **“从 Claude / Codex / Antigravity / ZCode 把 ‹名称› 那个会话导入，接着干”**，也可以贴会话截图 |
 | Pull or send with a skill<br>用指令拉取或转交 | Claude: `/from-codex`, `/to-codex`, `/from-antigravity`, `/to-antigravity`. Codex: `$from-claude`, `$to-claude`, `$from-antigravity`, `$to-antigravity`. In Antigravity, ask to continue from or switch to Claude / Codex.<br>Claude 和 Codex 中用相应指令；Antigravity 中直接说从 Claude / Codex 接着干，或转给它们 |
 
 The ⇄ menu groups conversations by project and app. Choose a session, then a destination: ○ first import and link, ✓ linked and in sync, ↻ linked with new progress to bring on the next message there. Each destination has its own state. English or Chinese via Language / 语言.<br>
@@ -184,14 +196,14 @@ Using [magpie](https://github.com/yetone/magpie)? This repository is also a magp
 
 ## FAQ · 常见问题
 
-**Does ccx upload my code or conversation to its own service?** No. Sync runs on your Mac; Codex data goes only through Codex's own app-server API. Cloud sessions are read by Claude Code's and Codex's own CLIs with their own sign-in; ccx does not handle their sign-in. Antigravity is read and written through its own local service and its `agentapi` command; a task you send to Antigravity becomes a message in your own Antigravity conversation, like one you typed. The receiving coding app uses its own model service as usual. ccx itself reaches GitHub only to install and check for updates.<br>
-**ccx 会把代码或对话传到自己的服务吗？** 不会。同步在本机进行；Codex 的数据只通过 Codex 自己的 app-server 接口读写。云端会话由 Claude Code 和 Codex 自己的命令行用它们自己的登录读取，ccx 不接管这些 app 的登录。Antigravity 通过它自己的本机服务和 `agentapi` 命令读写；你传到 Antigravity 的任务会成为你自己 Antigravity 对话里的一条消息，和你手动输入的一样。接收任务的 coding app 仍像平常一样调用自己的模型服务。ccx 本身只在安装和检查更新时访问 GitHub。
+**Does ccx upload my code or conversation to its own service?** No. Sync runs on your Mac; Codex data goes only through Codex's own app-server API. Cloud sessions are read by Claude Code's and Codex's own CLIs with their own sign-in; ccx does not handle their sign-in. Antigravity is read and written through its own local service and its `agentapi` command; a task you send to Antigravity becomes a message in your own Antigravity conversation, like one you typed. ZCode is read from its own database and written through its own import, on your Mac. The receiving coding app uses its own model service as usual. ccx itself reaches GitHub only to install and check for updates.<br>
+**ccx 会把代码或对话传到自己的服务吗？** 不会。同步在本机进行；Codex 的数据只通过 Codex 自己的 app-server 接口读写。云端会话由 Claude Code 和 Codex 自己的命令行用它们自己的登录读取，ccx 不接管这些 app 的登录。Antigravity 通过它自己的本机服务和 `agentapi` 命令读写；你传到 Antigravity 的任务会成为你自己 Antigravity 对话里的一条消息，和你手动输入的一样。ZCode 从它自己的数据库读取，通过它自己的导入接口写入，都在本机。接收任务的 coding app 仍像平常一样调用自己的模型服务。ccx 本身只在安装和检查更新时访问 GitHub。
 
-**Does it bypass usage limits?** No. You use your own Claude, ChatGPT/Codex and Antigravity accounts, each within its own limits; ccx only moves the task between them.<br>
-**这是在绕过额度限制吗？** 不是。你用的是自己的 Claude、ChatGPT/Codex 和 Antigravity 账号，各自在各自的额度内；ccx 只是在三者之间搬运任务。
+**Does it bypass usage limits?** No. You use your own Claude, ChatGPT/Codex, Antigravity and ZCode accounts, each within its own limits; ccx only moves the task between them.<br>
+**这是在绕过额度限制吗？** 不是。你用的是自己的 Claude、ChatGPT/Codex、Antigravity 和 ZCode 账号，各自在各自的额度内；ccx 只是在它们之间搬运任务。
 
-**Windows, Linux, or the standalone CLIs?** Not yet: ccx needs macOS 13+ and at least two supported desktop apps: Claude, Codex and Antigravity. It uses their local data and bundled services; standalone CLI-only setups are not supported.<br>
-**支持 Windows、Linux 或单独的命令行版吗？** 暂时不支持：ccx 需要 macOS 13+，以及 Claude、Codex、Antigravity 三个桌面版中的至少两个；它使用这些 app 的本机数据和内置服务，暂不支持只装独立 CLI 的组合。
+**Windows, Linux, or the standalone CLIs?** Not yet: ccx needs macOS 13+ and at least two supported desktop apps: Claude, Codex, Antigravity and ZCode. It uses their local data and bundled services; standalone CLI-only setups are not supported.<br>
+**支持 Windows、Linux 或单独的命令行版吗？** 暂时不支持：ccx 需要 macOS 13+，以及 Claude、Codex、Antigravity、ZCode 桌面版中的至少两个；它使用这些 app 的本机数据和内置服务，暂不支持只装独立 CLI 的组合。
 
 <details>
 <summary><b>More questions · 更多问题</b></summary>
@@ -230,8 +242,8 @@ Using [magpie](https://github.com/yetone/magpie)? This repository is also a magp
                    ⇄ menu bar + ccx CLI
 ```
 
-Each pair of linked conversations keeps track of how much each has received from the other. Add the third app and ccx fills in the remaining links, so each destination gets new progress without resending what it already has. Your next message triggers the sync. Saying “continue X from …” links the conversation you are in to X; the ⇄ menu imports and links it in the chosen app. Claude and Codex use native session imports; Antigravity starts with a condensed context message. Long history is condensed, and `read_session` can page through the rest.<br>
-每对关联的会话都记录“对面已经收到多少”。第三个 app 加入时，ccx 会补齐其余关联，让每个去向收到新进展，已收到的不重复发送。你发下一条消息时触发同步。说“从 … 接着 X 干”，会关联当前对话；⇄ 菜单则在选定的 app 里导入并关联。Claude 和 Codex 走原生会话导入，Antigravity 用一条压缩后的上下文消息开始。较长的历史会被压缩，其余内容可通过 `read_session` 分页补读。
+Each pair of linked conversations keeps track of how much each has received from the other. Add another app and ccx fills in the remaining links, so each destination gets new progress without resending what it already has. Your next message triggers the sync. Saying “continue X from …” links the conversation you are in to X; the ⇄ menu imports and links it in the chosen app. Claude, Codex and ZCode use native session imports; Antigravity starts with a condensed context message. Long history is condensed, and `read_session` can page through the rest.<br>
+每对关联的会话都记录“对面已经收到多少”。又有一个 app 加入时，ccx 会补齐其余关联，让每个去向收到新进展，已收到的不重复发送。你发下一条消息时触发同步。说“从 … 接着 X 干”，会关联当前对话；⇄ 菜单则在选定的 app 里导入并关联。Claude、Codex 和 ZCode 走原生会话导入，Antigravity 用一条压缩后的上下文消息开始。较长的历史会被压缩，其余内容可通过 `read_session` 分页补读。
 
 ## Updates · 更新
 

@@ -21,9 +21,10 @@ TMP = tempfile.mkdtemp(prefix="ccx-test-")
 os.environ["CLAUDE_CONFIG_DIR"] = os.path.join(TMP, "claude")
 os.environ["CCX_HOME"] = os.path.join(TMP, "state")
 os.environ["ANTIGRAVITY_HOME"] = os.path.join(TMP, "gemini", "antigravity")  # not installed, unless a test sets it up
+os.environ["ZCODE_HOME"] = os.path.join(TMP, "zcode")  # not installed, unless a test sets it up
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "plugins/ccx/lib"))
 
-from ccx import antigravity, claude, cloud, codex, hook, mcp_server, pairs, repairs, sync  # noqa: E402
+from ccx import antigravity, claude, cloud, codex, hook, mcp_server, pairs, repairs, sync, zcode  # noqa: E402
 from ccx.common import TAG, Session  # noqa: E402
 
 PROJ_A = os.path.join(TMP, "proj-a")
@@ -110,6 +111,9 @@ def amsg(t):
 
 class Base(unittest.TestCase):
     def setUp(self):
+        p = mock.patch.object(zcode, "app_path", lambda: None)
+        p.start()
+        self.addCleanup(p.stop)
         pairs.PAIRS.unlink(missing_ok=True)
         self.cx = FakeCodex()
         self.cx.patch(self)
@@ -432,7 +436,7 @@ class Interfaces(Base):
         for k in ("logo", "composerIcon"):
             self.assertTrue((root / "packaging/codex-directory" / pkg["interface"][k]).is_file())
         self.assertEqual(sorted(p.name for p in (root / "packaging/codex-directory/skills").iterdir()),
-                         ["from-antigravity", "from-claude", "to-antigravity", "to-claude"])
+                         ["from-antigravity", "from-claude", "from-zcode", "to-antigravity", "to-claude", "to-zcode"])
 
     def test_hook_injects_only_for_paired_sessions(self):
         claude_file(PROJ_A, "c-hook", [user("hi")], title="hook")
@@ -1287,12 +1291,12 @@ class Usage(Base):
         self.assertEqual(self.u.usage()["antigravity"]["used_percentage"], 60.0)
 
     def test_switch_goes_to_the_app_with_most_room(self):
-        claude_file(PROJ_A, "c-tri-usage", [user("hi")], title="three")
+        claude_file(PROJ_A, "c-usage-three", [user("hi")], title="three")
         self.limit_hit = (time.time() - 60, "You've hit your session limit · resets 9am (UTC)")
         self.codex_window(70)
         self.ag_window(0.9)   # 10 % used
         sw = self.u.usage()["switch"]
-        self.assertEqual((sw["from"], sw["to"], sw["session"]["id"]), ("claude", "antigravity", "c-tri-usage"))
+        self.assertEqual((sw["from"], sw["to"], sw["session"]["id"]), ("claude", "antigravity", "c-usage-three"))
         self.codex_window(100)
         self.ag_window(0)     # all three out: nowhere to go
         self.assertNotIn("switch", self.u.usage())
@@ -1868,6 +1872,235 @@ class ThreeApps(Base):
         self.assertEqual(mcp_server.tools("antigravity")[1]["inputSchema"]["properties"]["app"]["enum"], ["claude", "codex"])
         self.assertEqual(sync.default_target("antigravity", "a-menu"), "claude")
         self.assertEqual(sync.deep_link("antigravity", "a-menu"), "")
+
+
+
+class FakeZCode:
+    """Stands in for the ZCode desktop app: its own sqlite store, in the same shape."""
+
+    SCHEMA = """
+    create table session (id text primary key, directory text, path text, title text, time_updated integer,
+        parent_id text, time_deleted integer, time_archived integer, task_type text);
+    create table message (id text primary key, session_id text, data text, sequence integer, time_created integer);
+    create table part (id text primary key, message_id text, data text, sequence integer, time_created integer);
+    create table session_input (id text primary key, session_id text, status text);
+    """
+    TASKS = """
+    create table tasks (task_id text, deleted integer default 0);
+    create table projects (project_id text, name text, deleted integer default 0);
+    create table project_roots (project_id text, root_path text);
+    """
+
+    def __init__(self, test):
+        import sqlite3
+        self.sqlite3, self.n, self.created, self.running = sqlite3, 0, [], False
+        for path, schema in ((zcode.DB, self.SCHEMA), (zcode.TASKS, self.TASKS)):
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.unlink(missing_ok=True)
+            db = sqlite3.connect(path)
+            db.executescript(schema)
+            db.commit()
+            db.close()
+        zcode.SETTINGS.write_text(json.dumps({"lastActiveWorkspace": None, "lastWorkspaceSession": []}))
+        self.calls = []
+        test.addCleanup(lambda: [f.unlink(missing_ok=True) for f in (zcode.DB, zcode.TASKS, zcode.SETTINGS)])
+        for name, fn in (("app_path", lambda: "/Applications/ZCode.app"),
+                         ("new_session", self.new_session),
+                         ("running", lambda: self.running),
+                         ("open_app", lambda: self.calls.append("open") or True),
+                         ("quit_app", lambda wait=20: self.calls.append("quit") or not setattr(self, "running", False))):
+            p = mock.patch.object(zcode, name, fn)
+            p.start()
+            test.addCleanup(p.stop)
+
+    def sql(self, q, args=(), path=None):
+        db = self.sqlite3.connect(path or zcode.DB)
+        db.execute(q, args)
+        db.commit()
+        db.close()
+
+    def add(self, sid, cwd, title):
+        self.sql("insert into session values (?,?,?,?,?,null,null,null,'interactive')",
+                 (sid, cwd, cwd, title, int(time.time() * 1000)))
+
+    def say(self, sid, role, *parts, done=True, imported=False):
+        """One message made of parts; each part is a dict like ZCode stores."""
+        self.n += 1
+        mid = f"msg_{self.n:04d}"
+        now = int(time.time() * 1000) + self.n
+        m = {"role": role, "time": {"created": now, **({"completed": now} if done else {})}}
+        if imported:
+            m["metadata"] = {"migrationSource": "claudeCode"}
+        self.sql("insert into message values (?,?,?,?,?)", (mid, sid, json.dumps(m), self.n, now))
+        for i, p in enumerate(parts):
+            self.sql("insert into part values (?,?,?,?,?)", (f"prt_{self.n:04d}_{i}", mid, json.dumps(p), i, now))
+        self.sql("update session set time_updated = ? where id = ?", (now + 1000, sid))
+        return mid
+
+    def new_session(self, cwd, title, turns):
+        sid = f"sess_new{len(self.created)}"
+        self.add(sid, cwd, title)
+        for role, t in turns:
+            self.say(sid, role, {"type": "text", "text": t}, imported=True)
+        self.created.append((sid, title, turns))
+        return sid
+
+
+def zt(t, **kw):
+    return {"type": "text", "text": t, **kw}
+
+
+class ZCodeApp(Base):
+    """ZCode as the fourth app."""
+
+    def setUp(self):
+        super().setUp()
+        self.zc = FakeZCode(self)
+        claude_file(PROJ_A, "c-zc", [user("build the parser"), assistant(text("parser built"))], title="Parser")
+
+    def test_units_skip_imports_injections_and_half_written_replies(self):
+        self.zc.add("sess_u", PROJ_A, "Units")
+        self.zc.say("sess_u", "user", zt("old history"), imported=True)
+        self.zc.say("sess_u", "user", zt("add tests"), zt(f"<{TAG}>progress</{TAG}>", synthetic=True))
+        self.zc.say("sess_u", "assistant",
+                    {"type": "reasoning", "text": "hmm"},
+                    {"type": "tool", "tool": "Bash", "state": {"status": "completed", "input": {"command": "pytest"}, "output": "3 passed"}},
+                    {"type": "tool", "tool": "Read", "state": {"input": {"filePath": "a.py"}, "output": "..."}},
+                    {"type": "tool", "tool": "mcp__ccx__continue_here", "state": {"input": {}, "output": "x"}},
+                    {"type": "tool", "tool": "TodoWrite", "state": {"input": {"todos": [
+                        {"content": "lexer", "status": "completed"}, {"content": "parser", "status": "in_progress"}]}}},
+                    {"type": "tool", "tool": "Edit", "state": {"input": {"filePath": "/p/a.py"}}},
+                    zt("tests added"))
+        self.zc.say("sess_u", "assistant", zt("still writi"), done=False)
+        self.zc.say("sess_u", "user", zt("after the unfinished turn"))
+        us = zcode.units("sess_u")
+        self.assertEqual(us[:3], [None, ("user", "add tests"), None])
+        live = [u for u in us if u]
+        self.assertEqual(live[1], ("assistant", "[ran] pytest\n[output] 3 passed"))
+        self.assertIn("- [x] lexer", live[2][1])
+        self.assertIn("- [~] parser", live[2][1])
+        self.assertEqual(live[3:], [("assistant", "[edited] /p/a.py"), ("assistant", "tests added")])
+        self.assertEqual(len(us), 10)  # stops at the reply still being written
+        self.assertEqual(zcode.units("sess_u", include_imported=True)[0], ("user", "old history"))
+        self.assertEqual(zcode.find("u").id, "sess_u")  # an id without its "sess_"
+        self.assertEqual([s.id for s in zcode.sessions(PROJ_A)], ["sess_u"])
+        self.assertEqual(zcode.sessions(PROJ_B), [])
+
+    def test_claude_to_zcode_imports_once_then_syncs_both_ways(self):
+        first = sync.transfer("claude", "c-zc", open_app=False, dst="zcode")
+        self.assertEqual(first["action"], "created")
+        sid = first["target"]["id"]
+        _, title, turns = self.zc.created[0]
+        self.assertEqual(title, "⇄ Parser")
+        self.assertIn("parser built", json.dumps(turns))
+        self.assertEqual(sync.transfer("claude", "c-zc", open_app=False, dst="zcode")["action"], "in_sync")
+        self.assertEqual(len(self.zc.created), 1)
+        self.assertEqual(pairs.links(zcode.find(sid)), {"claude": {"id": "c-zc", "status": "linked"}})
+
+        # Claude moves on: ZCode's hook (UserPromptSubmit, camelCase sessionId) brings it in, once.
+        claude_file(PROJ_A, "c-zc", [user("build the parser"), assistant(text("parser built")),
+                                     user("now the lexer"), assistant(text("lexer done"))], title="Parser")
+        for expect in (True, False):
+            out = io.StringIO()
+            with mock.patch.object(sys, "stdin", io.StringIO(json.dumps({"sessionId": sid, "prompt": "go on"}))), \
+                 mock.patch.object(sys, "argv", ["hook"]), redirect_stdout(out), self.assertRaises(SystemExit):
+                hook.main()
+            self.assertEqual("lexer done" in out.getvalue(), expect, out.getvalue())
+
+        # ZCode moves on: Claude's hook gets exactly that.
+        self.zc.say(sid, "user", zt("ship it"))
+        self.zc.say(sid, "assistant", zt("shipped"))
+        self.assertEqual(pairs.links(zcode.find(sid))["claude"]["status"], "updated")
+        res = pairs.pull("claude", "c-zc")
+        self.assertEqual((res["from"], res["count"]), ("zcode", 2))
+        self.assertIn("shipped", res["context"])
+        self.assertIsNone(pairs.pull("claude", "c-zc"))
+
+    def test_zcode_to_claude_brings_its_whole_history(self):
+        self.zc.add("sess_z", PROJ_A, "Lexer")
+        self.zc.say("sess_z", "user", zt("write a lexer"))
+        self.zc.say("sess_z", "assistant", zt("lexer written"))
+        res = sync.transfer("zcode", "sess_z", open_app=False, dst="claude")
+        self.assertEqual(res["action"], "created")
+        cid = res["target"]["id"]
+        self.assertIn("lexer written", claude.find(cid).path.read_text())
+        self.assertEqual(pairs.links(zcode.find("sess_z"))["claude"]["id"], cid)
+
+    def test_a_deleted_zcode_conversation_is_imported_again(self):
+        sid = sync.transfer("claude", "c-zc", open_app=False, dst="zcode")["target"]["id"]
+        self.zc.sql("update session set time_deleted = 1 where id = ?", (sid,))
+        again = sync.transfer("claude", "c-zc", open_app=False, dst="zcode")
+        self.assertEqual(again["action"], "created")
+        self.assertNotEqual(again["target"]["id"], sid)
+
+    def test_show_restarts_only_when_nothing_is_running(self):
+        self.zc.add("sess_s", PROJ_A, "Show")
+        # closed: it opens on the folder, and the folder is written first
+        self.assertEqual(zcode.show("sess_s", PROJ_A), "launched")
+        self.assertEqual(json.loads(zcode.SETTINGS.read_text())["lastActiveWorkspace"]["workspacePath"], os.path.realpath(PROJ_A))
+        self.assertEqual(self.zc.calls, ["open"])
+        # open and idle: quit, then open on the folder
+        self.zc.running, self.zc.calls = True, []
+        self.assertEqual(zcode.show("sess_s", PROJ_A), "restarted")
+        self.assertEqual(self.zc.calls, ["quit", "open"])
+        # open and working: nothing is touched
+        self.zc.running, self.zc.calls = True, []
+        self.zc.say("sess_s", "assistant", zt("work"), done=False)
+        self.assertTrue(zcode.busy())
+        self.assertEqual(zcode.show("sess_s", PROJ_A), "busy")
+        self.assertEqual(self.zc.calls, [])
+        # already in its list: just brought forward
+        self.zc.sql("insert into tasks values ('sess_s', 0)", path=zcode.TASKS)
+        self.assertEqual(zcode.show("sess_s", PROJ_A), "listed")
+        self.assertEqual(self.zc.calls, ["open"])
+
+    def test_the_settings_file_is_left_alone_while_zcode_runs(self):
+        self.zc.running = True
+        before = zcode.SETTINGS.read_text()
+        self.assertFalse(zcode.set_active_folder(PROJ_A))
+        self.assertEqual(zcode.SETTINGS.read_text(), before)
+
+    def test_restart_when_idle_waits_for_the_running_task(self):
+        self.zc.running = True
+        self.zc.add("sess_w", PROJ_A, "Wait")
+        self.zc.sql("insert into session_input values ('in1', 'sess_w', 'admitted')")
+        seen = []
+
+        def nap(_):
+            seen.append(1)
+            self.zc.sql("update session_input set status = 'done'")
+
+        with mock.patch.object(zcode.time, "sleep", nap):
+            self.assertTrue(zcode.restart_when_idle(PROJ_A, timeout=60, every=1))
+        self.assertEqual(len(seen), 1)
+        self.assertEqual(self.zc.calls, ["quit", "open"])
+
+    def test_a_busy_zcode_asks_before_restarting(self):
+        self.zc.running = True
+        self.zc.add("sess_b", PROJ_B, "Busy")
+        self.zc.say("sess_b", "assistant", zt("work"), done=False)
+        with mock.patch.object(zcode, "ask_restart_when_idle", return_value=True) as ask, \
+             mock.patch.object(zcode, "spawn_restart_when_idle") as spawn:
+            res = sync.transfer("claude", "c-zc", open_app=True, dst="zcode")
+        self.assertEqual(res["zcode"], "busy")
+        ask.assert_called_once()
+        spawn.assert_called_once_with(PROJ_A)
+        self.assertFalse(res["opened"])
+        self.assertEqual(self.zc.calls, [])
+
+    def test_four_apps_stay_one_task(self):
+        ag = FakeAntigravity()
+        ag.patch(self)
+        with mock.patch.object(sync, "_import_to_codex", side_effect=lambda src: (
+                self.cx.add("x-" + src.id, src.cwd, "⇄ " + src.title, [umsg("imported"), amsg("ok")]), "x-" + src.id)[1]):
+            sid = sync.transfer("claude", "c-zc", open_app=False, dst="zcode")["target"]["id"]
+            sync.transfer("claude", "c-zc", open_app=False, dst="codex")
+            sync.transfer("claude", "c-zc", open_app=False, dst="antigravity")
+        self.assertEqual(sorted(pairs.links(zcode.find(sid))), ["antigravity", "claude", "codex"])
+        self.assertEqual(sync.apps(), ["claude", "codex", "antigravity", "zcode"])
+        listing = mcp_server.call("claude", "list_sessions", {"cwd": PROJ_A, "app": "zcode"})
+        self.assertIn("Parser", listing)
+        self.assertEqual(sync.deep_link("zcode", sid), "")
 
 
 if __name__ == "__main__":

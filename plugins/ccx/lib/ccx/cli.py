@@ -1,4 +1,4 @@
-"""ccx - claudecodex: continue the same task across Claude Code, Codex and Antigravity."""
+"""ccx - claudecodex: continue the same task across Claude Code, Codex, Antigravity and ZCode."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ import os
 import sys
 import time
 
-from . import __version__, antigravity, claude, cloud, codex, install, pairs, repairs, usage
+from . import __version__, antigravity, claude, cloud, codex, install, pairs, repairs, usage, zcode
 from .common import copy_to_clipboard, DEFAULTS, NAME, OTHER, TOOLS, L, Session, names, others, real, set_setting, setting
 from .sync import STATUS, continue_phrase, default_target, estimate, find_sessions, menu_data, new_conversation, transfer
 
@@ -17,7 +17,8 @@ def newest(tool: str, cwd: str):
     """The folder's most recent session in `tool` (None when it has none)."""
     try:
         ss = claude.sessions(cwd) if tool == "claude" else codex.threads(cwd, limit=1) if tool == "codex" \
-            else antigravity.sessions(cwd, limit=1) if antigravity.installed() else []
+            else zcode.sessions(cwd, limit=1) if tool == "zcode" and zcode.installed() \
+            else antigravity.sessions(cwd, limit=1) if tool == "antigravity" and antigravity.installed() else []
     except RuntimeError:
         ss = []  # that app isn't installed
     return ss[0] if ss else None
@@ -58,7 +59,7 @@ def run_transfer(src_tool: str, sid: str, a, dst=None):
 
 def sync_apps() -> list:
     from .sync import apps
-    return [t for t in ("codex", "claude", "antigravity") if t in apps()]
+    return [t for t in ("codex", "claude", "antigravity", "zcode") if t in apps()]
 
 
 def _codex_hooks_trusted():
@@ -87,13 +88,13 @@ def main(argv=None):
     common.add_argument("-C", dest="cwd", default=os.getcwd(), help="project folder (default: current folder)")
     common.add_argument("--no-open", action="store_true", help="import/link only, don't open the desktop app")
     common.add_argument("--json", action="store_true", help="JSON output")
-    p = argparse.ArgumentParser(prog="ccx", description="ccx - claudecodex: continue the same task across Claude Code, Codex and Antigravity")
+    p = argparse.ArgumentParser(prog="ccx", description="ccx - claudecodex: continue the same task across Claude Code, Codex, Antigravity and ZCode")
     p.add_argument("--version", action="version", version=f"ccx - claudecodex {__version__}")
     sub = p.add_subparsers(dest="cmd")
     _add = sub.add_parser
     sub.add_parser = lambda *args, **kw: _add(*args, parents=[common], **kw)
     sub.add_parser("switch", help="(default) take this folder's most recent session to the other app")
-    for dst in ("codex", "claude", "antigravity"):
+    for dst in ("codex", "claude", "antigravity", "zcode"):
         sp = sub.add_parser(f"to-{dst}", help=f"take a session from another app to {NAME[dst]} "
                                               f"(import and link the first time, then open the linked one)")
         sp.add_argument("session", nargs="?", help="session id or prefix, from any other app (default: newest in this folder)")
@@ -105,9 +106,9 @@ def main(argv=None):
     sub.add_parser("menu-data", help=argparse.SUPPRESS)
     sub.add_parser("cloud-signin", help="sign in to Claude Code once so its cloud sessions show up (opens Terminal)")
     inf = sub.add_parser("info", help="which app a session belongs to and whether it is linked (for integrations)")
-    inf.add_argument("session", help="Claude session, Codex thread or Antigravity conversation id")
+    inf.add_argument("session", help="Claude session, Codex thread, Antigravity or ZCode conversation id")
     ul = sub.add_parser("unlink", help="stop syncing a linked conversation; every conversation is kept")
-    ul.add_argument("session", help="Claude session, Codex thread or Antigravity conversation id (any side of a link)")
+    ul.add_argument("session", help="Claude session, Codex thread, Antigravity or ZCode conversation id (any side of a link)")
     ul.add_argument("--with", dest="other", choices=TOOLS, help="only its link with this app (default: all its links)")
     tc = sub.add_parser("call", help="run one of ccx's MCP tools from a shell (for skills used without the MCP server)")
     tc.add_argument("host", choices=TOOLS, help="the app the conversation is in")
@@ -123,7 +124,7 @@ def main(argv=None):
     es.add_argument("tool", choices=TOOLS)
     es.add_argument("session")
     es.add_argument("dst", nargs="?", choices=TOOLS)
-    for dst in TOOLS:
+    for dst in ("claude", "codex", "antigravity"):
         nc = sub.add_parser(f"new-{dst}", help=f"open a new {NAME[dst]} conversation that continues a session from another app")
         nc.add_argument("session")
     cf = sub.add_parser("config", help="show or change a setting (language)")
@@ -136,6 +137,8 @@ def main(argv=None):
     up.add_argument("--check", action="store_true", help="only check whether a new release is out")
     rf = sub.add_parser("_refresh", help=argparse.SUPPRESS)
     rf.add_argument("--quiet", action="store_true")
+    zr = sub.add_parser("zcode-restart", help="restart ZCode so it lists conversations imported from outside")
+    zr.add_argument("--when-idle", action="store_true", help="wait until no ZCode task is running first")
     sub.add_parser("doctor", help="check the installation")
     sub.add_parser("repair", help="repair linked Codex project grouping and history format (never stops Codex)")
     au = sub.add_parser("autostart", help="start the menu bar icon at login")
@@ -149,10 +152,10 @@ def main(argv=None):
         if a.cmd in (None, "switch"):
             found = [s for s in (newest(t, cwd) for t in TOOLS) if s]
             if not found:
-                sys.exit(f"no Claude, Codex or Antigravity session in {cwd}")
+                sys.exit(f"no Claude, Codex, Antigravity or ZCode session in {cwd}")
             src = max(found, key=lambda s: s.mtime)
             run_transfer(src.tool, src.id, a)
-        elif a.cmd in ("to-codex", "to-claude", "to-antigravity"):
+        elif a.cmd in ("to-codex", "to-claude", "to-antigravity", "to-zcode"):
             dst = a.cmd[3:]
             src = pick(dst, cwd, a.session, a.src)
             run_transfer(src.tool, src.id, a, dst)
@@ -181,7 +184,7 @@ def main(argv=None):
         elif a.cmd == "info":
             s = pairs.locate(a.session)
             if not s:
-                sys.exit(f"no Claude session, Codex thread or Antigravity conversation {a.session}")
+                sys.exit(f"no Claude session, Codex thread, Antigravity or ZCode conversation {a.session}")
             st, partner = pairs.status(s)
             lk = pairs.links(s)
             d = {"tool": s.tool, "id": s.id, "title": s.title, "cwd": s.cwd, "status": st,
@@ -197,7 +200,7 @@ def main(argv=None):
                 s = Session("codex", a.session, pairs.find("codex", a.session)["codex"]["cwd"], 0,
                             t["title"] if t else a.session)
             if not s:
-                sys.exit(f"no Claude session, Codex thread or Antigravity conversation {a.session}")
+                sys.exit(f"no Claude session, Codex thread, Antigravity or ZCode conversation {a.session}")
             gone = pairs.unlink(s.tool, s.id, a.other)
             partners = [pairs.partner_tool(g, s.tool) for g in gone]
             if a.json:
@@ -256,6 +259,10 @@ def main(argv=None):
             sys.exit(install.update(quiet=a.quiet))
         elif a.cmd == "_refresh":
             sys.exit(install.refresh(quiet=a.quiet))
+        elif a.cmd == "zcode-restart":
+            ok = zcode.restart_when_idle(cwd) if a.when_idle else zcode.restart(cwd)
+            print("✓ ZCode restarted" if ok else "✗ ZCode wasn't restarted")
+            sys.exit(0 if ok else 1)
         elif a.cmd == "doctor":
             sys.exit(install.doctor())
         elif a.cmd == "repair":

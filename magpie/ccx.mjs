@@ -7,7 +7,7 @@ import { homedir } from "node:os"
 import { join } from "node:path"
 
 export const INSTALL =
-  "ccx is not installed. It needs macOS and the Claude, Codex or Antigravity desktop app. Install it with: " +
+  "ccx is not installed. It needs macOS and the Claude, Codex, Antigravity or ZCode desktop app. Install it with: " +
   "curl -fsSL https://raw.githubusercontent.com/aaronwong1999/ccx/main/install.sh | sh"
 
 // CCX_BIN first (tests and custom installs), then where install.sh puts it,
@@ -37,8 +37,8 @@ export function run(args, { signal, env = process.env, timeout = 120000 } = {}) 
 // whose conversations they want, so they call from a different one.
 export const fromOther = (app) => {
   if (app === "claude") return "codex"
-  if (app === "codex" || app === "antigravity") return "claude"
-  throw new Error('app is "claude", "codex" or "antigravity"')
+  if (app === "codex" || app === "antigravity" || app === "zcode") return "claude"
+  throw new Error('app is "claude", "codex", "antigravity" or "zcode"')
 }
 
 export function sessionsArgs({ app, query, cwd } = {}) {

@@ -46,7 +46,7 @@ jobs:
           notes="docs/releases/${GITHUB_REF_NAME#v}.md"
           asset="ccx-${GITHUB_REF_NAME#v}-macos.zip"
           if [ -f "$notes" ]; then
-            gh release create "$GITHUB_REF_NAME" --title "ccx $GITHUB_REF_NAME · Claude ⇄ Codex ⇄ Antigravity" --notes-file "$notes" "$RUNNER_TEMP/$asset"
+            gh release create "$GITHUB_REF_NAME" --title "ccx $GITHUB_REF_NAME · Claude ⇄ Codex ⇄ Antigravity ⇄ ZCode" --notes-file "$notes" "$RUNNER_TEMP/$asset"
           else
             gh release create "$GITHUB_REF_NAME" --title "ccx - claudecodex $GITHUB_REF_NAME" --generate-notes "$RUNNER_TEMP/$asset"
           fi

@@ -1,5 +1,5 @@
 // ccx - claudecodex menu bar app: one click to continue a session in another app
-// (Claude, Codex, Antigravity).
+// (Claude, Codex, Antigravity, ZCode).
 // All the work is done by the `ccx` command; this is only the clickable surface.
 
 import AppKit
@@ -31,8 +31,18 @@ struct Link: Decodable {
     let status: String  // linked | updated
 }
 
-let appNames = ["claude": "Claude", "codex": "Codex", "antigravity": "Antigravity"]
+let appNames = ["claude": "Claude", "codex": "Codex", "antigravity": "Antigravity", "zcode": "ZCode"]
 func appName(_ key: String) -> String { appNames[key] ?? key }
+
+/// Apps that always get (and give) the condensed conversation, never a full native
+/// transcript of the other side: the long-conversation warnings don't apply.
+func condensedOnly(_ app: String) -> Bool { app == "antigravity" || app == "zcode" }
+
+/// "A and B", "A, B and C", "A, B, C and D" (Chinese: "A、B 和 C").
+func joinNames(_ n: [String]) -> String {
+    guard n.count > 1 else { return n.first ?? "" }
+    return L(n.dropLast().joined(separator: ", ") + " and " + n.last!, n.dropLast().joined(separator: "、") + " 和 " + n.last!)
+}
 
 struct Row: Decodable {
     let id: String
@@ -55,8 +65,11 @@ struct Project: Decodable {
     let codex: [Row]
     let claude: [Row]
     let antigravity: [Row]?
+    let zcode: [Row]?
 
-    func rows(_ app: String) -> [Row] { app == "claude" ? claude : app == "codex" ? codex : (antigravity ?? []) }
+    func rows(_ app: String) -> [Row] {
+        app == "claude" ? claude : app == "codex" ? codex : app == "zcode" ? (zcode ?? []) : (antigravity ?? [])
+    }
 }
 
 struct CloudOther: Decodable {
@@ -66,7 +79,7 @@ struct CloudOther: Decodable {
 
 struct MenuData: Decodable {
     let projects: [Project]
-    let apps: [String]?           // the apps ccx moves conversations between here; three with Antigravity
+    let apps: [String]?           // the apps ccx moves conversations between here (plus Antigravity and ZCode when used)
     let cloud_other: CloudOther?  // cloud sessions with no local checkout of their repository
     let claude_cloud_signin: Bool? // Claude Code's CLI isn't signed in, so its cloud sessions can't be listed
     let version: String?
@@ -122,18 +135,19 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
         return NSHomeDirectory() + "/.local/bin/ccx"
     }
 
-    /// Claude and Codex, plus Antigravity once its desktop app is used on this Mac.
-    /// Before the first `ccx` reading (an update notice at launch), Antigravity counts
-    /// when its conversation store is there, as ccx itself decides.
+    /// Claude and Codex, plus Antigravity and ZCode once their desktop apps are used
+    /// on this Mac. Before the first `ccx` reading (an update notice at launch), they
+    /// count when their conversation stores are there, as ccx itself decides.
     var apps: [String] {
-        data?.apps ?? (FileManager.default.fileExists(atPath: NSHomeDirectory() + "/.gemini/antigravity/conversation_summaries.db")
-                       ? ["claude", "codex", "antigravity"] : ["claude", "codex"])
+        if let a = data?.apps { return a }
+        let fm = FileManager.default, home = NSHomeDirectory()
+        return ["claude", "codex"]
+            + (fm.fileExists(atPath: home + "/.gemini/antigravity/conversation_summaries.db") ? ["antigravity"] : [])
+            + (fm.fileExists(atPath: home + "/.zcode/cli/db/db.sqlite")
+               && (fm.fileExists(atPath: "/Applications/ZCode.app") || fm.fileExists(atPath: home + "/Applications/ZCode.app")) ? ["zcode"] : [])
     }
     var threeWay: Bool { apps.count > 2 }
-    var allApps: String {
-        let n = apps.map(appName)
-        return n.count > 2 ? L("\(n[0]), \(n[1]) and \(n[2])", "\(n[0])、\(n[1]) 和 \(n[2])") : L("\(n[0]) and \(n[1])", "\(n[0]) 和 \(n[1])")
-    }
+    var allApps: String { joinNames(apps.map(appName)) }
 
     var version: String {
         data?.version ?? (Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "")
@@ -350,7 +364,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
         i.attributedTitle = s
         // The same row data a click on that session in its project submenu carries.
         let r = data?.projects.flatMap { $0.rows(sw.from) }.first { $0.id == sw.session.id }
-        let ag = to == "antigravity" || sw.from == "antigravity"
+        let ag = condensedOnly(to) || condensedOnly(sw.from)
         i.representedObject = ["from": sw.from, "to": to,
                                "id": sw.session.id, "tokens": String(ag ? 0 : (r?.partner_tokens ?? 0)),
                                "idle": String(r?.partner_idle_min ?? 0), "own": String(r?.own_tokens ?? 0),
@@ -645,7 +659,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
             let t = NSMenuItem(title: "", action: #selector(sessionClicked(_:)), keyEquivalent: "")
             t.target = self
             t.isEnabled = !busy
-            t.representedObject = ["from": from, "to": to, "id": r.id, "tokens": String(to == "antigravity" || from == "antigravity" ? 0 : (r.partner_tokens ?? 0)),
+            t.representedObject = ["from": from, "to": to, "id": r.id, "tokens": String(condensedOnly(to) || condensedOnly(from) ? 0 : (r.partner_tokens ?? 0)),
                                    "idle": String(r.partner_idle_min ?? 0), "own": String(r.own_tokens ?? 0),
                                    "linked": link == nil ? "0" : "1", "title": r.title]
             let s = NSMutableAttributedString(string: "\(glyph)  " + L("Continue in \(appName(to))", "去 \(appName(to)) 接着干"),
@@ -656,6 +670,9 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
             t.toolTip = to == "antigravity" && link == nil
                 ? L("Starts a new Antigravity conversation in this project with the condensed conversation; Antigravity answers once to confirm. They stay in sync from then on.",
                     "在 Antigravity 的这个项目下新开一个对话，带上压缩后的对话内容；Antigravity 会回复一句确认。之后两边自动同步。")
+                : to == "zcode" && link == nil
+                ? L("Imports the conversation into ZCode as its history, in this folder. ZCode lists it after a restart: ccx restarts ZCode right away when it is idle, and asks first when a ZCode task is running.",
+                    "把对话作为历史导入 ZCode 的这个文件夹。ZCode 重启后才会在列表里显示它：ZCode 空闲时 ccx 会立即帮你重启，有任务在跑时会先问你。")
                 : link == nil
                 ? L("Import into \(appName(to)) and link the two; they stay in sync from then on", "导入到 \(appName(to)) 并关联，之后两边自动同步")
                 : L("Open the linked \(appName(to)) conversation; your next message there brings the new progress", "打开 \(appName(to)) 里关联的会话；在那边发一句话就会带上新进展")
@@ -725,7 +742,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 "Codex 仍占用旧导入会话。方便时退出 Codex；ccx 每分钟自动重试。待此提示消失后再打开 Codex。"))
     }
 
-    /// `--click <codex|claude|antigravity> <session id> [--to <app>]` runs exactly what
+    /// `--click <codex|claude|antigravity|zcode> <session id> [--to <app>]` runs exactly what
     /// clicking that session (and, with three apps, its target) in the menu runs, prints the outcome instead of showing it, and exits (for tests).
     var clickTest: Bool { CommandLine.arguments.contains("--click") }
 
@@ -742,10 +759,11 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     rows.append(contentsOf: project.codex)
                     rows.append(contentsOf: project.claude)
                     rows.append(contentsOf: project.antigravity ?? [])
+                    rows.append(contentsOf: project.zcode ?? [])
                 }
             }
             if let r = rows.first(where: { $0.id == a[i + 2] }) {
-                let agy = to == "antigravity" || a[i + 1] == "antigravity"
+                let agy = condensedOnly(to) || condensedOnly(a[i + 1])
                 obj["tokens"] = String(agy ? 0 : (r.partner_tokens ?? 0))
                 obj["idle"] = String(r.partner_idle_min ?? 0)
                 obj["own"] = String(r.own_tokens ?? 0)
@@ -818,8 +836,8 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // 1. The target conversation is huge and idle past its cache lifetime: the next
         //    message there re-reads all of it, however little this transfer adds.
         // 2. An unlinked long Claude session: a full import makes Codex read all of it.
-        //    (Both only between Claude and Codex: Antigravity always gets or gives the condensed conversation.)
-        let stale = tokens >= (from == "codex" ? 250_000 : 150_000) && idle >= 55 && to != "antigravity" && from != "antigravity"
+        //    (Both only between Claude and Codex: Antigravity and ZCode always get or give the condensed conversation.)
+        let stale = tokens >= (from == "codex" ? 250_000 : 150_000) && idle >= 55 && !condensedOnly(to) && !condensedOnly(from)
         let est = stale || (from == "claude" && to == "codex" && !linked && own >= 50_000) ? estimate(from, id) : [:]
         let full = est["full"] ?? 0, small = max(est["condensed"] ?? 0, 1000)
         let n = est["pending"] ?? 0, added = est["pending_tokens"] ?? 0

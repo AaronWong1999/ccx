@@ -1,7 +1,7 @@
-"""The sync hook shared by Claude, Codex and Antigravity: if this conversation
-is linked and another app made progress since the last sync, inject it.
+"""The sync hook shared by Claude, Codex, Antigravity and ZCode: if this
+conversation is linked and another app made progress since the last sync, inject it.
 
-    python -m ccx.hook                 (Claude and Codex: UserPromptSubmit)
+    python -m ccx.hook                 (Claude, Codex and ZCode: UserPromptSubmit)
     python -m ccx.hook --antigravity   (Antigravity: PreInvocation)
 
 The app sends the hook JSON on stdin. On the Claude side it also shows a short
@@ -36,9 +36,9 @@ def main():
         return antigravity_main()
     try:
         data = json.loads(sys.stdin.read() or "{}")
-        sid = data.get("session_id") or data.get("thread_id") or ""
+        sid = data.get("session_id") or data.get("sessionId") or data.get("thread_id") or ""
         # Session ids never collide between the apps, so look the id up on every side.
-        host = next((t for t in ("claude", "codex") if sid and pairs.find(t, sid)), None)
+        host = next((t for t in ("claude", "codex", "zcode") if sid and pairs.find(t, sid)), None)
         res = pairs.pull(host, sid) if host else None
         if host:
             _log(f"{host} session={sid} injected={res['count'] if res else 0}")

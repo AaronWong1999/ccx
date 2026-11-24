@@ -45,7 +45,7 @@ test("sessions lists the app asked for, by calling from the other side", async (
   expect(lastArgs()).toBe("call codex list_sessions --no-open --app claude")
   await call("sessions", { app: "codex", query: "login", cwd: "/tmp/app" })
   expect(lastArgs()).toBe("call claude list_sessions --no-open --app codex --query login -C /tmp/app")
-  await expect(call("sessions", { app: "cursor" })).rejects.toThrow('app is "claude", "codex" or "antigravity"')
+  await expect(call("sessions", { app: "cursor" })).rejects.toThrow('app is "claude", "codex", "antigravity" or "zcode"')
 })
 
 test("read answers the page as JSON and pages on with offset", async () => {

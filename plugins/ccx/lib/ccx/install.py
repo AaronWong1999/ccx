@@ -1,5 +1,5 @@
 """Install, update, check and remove ccx, using the CLIs bundled inside the
-Claude and Codex desktop apps (no separate CLI installs needed) and
+Claude, Codex and ZCode desktop apps (no separate CLI installs needed) and
 Antigravity's plugin folder."""
 
 from __future__ import annotations
@@ -15,7 +15,7 @@ import time
 from pathlib import Path
 from typing import List, Optional, Tuple
 
-from . import __version__, antigravity, claude, cloud, codex, pairs, presence, repairs
+from . import __version__, antigravity, claude, cloud, codex, pairs, presence, repairs, zcode
 from .common import HOME, STATE_DIR, proxy_env
 
 REPO = "aaronwong1999/ccx"
@@ -114,6 +114,8 @@ def needs_setup() -> List[str]:
         pass
     if antigravity.installed() and antigravity_plugin_version() != repo_version():
         out.append("antigravity")
+    if zcode.installed() and not ZCODE_STAMP.exists():
+        out.append("zcode")  # (the plugin list is slow to read: a stamp says ccx set it up)
     return out
 
 
@@ -225,6 +227,43 @@ def setup_antigravity(quiet: bool = False) -> bool:
     return True
 
 
+# -------------------------------------------------------------------- ZCode
+
+ZCODE_STAMP = STATE_DIR / "zcode-plugin.version"
+
+
+def setup_zcode(source: str, quiet: bool = False) -> bool:
+    """ZCode installs Claude Code-style plugins with its own `zcode plugins`
+    command; ccx's plugin has a ZCode manifest (.zcode-plugin) that ZCode reads
+    first: ZCode's skills, the MCP server as host "zcode", and the shared hook."""
+    if not zcode.installed():
+        say(False, "ZCode: desktop app not installed or never opened (https://zcode.z.ai); skipping", quiet)
+        return False
+    code, out = zcode.run_cli(["plugins", "marketplace", "list", "--json"], 60)
+    if source not in out:
+        if '"ccx"' in out:
+            zcode.run_cli(["plugins", "marketplace", "remove", "ccx"], 60)
+        # Adding refreshes every marketplace ZCode knows (one is on GitHub): minutes on a slow network.
+        zcode.run_cli(["plugins", "marketplace", "add", source], 600)
+    else:
+        zcode.run_cli(["plugins", "marketplace", "update", "ccx"], 300)
+    want = repo_version()
+    got = zcode.plugin_version()
+    if got != want:
+        if got:
+            zcode.run_cli(["plugins", "uninstall", "ccx@ccx", "--keep-data"], 120)
+        code, out = zcode.run_cli(["plugins", "install", "ccx@ccx"], 300)
+        zcode.run_cli(["plugins", "enable", "ccx@ccx"], 60)
+        got = zcode.plugin_version()
+    ok = got == want
+    if ok:
+        STATE_DIR.mkdir(parents=True, exist_ok=True)
+        ZCODE_STAMP.write_text(want)
+    say(ok, f"ZCode plugin ccx {got} installed (new conversations pick it up)" if ok
+        else f"ZCode plugin install failed: {out[-300:]} (run `ccx doctor`, then `ccx setup` to retry)", quiet)
+    return ok
+
+
 # ------------------------------------------------------------------ menu bar
 
 def _swift_hash() -> str:
@@ -318,6 +357,7 @@ def setup(dev: bool = False, quiet: bool = False) -> int:
     ok_claude = setup_claude(source, quiet)
     ok_codex = setup_codex(source, quiet)
     ok_agy = setup_antigravity(quiet)
+    ok_zc = setup_zcode(source, quiet)
     LINK.parent.mkdir(parents=True, exist_ok=True)
     if LINK.is_symlink() or LINK.exists():
         LINK.unlink()
@@ -328,7 +368,7 @@ def setup(dev: bool = False, quiet: bool = False) -> int:
     menu_ok = build_menubar(quiet)
     if menu_ok and not AGENT.exists():
         autostart(True)
-    done = [n for n, ok in (("Claude", ok_claude), ("Codex", ok_codex), ("Antigravity", ok_agy)) if ok]
+    done = [n for n, ok in (("Claude", ok_claude), ("Codex", ok_codex), ("Antigravity", ok_agy), ("ZCode", ok_zc)) if ok]
     if not quiet:
         if not menu_ok:
             print("\nSetup is incomplete: the menu bar app could not be built. Your conversations and links are kept. Retry with `ccx setup` after fixing the error above.")
@@ -337,7 +377,7 @@ def setup(dev: bool = False, quiet: bool = False) -> int:
                   "(or keep using an existing one) and click ⇄ in the menu bar to move a conversation to another app, "
                   f"or say “continue the <name> session from {done[0]}” in any of them.")
         elif done:
-            print(f"\nccx is set up in {done[0]}. Install another of the Claude, Codex or Antigravity desktop apps too: "
+            print(f"\nccx is set up in {done[0]}. Install another of the Claude, Codex, Antigravity or ZCode desktop apps too: "
                   "ccx finishes setting it up by itself.")
         else:
             print("\nccx is installed, but no app could be set up yet (see above). `ccx doctor` shows what's missing.")
@@ -368,6 +408,7 @@ def refresh(quiet: bool = False) -> int:
     claude_ok = setup_claude(source, quiet)
     codex_ok = setup_codex(source, quiet)
     agy_ok = setup_antigravity(quiet) if antigravity.installed() else True
+    zc_ok = setup_zcode(source, quiet) if zcode.installed() else True
     menu_ok = build_menubar(quiet)
     # Missing optional apps are fine. Failures for apps actually present are not:
     # keep the retry visible instead of announcing a successful update.
@@ -377,7 +418,7 @@ def refresh(quiet: bool = False) -> int:
         codex_required = True
     except RuntimeError:
         codex_required = False
-    ok = (not claude_required or claude_ok) and (not codex_required or codex_ok) and agy_ok and menu_ok
+    ok = (not claude_required or claude_ok) and (not codex_required or codex_ok) and agy_ok and zc_ok and menu_ok
     say(bool(ok), f"ccx is up to date: {__version__}" if ok else
         "Update needs attention: see the failure above. Run `ccx setup` to retry; your conversations and links are kept.", quiet)
     return 0 if ok else 1
@@ -409,6 +450,12 @@ def doctor() -> int:
         rows.append((bool(v), f"Antigravity plugin: ccx {v}" if v else "Antigravity plugin: not installed (run `ccx setup`)"))
     else:
         rows.append((True, "Antigravity: not installed (optional)"))
+    if zcode.installed():
+        v = zcode.plugin_version()
+        rows.append((True, "ZCode: " + ("running" if zcode.running() else "not running")))
+        rows.append((bool(v), f"ZCode plugin: ccx {v}" if v else "ZCode plugin: not installed (run `ccx setup`)"))
+    else:
+        rows.append((True, "ZCode: not installed (optional)"))
     running = menubar_running()
     rows.append((running, "Menu bar icon: " + ("running" if running else "not running (open ~/Applications/ccx.app)")))
     rows.append((True, "Start at login: " + ("on" if autostart(None) else "off")))
@@ -438,6 +485,10 @@ def uninstall(purge: bool = False) -> int:
     except RuntimeError:
         pass
     shutil.rmtree(antigravity.PLUGIN_DIR, ignore_errors=True)
+    if zcode.installed():
+        zcode.run_cli(["plugins", "uninstall", "ccx@ccx"], 120)
+        zcode.run_cli(["plugins", "marketplace", "remove", "ccx"], 60)
+    ZCODE_STAMP.unlink(missing_ok=True)
     autostart(False)
     run(["pkill", "-a", "-x", "ccx"])
     shutil.rmtree(APP, ignore_errors=True)

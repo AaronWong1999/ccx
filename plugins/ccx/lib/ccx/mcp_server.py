@@ -1,6 +1,6 @@
-"""Minimal stdio MCP server exposing ccx to Claude Code, Codex and Antigravity.
+"""Minimal stdio MCP server exposing ccx to Claude Code, Codex, Antigravity and ZCode.
 
-    python -m ccx.mcp_server --host claude|codex|antigravity
+    python -m ccx.mcp_server --host claude|codex|antigravity|zcode
 
 `--host` is the app this server runs inside; "the other apps" are the rest.
 """
@@ -13,7 +13,7 @@ import os
 import sys
 import traceback
 
-from . import __version__, antigravity, claude, cloud, codex, history, pairs
+from . import __version__, antigravity, claude, cloud, codex, history, pairs, zcode
 from .common import NAME, OTHER, TOOLS, others, real
 from .sync import STATUS, default_target, find_sessions, transfer
 
@@ -114,7 +114,10 @@ def current_session(host: str, cwd: str) -> str:
             return os.environ[k]
     if host == "antigravity" and os.environ.get("ANTIGRAVITY_CONVERSATION_ID"):
         return os.environ["ANTIGRAVITY_CONVERSATION_ID"]
+    if host == "zcode" and (os.environ.get("ZCODE_SESSION_ID") or "").startswith("sess_"):
+        return os.environ["ZCODE_SESSION_ID"]
     ss = claude.sessions(cwd) if host == "claude" else codex.threads(cwd, limit=1) if host == "codex" \
+        else zcode.sessions(cwd, limit=1) if host == "zcode" \
         else (antigravity.sessions(cwd, limit=1) or antigravity.sessions(limit=1))
     if not ss:
         raise RuntimeError(f"no {NAME[host]} conversation found for {cwd}")

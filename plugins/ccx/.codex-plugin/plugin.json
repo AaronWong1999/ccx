@@ -1,7 +1,7 @@
 {
   "name": "ccx",
-  "version": "0.1.8",
-  "description": "ccx - claudecodex: sync task context between Claude, Codex and Antigravity. Import a Claude Code session or Antigravity conversation into this thread, keep them in sync, or hand this thread over. Menu bar ⇄ and the other apps' side: github.com/aaronwong1999/ccx",
+  "version": "0.2.0",
+  "description": "ccx - claudecodex: sync task context between Claude, Codex, Antigravity and ZCode. Import a Claude Code session, Antigravity or ZCode conversation into this thread, keep them in sync, or hand this thread over. Menu bar ⇄ and the other apps' side: github.com/aaronwong1999/ccx",
   "author": {
     "name": "Aaron Wong",
     "url": "https://github.com/aaronwong1999"
@@ -20,8 +20,8 @@
   "mcpServers": "./codex.mcp.json",
   "interface": {
     "displayName": "ccx - claudecodex",
-    "shortDescription": "Sync task context between Claude, Codex and Antigravity",
-    "longDescription": "Links a Codex thread with a Claude Code session and an Antigravity conversation so you can keep working on the same task in any of them: the others' new progress is brought into the conversation you are in. Not affiliated with OpenAI, Anthropic or Google.",
+    "shortDescription": "Sync tasks: Claude, Codex, Antigravity, ZCode",
+    "longDescription": "Links a Codex thread with a Claude Code session and Antigravity and ZCode conversations so you can keep working on the same task in any of them: the others' new progress is brought into the conversation you are in. Not affiliated with OpenAI, Anthropic, Google or Z.ai.",
     "developerName": "Aaron Wong",
     "category": "Developer Tools",
     "capabilities": [
