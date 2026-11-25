@@ -175,28 +175,62 @@ def desktop_project(cwd: str) -> Optional[dict]:
     return None
 
 
-def register_desktop_workspace(cwd: str, timeout: float = 15) -> bool:
+def _projects_for_root(root: str, timeout: float = 5) -> List[str]:
+    """Look up exact roots in the project service, including later pages."""
+    srv = server()
+    matches = []
+    cursor = None
+    deadline = time.monotonic() + timeout
+    while True:
+        page = srv.request("project/list", {"limit": 100, "cursor": cursor},
+                           timeout=max(0.1, deadline - time.monotonic()))
+        matches.extend(p["id"] for p in page.get("data", [])
+                       if any(real(r.get("path") or "") == root for r in p.get("roots", [])))
+        cursor = page.get("nextCursor")
+        if not cursor:
+            return list(dict.fromkeys(matches))
+        if time.monotonic() >= deadline:
+            raise TimeoutError("Codex project lookup timed out")
+
+
+def register_desktop_workspace(cwd: str, timeout: float = 60) -> Optional[str]:
     """Use the official CLI to register the workspace in the live desktop.
 
-    Returns True only when registration was needed (the caller may want to
-    restore its thread afterwards). Merely restarting the app doesn't import
-    project/create records into this desktop index. No direct state-file writes.
+    Return the server project ID when the desktop had to open the folder.
+    Newer desktops can save the project without flushing their legacy index.
     """
     root = real(cwd) if cwd else ""
     if not root or not os.path.isdir(root) or "/scratch-workspaces/" in root or desktop_project(root):
-        return False
-    proc = subprocess.run([codex_bin(), "app", root], capture_output=True, text=True, timeout=30)
+        return None
+    before = set(_projects_for_root(root))
+    try:
+        proc = subprocess.run([codex_bin(), "app", root], capture_output=True, text=True, timeout=30)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        raise RuntimeError(f"Codex could not open the desktop workspace: {e}") from e
     if proc.returncode:
         raise RuntimeError("Codex could not register the desktop workspace: " + clip(proc.stderr or proc.stdout, 400))
-    deadline = time.monotonic() + timeout
+    # A new folder can pause at Codex's own directory-trust prompt.
+    deadline = time.monotonic() + (min(timeout, 15) if before else timeout)
+    matches = []
     while time.monotonic() < deadline:
-        if desktop_project(root):
-            return True
+        registered = desktop_project(root)
+        if registered and registered.get("server_id"):
+            return registered["server_id"]
+        matches = _projects_for_root(root, timeout=min(5, max(0.1, deadline - time.monotonic())))
+        created = [project_id for project_id in matches if project_id not in before]
+        if len(created) == 1:
+            return created[0]
+        if registered and len(matches) == 1:
+            return matches[0]
         time.sleep(0.1)  # opening the workspace is asynchronous after the CLI returns
+    # A retry can start after the desktop already created the project. Require
+    # a unique exact match before using it without the desktop ID mapping.
+    if len(before) == 1 and len(matches) == 1 and matches[0] in before:
+        return matches[0]
     raise RuntimeError("Codex opened the folder but has not registered it in the desktop project list yet; retry")
 
 
-def ensure_thread_project(tid: str, cwd: str) -> Optional[str]:
+def ensure_thread_project(tid: str, cwd: str, opened_project: Optional[str] = None) -> Optional[str]:
     """Attach a projectless thread to the desktop project for its working folder.
 
     cwd is execution context, not sidebar membership. Reuse an exact canonical
@@ -210,13 +244,14 @@ def ensure_thread_project(tid: str, cwd: str) -> Optional[str]:
     if not root or not os.path.isdir(root) or "/scratch-workspaces/" in root:
         return thread.get("projectId")  # don't create projects for missing/temporary folders
     registered = desktop_project(root)
-    preferred = (registered or {}).get("server_id")
+    registered = registered or {}
+    preferred = registered.get("server_id") or opened_project
     current = thread.get("projectId")
     if current and current != preferred:
         # Preserve explicit assignments. Only repair an orphan created by ccx's
         # previous backend-only flow when it has the same root and is not a
         # separately registered desktop project.
-        if not preferred or current in registered.get("registered_server_ids", []):
+        if not registered.get("server_id") or current in registered.get("registered_server_ids", []):
             return current
         try:
             existing = srv.request("project/read", {"projectId": current})["project"]

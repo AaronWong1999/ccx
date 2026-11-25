@@ -658,7 +658,9 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
         for to in apps where to != from {
             let link = r.links?[to]
             let glyph = link == nil ? "○" : link!.status == "updated" ? "↻" : "✓"
-            let state = link == nil ? L("first time: imports it and links the two", "首次：导入并关联")
+            let state = link == nil ? (to == "codex"
+                ? L("first time · confirm folder trust if asked", "首次 · 如提示请确认目录信任")
+                : L("first time: imports it and links the two", "首次：导入并关联"))
                 : link!.status == "updated" ? L("linked · new progress goes along", "已关联 · 会带上新进展")
                 : L("linked · in sync", "已关联 · 已同步")
             let t = NSMenuItem(title: "", action: #selector(sessionClicked(_:)), keyEquivalent: "")
@@ -817,6 +819,9 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 case "in_sync": heading = L("Already in sync, nothing new", "已同步，没有新内容")
                 case "pushed": heading = L("Linked: \(n) new updates brought over", "已关联：\(n) 条新进展已带过去")
                 default: heading = L("Linked: \(n) new updates to bring over", "已关联：有 \(n) 条新进展待带入")
+                }
+                if let target = d["target"] as? [String: Any], target["project_warning"] != nil {
+                    heading = L("Chat linked · project pending", "聊天已关联 · 项目待确认")
                 }
             }
             if code != 0 { self.alert(L("That didn't work", "没有成功"), text) } else if showOutput { self.alert(title, text) }

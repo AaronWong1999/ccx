@@ -466,6 +466,20 @@ def transfer(tool: str, session_id: str, open_app: bool = True, dst: Optional[st
     if pair and dst == "zcode" and not zcode.find(pair[dst]["id"]):
         pair = None  # that ZCode conversation was deleted: import afresh
     pair = pair or _adopt(tool, src.id, dst)
+    opened_project = project_warning = None
+    if dst == "codex" and open_app:
+        # Codex classifies existing chats before adding a folder to the sidebar.
+        # Register first so the desktop doesn't classify a new import as projectless.
+        target_session = codex.find(pair[dst]["id"]) if pair else None
+        try:
+            opened_project = codex.register_desktop_workspace(target_session.cwd if target_session else src.cwd)
+        except (RuntimeError, TimeoutError) as e:
+            project_warning = str(e)
+            if not pair:
+                raise RuntimeError(L(
+                    "Import paused while waiting for the Codex project. If Codex asks you to trust the folder, "
+                    "confirm there and retry the transfer.",
+                    "导入已暂停，等待 Codex 项目就绪。如果 Codex 弹出目录信任提示，请在那里确认后再转移。")) from e
     if pair:
         target, action = pair[dst]["id"], "linked"
         pending = pairs.pending(tool, src.id, dst)
@@ -506,11 +520,15 @@ def transfer(tool: str, session_id: str, open_app: bool = True, dst: Optional[st
     if dst == "codex":
         # Save the pair before grouping: if grouping fails, retry repairs this
         # thread instead of importing another copy. Also repairs pre-0.0.9 pairs.
+        if project_warning:
+            res["target"]["project_warning"] = project_warning
+            res["message"] += L(
+                "\n\nThe sidebar project is still pending. If Codex asks you to trust the folder, "
+                "confirm there and retry the transfer. It will reuse the linked chat.",
+                "\n\n侧栏项目仍待确认。如果 Codex 弹出目录信任提示，请在 Codex 里确认后再转移一次，CCX 会复用已关联的聊天。")
         try:
-            if open_app:
-                target_session = codex.find(target)
-                codex.register_desktop_workspace(target_session.cwd if target_session else src.cwd)
-            res["target"]["project_id"] = codex.ensure_thread_project(target, src.cwd)
+            if "project_warning" not in res["target"]:
+                res["target"]["project_id"] = codex.ensure_thread_project(target, src.cwd, opened_project)
             res["target"]["history_status"] = repairs.prepare(target)
         except (RuntimeError, TimeoutError) as e:
             raise RuntimeError(f"The conversation is linked to Codex thread {target}, but desktop preparation failed: "
@@ -535,6 +553,11 @@ def transfer(tool: str, session_id: str, open_app: bool = True, dst: Optional[st
                 copy_to_clipboard(f"/goal {g['objective']}")
     if open_app and dst != "zcode":
         res["opened"] = open_in_app(dst, target)
+        if dst == "codex" and not res["opened"]:
+            res["message"] = L(
+                "The Codex chat is saved and linked. macOS couldn't open it automatically. "
+                "Retry the transfer to open the same chat.",
+                "Codex 聊天已保存并关联。macOS 未能自动打开它，再次转移会打开同一条聊天。")
     elif open_app:
         res["opened"] = res["zcode"] != "busy"
     return res

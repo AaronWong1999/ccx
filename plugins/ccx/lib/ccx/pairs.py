@@ -354,9 +354,9 @@ def continue_from(here_tool: str, here_id: str, here_cwd: str, other_id: str, ot
     if here_tool == "codex":
         # In-conversation imports stay in the current thread's own workspace.
         # A foreign Claude folder remains reference context, never a silent move.
-        opened_workspace = codex.register_desktop_workspace(here["cwd"])
-        codex.ensure_thread_project(here_id, here["cwd"])
-        if opened_workspace:
+        opened_project = codex.register_desktop_workspace(here["cwd"])
+        codex.ensure_thread_project(here_id, here["cwd"], opened_project)
+        if opened_project:
             subprocess.run(["open", f"codex://threads/{here_id}"], capture_output=True, check=False)
     g = goal(other, s.id)
     there = {"id": s.id, "cwd": s.cwd, "cursor": len(us), "goal_sent": _goal_key(g)}

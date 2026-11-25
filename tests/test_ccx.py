@@ -691,6 +691,44 @@ class Interfaces(Base):
         self.assertIn(result["action"], ("linked", "in_sync"))
         self.assertEqual(result["target"]["project_id"], "project-a")
 
+    def test_pending_desktop_project_still_prepares_and_opens_the_linked_chat(self):
+        claude_file(PROJ_A, "c-sidebar", [user("continue")])
+        self.cx.add("x-sidebar", PROJ_A, "continue", [umsg("continue")])
+        with mock.patch.object(sync, "_import_to_codex", return_value="x-sidebar") as imp, \
+                mock.patch.object(codex, "register_desktop_workspace", side_effect=[TimeoutError("index"), "native"]), \
+                mock.patch.object(codex, "ensure_thread_project", return_value="native") as group, \
+                mock.patch.object(repairs, "prepare", return_value="ready") as history, \
+                mock.patch.object(sync, "open_in_app", return_value=True) as opened:
+            sync.transfer("claude", "c-sidebar", open_app=False)
+            group.reset_mock()
+            history.reset_mock()
+            first = sync.transfer("claude", "c-sidebar")
+            self.assertIn("project_warning", first["target"])
+            self.assertTrue(first["opened"])
+            group.assert_not_called()
+            second = sync.transfer("claude", "c-sidebar")
+        imp.assert_called_once()
+        group.assert_called_once_with("x-sidebar", PROJ_A, "native")
+        self.assertEqual(history.call_args_list, [mock.call("x-sidebar")] * 2)
+        self.assertEqual(opened.call_args_list, [mock.call("codex", "x-sidebar")] * 2)
+        self.assertEqual(second["target"]["project_id"], "native")
+
+    def test_new_codex_import_waits_for_folder_confirmation_before_creating_chat(self):
+        claude_file(PROJ_A, "c-trust", [user("continue")])
+        self.cx.add("x-trust", PROJ_A, "continue", [umsg("continue")])
+        calls = mock.Mock()
+        calls.register.side_effect = [TimeoutError("index"), "native"]
+        calls.import_session.return_value = "x-trust"
+        with mock.patch.object(codex, "register_desktop_workspace", calls.register), \
+                mock.patch.object(sync, "_import_to_codex", calls.import_session), \
+                mock.patch.object(sync, "open_in_app", return_value=True):
+            with self.assertRaises(RuntimeError):
+                sync.transfer("claude", "c-trust")
+            self.assertIsNone(pairs.find("claude", "c-trust", "codex"))
+            result = sync.transfer("claude", "c-trust")
+        self.assertEqual([c[0] for c in calls.mock_calls], ["register", "register", "import_session"])
+        self.assertEqual(result["action"], "created")
+
     def test_source_progress_during_import_is_still_pending(self):
         c = claude_file(PROJ_A, "c-racing", [user("start")])
         self.cx.add("x-racing", PROJ_A, "race", [umsg("start")])
@@ -851,11 +889,12 @@ class DesktopWorkspace(unittest.TestCase):
             self.assertEqual(p.read_text(), original)
 
     def test_registers_folder_through_official_cli_and_waits_for_index(self):
-        with mock.patch.object(codex, "desktop_project", side_effect=[None, None, {"id": "new-ui-project"}]), \
+        with mock.patch.object(codex, "desktop_project", side_effect=[None, None, {"server_id": "native"}]), \
+                mock.patch.object(codex, "_projects_for_root", return_value=[]), \
                 mock.patch.object(codex, "codex_bin", return_value="bundled-codex"), \
                 mock.patch.object(codex.subprocess, "run", return_value=mock.Mock(returncode=0)) as run, \
                 mock.patch.object(codex.time, "sleep"):
-            self.assertTrue(codex.register_desktop_workspace(PROJ_A))
+            self.assertEqual(codex.register_desktop_workspace(PROJ_A), "native")
         self.assertEqual(run.call_args.args[0], ["bundled-codex", "app", os.path.realpath(PROJ_A)])
 
     def test_existing_folder_is_not_reopened(self):
@@ -866,10 +905,25 @@ class DesktopWorkspace(unittest.TestCase):
 
     def test_failed_registration_is_not_reported_as_success(self):
         with mock.patch.object(codex, "desktop_project", return_value=None), \
+                mock.patch.object(codex, "_projects_for_root", return_value=[]), \
                 mock.patch.object(codex, "codex_bin", return_value="bundled-codex"), \
                 mock.patch.object(codex.subprocess, "run", return_value=mock.Mock(returncode=1, stderr="failed")):
             with self.assertRaisesRegex(RuntimeError, "could not register"):
                 codex.register_desktop_workspace(PROJ_A)
+
+    def test_detects_native_project_with_stale_desktop_mapping(self):
+        with mock.patch.object(codex, "desktop_project", return_value=None), \
+                mock.patch.object(codex, "_projects_for_root", side_effect=[["old"], ["old", "native"]]), \
+                mock.patch.object(codex, "codex_bin", return_value="bundled-codex"), \
+                mock.patch.object(codex.subprocess, "run", return_value=mock.Mock(returncode=0)):
+            self.assertEqual(codex.register_desktop_workspace(PROJ_A), "native")
+
+    def test_later_page_can_confirm_an_exact_root(self):
+        srv = mock.Mock()
+        srv.request.side_effect = [{"data": [], "nextCursor": "more"}, {"data": [
+            {"id": "native", "roots": [{"path": PROJ_A}]}, {"id": "parent", "roots": [{"path": TMP}]}]}]
+        with mock.patch.object(codex, "server", return_value=srv):
+            self.assertEqual(codex._projects_for_root(os.path.realpath(PROJ_A)), ["native"])
 
 
 class NativeHistory(unittest.TestCase):

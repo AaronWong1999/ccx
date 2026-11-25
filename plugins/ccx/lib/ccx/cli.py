@@ -43,6 +43,9 @@ def pick(dst: str, cwd: str, ref, src_tool=None):
 
 
 def run_transfer(src_tool: str, sid: str, a, dst=None):
+    if dst == "codex" and not a.no_open and sys.stderr.isatty():
+        print(L("If Codex asks you to trust the project folder, confirm in Codex to continue.",
+                "如果 Codex 弹出目录信任提示，请在 Codex 里确认后继续。"), file=sys.stderr, flush=True)
     res = transfer(src_tool, sid, open_app=not a.no_open, dst=dst)
     t = res["target"]
     if res["action"] == "linked" and t["tool"] == "codex" and not res.get("goal") and codex.hooks_trusted() is False:
