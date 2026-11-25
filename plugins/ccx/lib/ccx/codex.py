@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 from . import __version__
-from .common import (HOME, PLAN, TAG, Session, clip, first_line, image_line, real, strip_files_header,
+from .common import (HOME, L, PLAN, TAG, Session, clip, first_line, image_line, real, strip_files_header,
                      user_text, which)
 
 APP_BUNDLES = ("/Applications/ChatGPT.app", "/Applications/Codex.app",
@@ -193,6 +193,32 @@ def _projects_for_root(root: str, timeout: float = 5) -> List[str]:
             raise TimeoutError("Codex project lookup timed out")
 
 
+def confirm_new_project(root: str) -> bool:
+    """Explain the upcoming native prompt without granting trust on the user's behalf."""
+    title = L("Open a new folder in Codex", "在 Codex 中首次打开目录")
+    message = L(
+        f"CCX will ask Codex to add this folder as a project:\n\n{root}\n\n"
+        "If Codex asks you to trust it, check the path and confirm only if you trust the folder. "
+        "Trust lets Codex read, edit, and run files there. If you cancel in either app, you can retry the transfer later.",
+        f"CCX 将在 Codex 中打开以下目录作为项目：\n\n{root}\n\n"
+        "如果 Codex 弹出「信任此文件夹吗？」，请核对路径，只在信任该目录时确认。"
+        "信任后，Codex 可以读取、编辑和运行目录中的文件。你可以在任一窗口取消，之后再试。")
+    proceed = L("Open Codex", "打开 Codex")
+    cancel = L("Cancel", "取消")
+    script = '''on run argv
+        activate
+        set choice to display dialog (item 2 of argv) with title (item 1 of argv) ¬
+            buttons {item 3 of argv, item 4 of argv} default button 2 cancel button 1 giving up after 120
+        return button returned of choice
+    end run'''
+    try:
+        result = subprocess.run(["/usr/bin/osascript", "-e", script, title, message, cancel, proceed],
+                                capture_output=True, text=True, timeout=125)
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    return result.returncode == 0 and result.stdout.strip() == proceed
+
+
 def register_desktop_workspace(cwd: str, timeout: float = 60) -> Optional[str]:
     """Use the official CLI to register the workspace in the live desktop.
 
@@ -203,6 +229,8 @@ def register_desktop_workspace(cwd: str, timeout: float = 60) -> Optional[str]:
     if not root or not os.path.isdir(root) or "/scratch-workspaces/" in root or desktop_project(root):
         return None
     before = set(_projects_for_root(root))
+    if not before and not confirm_new_project(root):
+        raise RuntimeError(L("Opening the new Codex folder was cancelled.", "已取消打开 Codex 新目录。"))
     try:
         proc = subprocess.run([codex_bin(), "app", root], capture_output=True, text=True, timeout=30)
     except (OSError, subprocess.TimeoutExpired) as e:

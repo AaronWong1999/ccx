@@ -891,10 +891,12 @@ class DesktopWorkspace(unittest.TestCase):
     def test_registers_folder_through_official_cli_and_waits_for_index(self):
         with mock.patch.object(codex, "desktop_project", side_effect=[None, None, {"server_id": "native"}]), \
                 mock.patch.object(codex, "_projects_for_root", return_value=[]), \
+                mock.patch.object(codex, "confirm_new_project", return_value=True) as notice, \
                 mock.patch.object(codex, "codex_bin", return_value="bundled-codex"), \
                 mock.patch.object(codex.subprocess, "run", return_value=mock.Mock(returncode=0)) as run, \
                 mock.patch.object(codex.time, "sleep"):
             self.assertEqual(codex.register_desktop_workspace(PROJ_A), "native")
+        notice.assert_called_once_with(os.path.realpath(PROJ_A))
         self.assertEqual(run.call_args.args[0], ["bundled-codex", "app", os.path.realpath(PROJ_A)])
 
     def test_existing_folder_is_not_reopened(self):
@@ -906,10 +908,33 @@ class DesktopWorkspace(unittest.TestCase):
     def test_failed_registration_is_not_reported_as_success(self):
         with mock.patch.object(codex, "desktop_project", return_value=None), \
                 mock.patch.object(codex, "_projects_for_root", return_value=[]), \
+                mock.patch.object(codex, "confirm_new_project", return_value=True), \
                 mock.patch.object(codex, "codex_bin", return_value="bundled-codex"), \
                 mock.patch.object(codex.subprocess, "run", return_value=mock.Mock(returncode=1, stderr="failed")):
             with self.assertRaisesRegex(RuntimeError, "could not register"):
                 codex.register_desktop_workspace(PROJ_A)
+
+    def test_cancel_at_ccx_notice_leaves_codex_unopened(self):
+        with mock.patch.object(codex, "desktop_project", return_value=None), \
+                mock.patch.object(codex, "_projects_for_root", return_value=[]), \
+                mock.patch.object(codex, "confirm_new_project", return_value=False), \
+                mock.patch.object(codex.subprocess, "run") as run:
+            with self.assertRaises(RuntimeError):
+                codex.register_desktop_workspace(PROJ_A)
+        run.assert_not_called()
+
+    def test_explains_trust_with_exact_path_and_requires_open_button(self):
+        root = '/project/with spaces/"quoted"'
+        with mock.patch.object(codex, "L", side_effect=lambda en, zh: en), \
+                mock.patch.object(codex.subprocess, "run") as run:
+            run.return_value = subprocess.CompletedProcess([], 0, "Open Codex\n", "")
+            self.assertTrue(codex.confirm_new_project(root))
+            args = run.call_args.args[0]
+            self.assertIn(root, args[4])
+            self.assertIn("read, edit, and run", args[4])
+            self.assertNotIn(root, args[2])
+            run.return_value = subprocess.CompletedProcess([], 1, "", "User canceled")
+            self.assertFalse(codex.confirm_new_project(root))
 
     def test_detects_native_project_with_stale_desktop_mapping(self):
         with mock.patch.object(codex, "desktop_project", return_value=None), \
